@@ -1,0 +1,33 @@
+import { defineConfig, devices } from "@playwright/test";
+import { loadEnvFile } from "node:process";
+loadEnvFile(".env.local");
+for (const key of [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "DEMO_ADMIN_PASSWORD",
+  "DEMO_DRIVER_PASSWORD",
+]) {
+  if (!process.env[key])
+    throw new Error(
+      `Authenticated E2E requires ${key} in .env.local and a migrated, seeded local Supabase.`,
+    );
+}
+export default defineConfig({
+  testDir: "./tests/auth-e2e",
+  use: {
+    channel: "chromium",
+    baseURL: "http://127.0.0.1:3001",
+    trace: "off",
+    screenshot: "off",
+    video: "off",
+  },
+  projects: [
+    { name: "desktop-auth", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile-auth", use: { ...devices["Pixel 7"] } },
+  ],
+  webServer: {
+    command: "npm run dev -- --hostname 127.0.0.1 --port 3001",
+    url: "http://127.0.0.1:3001",
+    reuseExistingServer: false,
+  },
+});

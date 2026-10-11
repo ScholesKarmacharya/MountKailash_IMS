@@ -7,5 +7,6 @@ test-results/
 .env*
 !.env.example
 *.tsbuildinfo
+next-env.d.ts
 supabase/.temp/
 supabase/.branches/

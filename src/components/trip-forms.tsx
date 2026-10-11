@@ -1,4 +1,9 @@
 "use client";
+import { AmountInput, PaymentButtons } from "./finance-payment";
+import { cents, decimal, sum, npr } from "@/domain/finance/money";
+import { paymentPlan } from "@/domain/finance/payment-plan";
+import type { FinanceWorkspace, PaymentDraft } from "@/domain/finance/types";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Count, Trip, Workspace } from "@/domain/operations/types";
@@ -163,9 +168,11 @@ export function LoadTripForm({
 }
 export function DeliveryForm({
   workspace: w,
+  finance: f,
   trip,
   requestKey,
 }: {
+  finance?: FinanceWorkspace;
   workspace: Workspace;
   trip: Trip;
   requestKey: string;
@@ -183,6 +190,10 @@ export function DeliveryForm({
   const [quantities, setQuantities] = useState<
     Record<string, { full_jars: number; empty_jars: number; cartons: number }>
   >({});
+  const [oldAmount, setOldAmount] = useState(""),
+    [deposit, setDeposit] = useState(""),
+    [fonepayPart, setFonepayPart] = useState("");
+  const credit = f?.credit.filter((i) => i.customer_id === customer) ?? [];
   const counts = vehicleCounts(w, trip);
   const products = w.products.filter((p) =>
     w.loads.some((l) => l.product_id === p.id),
@@ -202,10 +213,51 @@ export function DeliveryForm({
     .filter((i) => i.full_jars + i.empty_jars + i.cartons > 0);
   const total = moneyTotal(
     products.map((p) => ({
-      price: p.default_price,
+      price:
+        f?.prices.find(
+          (r) =>
+            r.customer_id === (walk ? null : customer) &&
+            r.product_id === p.id &&
+            r.active,
+        )?.price ?? p.default_price,
       quantity: quantity(p.id).full_jars + quantity(p.id).cartons,
     })),
   );
+  const tax =
+    f?.company?.tax_mode === "EXPLICIT"
+      ? decimal((cents(total) * cents(f.company.tax_rate) + 5000n) / 10000n)
+      : "0.00";
+  const payable = sum([total, tax]);
+  let financeProblem = "",
+    payments: PaymentDraft[] = [];
+  if (f?.available) {
+    try {
+      if (cents(payable) > 99999999999999n)
+        throw new Error(
+          "This delivery exceeds the supported invoice amount. Reduce quantities.",
+        );
+      payments = paymentPlan({
+        selection: payment,
+        total: payable,
+        amount,
+        oldAmount: walk ? "0" : oldAmount,
+        deposit: walk ? "0" : deposit,
+        fonepayPart,
+        reference,
+        credit,
+      });
+      if (
+        walk &&
+        payments.reduce((s, p) => s + cents(p.current_amount ?? "0"), 0n) <
+          cents(payable)
+      )
+        throw new Error(
+          "Walk-in invoice requires full cash or pending Fonepay coverage.",
+        );
+    } catch (e) {
+      financeProblem = (e as Error).message;
+    }
+  }
   const customers = w.customers.filter(
     (c) =>
       c.is_active &&
@@ -248,7 +300,8 @@ export function DeliveryForm({
     (walk ? !!walkName.trim() : !!customer) &&
     !walkProblem &&
     !custodyProblem &&
-    !stockProblem;
+    !stockProblem &&
+    !financeProblem;
   const router = useRouter();
   return (
     <div className="space-y-5">
@@ -283,6 +336,8 @@ export function DeliveryForm({
           variant={walk ? "default" : "outline"}
           onClick={() => {
             setWalk(true);
+            setOldAmount("");
+            setDeposit("");
             setReview(false);
           }}
         >
@@ -295,8 +350,15 @@ export function DeliveryForm({
         requestKey={requestKey}
         showSubmit={review && eligible}
         label="Save confirmed delivery"
-        confirm={`Save ${walk ? walkName : selected?.name}: ${items.map((i) => `${i.full_jars} full, ${i.empty_jars} empty, ${i.cartons} cartons`).join("; ")}? Payment remains unverified.`}
+        confirm={`Save ${f?.available ? payments.map((p) => p.method + " " + p.amount + " NPR (deposit " + p.deposit_amount + ")").join("; ") : ""} ${walk ? walkName : selected?.name}: ${items.map((i) => `${i.full_jars} full, ${i.empty_jars} empty, ${i.cartons} cartons`).join("; ")}? ${f?.available ? "Cash is recorded; Fonepay remains pending." : "Payment remains unverified."}`}
       >
+        {f?.available && (
+          <input
+            type="hidden"
+            name="finance_payments"
+            value={JSON.stringify(payments)}
+          />
+        )}
         <input type="hidden" name="customer" value={walk ? "" : customer} />
         <input type="hidden" name="items" value={JSON.stringify(items)} />
         <input type="hidden" name="walk_name" value={walk ? walkName : ""} />
@@ -305,7 +367,7 @@ export function DeliveryForm({
         <input
           type="hidden"
           name="amount"
-          value={payment === "UNPAID" ? "" : amount}
+          value={f?.available || payment === "UNPAID" ? "" : amount}
         />
         <input type="hidden" name="reference" value={reference} />
         <input type="hidden" name="notes" value={notes} />
@@ -338,7 +400,12 @@ export function DeliveryForm({
                       type="button"
                       variant={customer === c.id ? "default" : "outline"}
                       className="min-h-14 w-full justify-start whitespace-normal text-left"
-                      onClick={() => setCustomer(c.id)}
+                      onClick={() => {
+                        setCustomer(c.id);
+                        setOldAmount("");
+                        setDeposit("");
+                        setReview(false);
+                      }}
                     >
                       {c.name}
                       {c.shop_name && ` · ${c.shop_name}`}
@@ -424,40 +491,132 @@ export function DeliveryForm({
                 </Card>
               );
             })}
-            <label className="grid gap-2 text-sm font-semibold">
-              Payment instruction
-              <select
-                value={payment}
-                onChange={(e) => setPayment(e.target.value)}
-                className="min-h-14 rounded-lg border border-input bg-background px-3"
-              >
-                <option value="CASH">Cash</option>
-                <option value="FONEPAY">Fonepay</option>
-                <option value="UNPAID">Monthly credit / unpaid</option>
-                <option value="PARTIAL">Partial payment</option>
-              </select>
-            </label>
-            {payment !== "UNPAID" && (
-              <label className="grid gap-2 text-sm font-semibold">
-                Reported amount (NPR){payment !== "PARTIAL" && " — optional"}
-                <Input
-                  inputMode="decimal"
-                  value={amount}
-                  required={payment === "PARTIAL"}
-                  pattern="[0-9]{1,12}(\.[0-9]{1,2})?"
-                  maxLength={15}
-                  onChange={(e) => setAmount(e.target.value)}
+            {f?.available ? (
+              <div className="space-y-5">
+                <p className="text-xl font-bold">Payable: {npr(payable)}</p>
+                <PaymentButtons
+                  value={payment}
+                  onChange={(v) => {
+                    setPayment(v);
+                    setAmount("");
+                    setFonepayPart("");
+                    setReview(false);
+                  }}
                 />
-              </label>
+                {payment !== "UNPAID" && (
+                  <AmountInput
+                    label="Amount received for this invoice (NPR)"
+                    value={amount}
+                    onChange={setAmount}
+                    required={payment === "PARTIAL"}
+                  />
+                )}
+                {payment === "PARTIAL" && (
+                  <AmountInput
+                    label="Additional Fonepay amount (pending, NPR)"
+                    value={fonepayPart}
+                    onChange={setFonepayPart}
+                  />
+                )}
+                <p>
+                  Remaining outstanding after cash:{" "}
+                  {npr(
+                    decimal(
+                      cents(payable) -
+                        payments
+                          .filter((p) => p.method === "CASH")
+                          .reduce(
+                            (s, p) => s + cents(p.current_amount ?? "0"),
+                            0n,
+                          ),
+                    ),
+                  )}
+                </p>
+                {!walk && selected && (
+                  <>
+                    <p>
+                      Previous outstanding:{" "}
+                      {npr(sum(credit.map((i) => i.outstanding)))} - Available:{" "}
+                      {npr(sum(credit.map((i) => i.available)))}
+                    </p>
+                    <AmountInput
+                      label="Previous credit received (NPR)"
+                      value={oldAmount}
+                      onChange={setOldAmount}
+                    />
+                    {f.billing.some(
+                      (b) =>
+                        b.customer_id === customer &&
+                        b.deposit_mode === "MANUAL",
+                    ) && (
+                      <AmountInput
+                        label="Refundable jar deposit received (NPR)"
+                        value={deposit}
+                        onChange={setDeposit}
+                      />
+                    )}
+                  </>
+                )}
+                <label className="grid gap-2 text-sm font-semibold">
+                  Transaction reference (unverified)
+                  <Input
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    maxLength={200}
+                  />
+                </label>
+                <p className="text-sm text-muted-foreground">
+                  Blank cash or Fonepay amount covers the full invoice. Previous
+                  credit and deposits use the selected method; unpaid or partial
+                  uses cash. Fonepay does not reduce credit until admin
+                  reconciliation.
+                </p>
+                {financeProblem && (
+                  <p role="alert" className="text-red-700">
+                    {financeProblem}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                {" "}
+                <label className="grid gap-2 text-sm font-semibold">
+                  Payment instruction
+                  <select
+                    value={payment}
+                    onChange={(e) => setPayment(e.target.value)}
+                    className="min-h-14 rounded-lg border border-input bg-background px-3"
+                  >
+                    <option value="CASH">Cash</option>
+                    <option value="FONEPAY">Fonepay</option>
+                    <option value="UNPAID">Monthly credit / unpaid</option>
+                    <option value="PARTIAL">Partial payment</option>
+                  </select>
+                </label>
+                {payment !== "UNPAID" && (
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Reported amount (NPR)
+                    {payment !== "PARTIAL" && " — optional"}
+                    <Input
+                      inputMode="decimal"
+                      value={amount}
+                      required={payment === "PARTIAL"}
+                      pattern="[0-9]{1,12}(\.[0-9]{1,2})?"
+                      maxLength={15}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                  </label>
+                )}
+                <label className="grid gap-2 text-sm font-semibold">
+                  Reference (optional)
+                  <Input
+                    value={reference}
+                    maxLength={200}
+                    onChange={(e) => setReference(e.target.value)}
+                  />
+                </label>
+              </>
             )}
-            <label className="grid gap-2 text-sm font-semibold">
-              Reference (optional)
-              <Input
-                value={reference}
-                maxLength={200}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </label>
             <label className="grid gap-2 text-sm font-semibold">
               Visit notes
               <Input
@@ -470,9 +629,9 @@ export function DeliveryForm({
               Indicative delivery value: NPR {total}
             </p>
             <p className="text-sm text-muted-foreground">
-              Server snapshots current default prices when saved. Payment
-              instructions are pending Sprint 3 settlement; Fonepay is
-              unverified.
+              {f?.available
+                ? "Server confirms approved prices and exact tax at saving. Deposits are separate from sales."
+                : "Server snapshots current default prices. Finance migration is required for settlement."}
             </p>
             {walkProblem && (
               <p role="alert" className="text-sm text-red-700">
@@ -513,11 +672,21 @@ export function DeliveryForm({
               </p>
             ))}
             <p>
-              NPR {total} · {payment} · {amount || "No amount reported"}
+              NPR {payable} · {payment} · {amount || "No amount reported"}
             </p>
+            {f?.available &&
+              payments.map((p, index) => (
+                <p key={index}>
+                  {p.method}: NPR {p.amount} - current invoice{" "}
+                  {p.current_amount}, prior credit{" "}
+                  {sum(p.allocations.map((a) => a.amount))}, deposit{" "}
+                  {p.deposit_amount}
+                </p>
+              ))}
             <p className="text-sm">
-              This saves an immutable visit. Financial settlement remains
-              pending.
+              {f?.available
+                ? "Invoices, cash receipts and credit are posted atomically. Fonepay stays pending."
+                : "This saves an immutable visit. Financial settlement remains pending."}
             </p>
             <Button
               type="button"

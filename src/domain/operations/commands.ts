@@ -1,4 +1,5 @@
 import { uuid } from "@/domain/inventory/validation";
+import { paymentDraft } from "@/domain/finance/commands";
 export type Operation =
   | "customer"
   | "vehicle"
@@ -144,6 +145,13 @@ export function parseCommand(form: FormData): Command {
             selection: str("payment", 10),
             reported_amount: str("amount", 16) || null,
             reference: str("reference", 200),
+            ...(form.has("finance_payments")
+              ? {
+                  payments: (json("finance_payments") as unknown[]).map(
+                    paymentDraft,
+                  ),
+                }
+              : {}),
           },
           p_notes: str("notes"),
           ...common,

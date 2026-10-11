@@ -9,14 +9,15 @@ for (const key of [
 ]) {
   if (!process.env[key])
     throw new Error(
-      `Authenticated E2E requires ${key} in .env.local and a migrated, seeded local Supabase.`,
+      `Authenticated E2E requires ${key} in .env.local and a migrated Supabase project with provisioned demo accounts.`,
     );
 }
+const baseURL = process.env.AUTH_E2E_BASE_URL ?? "http://127.0.0.1:3001";
 export default defineConfig({
   testDir: "./tests/auth-e2e",
   use: {
     channel: "chromium",
-    baseURL: "http://127.0.0.1:3001",
+    baseURL,
     trace: "off",
     screenshot: "off",
     video: "off",
@@ -27,7 +28,8 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run dev -- --hostname 127.0.0.1 --port 3001",
-    url: "http://127.0.0.1:3001",
-    reuseExistingServer: false,
+    url: baseURL,
+    reuseExistingServer: !!process.env.AUTH_E2E_BASE_URL,
+    env: { AUTH_E2E: "1" },
   },
 });

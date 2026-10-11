@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { saveOperation } from "@/services/operations";
+import { saveFinance } from "@/services/finance";
 export type OperationState = {
   error?: string;
   success?: string;
@@ -12,7 +13,11 @@ export async function operationAction(
   form: FormData,
 ): Promise<OperationState> {
   try {
-    const id = await saveOperation(form);
+    const id =
+      typeof form.get("operation") === "string" &&
+      String(form.get("operation")).startsWith("finance:")
+        ? await saveFinance(form)
+        : await saveOperation(form);
     revalidatePath("/admin", "layout");
     revalidatePath("/driver", "layout");
     return { success: "Saved to the database.", id };

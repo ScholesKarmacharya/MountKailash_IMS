@@ -1,21 +1,13 @@
+import { FinanceOverview } from "@/components/finance-overview";
 import { Card } from "@/components/ui/card";
 import { TripList } from "@/components/trip-summary";
 import { getAdminDashboard } from "@/services/dashboard";
 import { formatNepalTime, isOvernightDay } from "@/domain/business-days/time";
 import { WarehouseStock } from "@/components/warehouse-stock";
 import Link from "next/link";
-const metrics = [
-  {
-    title: "Collected payments",
-    description: "Cash and pending Fonepay records arrive in Sprint 3.",
-  },
-  {
-    title: "Outstanding credit",
-    description: "Customer receivables arrive in Sprint 3.",
-  },
-];
 export default async function Dashboard() {
-  const { businessDay, inventory, operations } = await getAdminDashboard();
+  const { businessDay, inventory, operations, finance } =
+    await getAdminDashboard();
   return (
     <div className="space-y-7">
       <div>
@@ -84,18 +76,11 @@ export default async function Dashboard() {
             Review trip queue
           </Link>
         </Card>
-        {metrics.map((metric) => (
-          <Card key={metric.title}>
-            <h2 className="text-sm font-semibold">{metric.title}</h2>
-            <p className="my-5 text-lg font-bold text-muted-foreground">
-              Not yet available
-            </p>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {metric.description}
-            </p>
-          </Card>
-        ))}
       </div>
+      <FinanceOverview finance={finance} day={businessDay?.id ?? null} />
+      <Link href="/admin/payments" className="text-primary underline">
+        View payments and credit
+      </Link>
       <Card>
         <h2 className="mb-4 font-semibold">Open trip queue</h2>
         {operations.available ? (
@@ -110,8 +95,9 @@ export default async function Dashboard() {
         )}
       </Card>
       <p className="text-sm text-muted-foreground">
-        Collections will include repayments of prior credit. Refundable deposits
-        will remain separate from sales. Payment verification is not connected.
+        Collections include repayments of prior credit and deposit receipts.
+        Deposits remain separate from sales. Fonepay requires explicit admin
+        reconciliation.
       </p>
     </div>
   );

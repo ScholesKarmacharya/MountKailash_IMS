@@ -1,4 +1,26 @@
 @import "tailwindcss";
+@media print {
+  aside,
+  header,
+  footer,
+  nav,
+  form,
+  [role="status"],
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  main > div {
+    display: block;
+  }
+}
 :root {
   --background: #f5f7fb;
   --foreground: #142b3c;

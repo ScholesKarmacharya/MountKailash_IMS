@@ -28,8 +28,10 @@ for (const role of ["ADMIN", "DRIVER"] as const) {
       ).toBeVisible();
     } else {
       await expect(
-        page.getByText("Not yet available", { exact: true }),
-      ).toHaveCount(2);
+        page.getByRole("heading", {
+          name: /Finance migration required|Business-day sales/,
+        }),
+      ).toBeVisible();
     }
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL(/\/sign-in/);

@@ -18,6 +18,12 @@ for (const route of [
   "/admin/dashboard",
   "/admin/products",
   "/admin/inventory",
+  "/admin/payments",
+  "/admin/credit",
+  "/admin/billing",
+  "/driver/invoices/00000000-0000-0000-0000-000000000011",
+  "/api/invoices/00000000-0000-0000-0000-000000000011/pdf",
+  "/api/payments/00000000-0000-0000-0000-000000000011/pdf",
   "/driver",
   "/driver/home",
 ])

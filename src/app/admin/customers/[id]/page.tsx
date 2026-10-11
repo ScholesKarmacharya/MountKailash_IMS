@@ -1,3 +1,7 @@
+import { getFinance } from "@/services/finance";
+import { FinanceRequired } from "@/components/finance-overview";
+import { CustomerBillingForms } from "@/components/finance-admin-forms";
+import { CustomerFinance } from "@/components/customer-finance";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getOperations } from "@/services/operations";
@@ -14,7 +18,7 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const w = await getOperations(true);
+  const [w, f] = await Promise.all([getOperations(true), getFinance(true)]);
   if (!w.available) return <MigrationRequired />;
   const record = w.customers.find((r) => r.id === id);
   if (!record) notFound();
@@ -32,6 +36,14 @@ export default async function Page({
       </Card>
       <CustodyForm workspace={w} customer={record} />
       <CustomerReport id={id} />
+      {f.available ? (
+        <>
+          <CustomerFinance id={id} finance={f} />
+          <CustomerBillingForms id={id} finance={f} workspace={w} />
+        </>
+      ) : (
+        <FinanceRequired />
+      )}
     </div>
   );
 }

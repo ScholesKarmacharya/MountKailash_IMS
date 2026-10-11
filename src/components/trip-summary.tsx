@@ -1,3 +1,5 @@
+import { getFinance } from "@/services/finance";
+import { CollectCreditForm } from "./finance-payment";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -82,7 +84,10 @@ export async function TripDetail({
   id: string;
   admin: boolean;
 }) {
-  const w = await getOperations(admin, id);
+  const [w, f] = await Promise.all([
+    getOperations(admin, id),
+    getFinance(admin),
+  ]);
   if (!w.available) return <MigrationRequired />;
   const trip = w.trips.find((t) => t.id === id);
   if (!trip) notFound();
@@ -147,6 +152,24 @@ export async function TripDetail({
           admin review.
         </p>
       )}
+      {f.available && f.payments.some((p) => p.trip_id === trip.id) && (
+        <Card>
+          <h2 className="mb-4 font-semibold">Trip receipts</h2>
+          {f.payments
+            .filter((p) => p.trip_id === trip.id)
+            .map((p) => (
+              <p key={p.id} className="py-2">
+                <Link
+                  className="text-primary underline"
+                  href={(admin ? "/admin" : "/driver") + "/payments/" + p.id}
+                >
+                  Receipt R-{p.number.padStart(8, "0")}
+                </Link>{" "}
+                - {p.method} - {p.status} - NPR {p.amount}
+              </p>
+            ))}
+        </Card>
+      )}
       {dayOpen && admin && trip.status === "DRAFT" && (
         <Card>
           <h2 className="mb-5 text-lg font-semibold">Load vehicle</h2>
@@ -168,7 +191,25 @@ export async function TripDetail({
         <>
           <Card id="add-delivery">
             <h2 className="mb-5 text-xl font-bold">Add Delivery</h2>
-            <DeliveryForm workspace={w} trip={trip} requestKey={randomUUID()} />
+            <DeliveryForm
+              finance={f}
+              workspace={w}
+              trip={trip}
+              requestKey={randomUUID()}
+            />
+            {f.available && (
+              <div className="mt-8 border-t pt-6">
+                <h3 className="mb-4 font-semibold">
+                  Collect credit without a new sale
+                </h3>
+                <CollectCreditForm
+                  finance={f}
+                  workspace={w}
+                  trip={trip}
+                  requestKey={randomUUID()}
+                />
+              </div>
+            )}
           </Card>
           <Card id="submit-trip">
             <h2 className="mb-5 text-lg font-semibold">End trip</h2>
@@ -226,8 +267,8 @@ export async function TripDetail({
           <h2 className="font-semibold">Physical trip closed</h2>
           <p className="mt-3 text-sm">{trip.close_reason}</p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Payments remain pending Sprint 3 settlement. Historical visits and
-            return checks are preserved.
+            Physical reconciliation remains independent of financial settlement.
+            Historical visits and return checks are preserved.
           </p>
         </Card>
       )}
@@ -320,8 +361,28 @@ export async function TripDetail({
                 Reported {payment?.reported_amount ?? "not specified"}
               </p>
               <p className="text-xs text-amber-800">
-                Pending Sprint 3 settlement · Fonepay unverified
+                {f.available
+                  ? f.sales.some((s) => s.visit_id === v.id)
+                    ? "Invoice recorded; Fonepay requires reconciliation"
+                    : "Legacy visit: finance has not been posted"
+                  : "Finance migration required; legacy payment intent"}
               </p>
+              {f.invoices
+                .filter((i) =>
+                  f.sales.some(
+                    (s) => s.id === i.sale_id && s.visit_id === v.id,
+                  ),
+                )
+                .map((i) => (
+                  <Link
+                    key={i.id}
+                    className="text-primary underline"
+                    href={(admin ? "/admin" : "/driver") + "/invoices/" + i.id}
+                  >
+                    Invoice MK-{i.number.padStart(8, "0")} - outstanding NPR{" "}
+                    {i.outstanding}
+                  </Link>
+                ))}
               {payment?.reference && (
                 <p className="text-xs">Reference: {payment.reference}</p>
               )}

@@ -1,6 +1,6 @@
 # Mount Kailash Water Distribution Management System
 
-Specification pack, authenticated application foundation and Sprint 1 product/warehouse implementation (2026-10-11). Product and inventory screens use real Supabase data after the reviewed Sprint 1 migration is applied. Trips, payments, refilling and day closing remain future work. See [Sprint 1 implementation, migration review and testing](docs/SPRINT_1_IMPLEMENTATION.md).
+Specification pack and application through Sprint 3 (2026-10-11). Supabase Cloud authentication, warehouse inventory and trip operations are working. Sales, payments, credit, deposits and invoices are implemented; Sprint 3 Cloud migrations await review and approval. See [Sprint 3 implementation and migration review](docs/SPRINT_3_IMPLEMENTATION.md). Refilling/damage and business-day closing remain deferred.
 
 ## Goal
 
@@ -105,4 +105,12 @@ See the [Sprint 2 integration audit](docs/SPRINT_2_INTEGRATION_AUDIT.md) for the
 
 `npm run test:e2e:operations` runs the real screens and application SQL against disposable PostgreSQL with a test-only Auth/PostgREST adapter, using separate loopback ports and build output. It does not modify the connected Cloud project. Existing Cloud login verification reuses the running development server; do not launch two Next dev instances against the same build directory.
 
-**Next work:** Sprint 3 financial journals, credit repayments, verified collections, settlement and finance reconciliation. Product-specific customer pricing, deposits and tax need confirmed rules. Refilling/damage and daily close remain separate workflows.
+## Sprint 3 finance
+
+Read [Sprint 3 implementation, migration review and manual acceptance](docs/SPRINT_3_IMPLEMENTATION.md). New trip visits atomically issue sales/invoices with approved price snapshots and post cash, pending Fonepay, allocations, credit and explicit deposits. Admin Payments, Customer credit and Billing settings use real Supabase RPC data. Invoice/receipt PDFs are private, generated on demand and support English/Nepali with bundled fonts.
+
+Cloud migrations 006?008 require review and approval; they were only dry-run, not applied. No new secrets, Docker or sample records are needed. Existing Sprint 2 payment intents are preserved without automatic financial backfill. Keep tax unconfigured until confirmed and configure manual deposit arrangements per customer.
+
+Run `npm.cmd test` and `npm.cmd run test:e2e:operations` for disposable PostgreSQL and actual desktop/mobile finance/trip screens. These commands do not contact Cloud or read real passwords. The browser adapter is only a test helper. For read-only Cloud regression with the running development server, use `node --env-file=.env.local scripts/verify-cloud-operations.mjs`; it logs no credentials.
+
+**Next work:** Sprint 4 business-day close, cash handover/reconciliation, immutable closing snapshots and carry-forward reports. Fonepay automatic integration awaits official merchant APIs/credentials. Refilling/damage remains deferred.

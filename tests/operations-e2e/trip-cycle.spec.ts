@@ -160,7 +160,14 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       p_items: JSON.parse(
         await form.locator('input[name="items"]').inputValue(),
       ),
-      p_payment: { selection: "CASH", reported_amount: null, reference: "" },
+      p_payment: {
+        selection: "CASH",
+        reported_amount: null,
+        reference: "",
+        payments: JSON.parse(
+          await form.locator('input[name="finance_payments"]').inputValue(),
+        ),
+      },
       p_notes: "",
       p_key: await form.locator('input[name="key"]').inputValue(),
     };

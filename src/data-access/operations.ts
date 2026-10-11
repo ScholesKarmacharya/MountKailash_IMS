@@ -22,7 +22,7 @@ export async function writeOperation(command: Command): Promise<string> {
   if (error) {
     if (error.code === "23505")
       throw new Error(
-        "That vehicle, driver, plate or request is already assigned. Refresh and check before retrying.",
+        "That assignment, request or verified transaction reference already exists. Refresh and check before retrying.",
       );
     if (error.code === "23503")
       throw new Error(
@@ -37,7 +37,7 @@ export async function writeOperation(command: Command): Promise<string> {
     )
       throw new Error(error.message);
     throw new Error(
-      "Unable to save this operation. Refresh and retry; check that Sprint 2 migrations are installed.",
+      "Unable to save this operation. Refresh and retry; check that the required migrations are installed.",
     );
   }
   if (typeof data !== "string")

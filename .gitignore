@@ -1,6 +1,9 @@
 node_modules/
 .next/
 .next-sprint2-e2e/
+.next-scaffold-e2e/
+.next-auth-e2e/
+.next-build-check/
 out/
 coverage/
 playwright-report/

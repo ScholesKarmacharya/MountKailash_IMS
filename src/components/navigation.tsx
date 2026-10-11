@@ -1,13 +1,10 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, Wallet, ClipboardCheck } from "lucide-react";
+import { LayoutDashboard, Package, ClipboardCheck } from "lucide-react";
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
-const futureAdmin = [
-  ["Payments", Wallet],
-  ["Daily close", ClipboardCheck],
-] as const;
+const futureAdmin = [["Daily close", ClipboardCheck]] as const;
 export function Navigation({ role }: { role: Role }) {
   const pathname = usePathname();
   const href = role === "ADMIN" ? "/admin/dashboard" : "/driver/home";
@@ -36,6 +33,9 @@ export function Navigation({ role }: { role: Role }) {
             ["Customers", "/admin/customers"],
             ["Vehicles", "/admin/vehicles"],
             ["Drivers", "/admin/drivers"],
+            ["Payments", "/admin/payments"],
+            ["Customer credit", "/admin/credit"],
+            ["Billing settings", "/admin/billing"],
           ] as const
         ).map(([label, target]) => (
           <Link

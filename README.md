@@ -40,6 +40,8 @@ The unanswered business questions in `docs/OPEN_QUESTIONS.md` have conservative 
 
 ## Install and start
 
+For an already-linked **Supabase Cloud** project, follow [Cloud setup and login](docs/SUPABASE_CLOUD_SETUP.md). Cloud does not require Docker or a database reset. The instructions below are for disposable local Supabase development.
+
 Use Node.js 22.13+ (or Node 24 LTS), npm and Docker Desktop for local Supabase.
 
 ```sh

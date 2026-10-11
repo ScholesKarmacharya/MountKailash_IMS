@@ -15,6 +15,8 @@ export type Permission =
   | "stock:adjust"
   | "product:manage"
   | "day:open"
+  | "finance:manage"
+  | "payment:record"
   | "day:close";
 export function isRole(value: unknown): value is Role {
   return value === "ADMIN" || value === "DRIVER";
@@ -27,6 +29,7 @@ export function can(profile: Profile | null, permission: Permission): boolean {
   return (
     profile.role === "ADMIN" ||
     permission === "driver:read" ||
+    permission === "payment:record" ||
     permission === "trip:operate"
   );
 }

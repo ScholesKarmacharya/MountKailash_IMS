@@ -1,6 +1,6 @@
 # Sprint 1: products and warehouse inventory
 
-This implements the user's product/warehouse scope. Original requirement documents remain authoritative. Existing Auth users, profiles, IDs and Sprint 0 migration are preserved. No Cloud migration or operational write was performed during implementation.
+This implements the user's product/warehouse scope. Original requirement documents remain authoritative. Existing Auth users, profiles, IDs and Sprint 0 migration are preserved. Sprint 1 is now confirmed applied in Cloud; verification retained no sample inventory or operational changes. See [Cloud verification results](SPRINT_1_CLOUD_VERIFICATION.md).
 
 ## Behavior
 
@@ -31,13 +31,13 @@ Stock movements, adjustments, audits and request records reject UPDATE, DELETE a
 
 Forms keep the request key while retrying in the current page, disable repeated submits while pending and disable further posting after a confirmed success. Use “Start another entry” for a new operation. If a network failure leaves the result uncertain, retry the same form unchanged; avoid reloading and submitting a new correction before checking history. Full offline/persistent replay remains deferred.
 
-## Migration approval
+## Migration status
 
-Pending migration: `supabase/migrations/202610110002_sprint1_inventory.sql`.
+Applied migration: `supabase/migrations/202610110002_sprint1_inventory.sql`.
 
-Verified remotely: Sprint 0 `202610110001` remains applied; Sprint 1 is pending. The Cloud dry run lists only the Sprint 1 file. Dry run checks the pending list, not execution of SQL against Cloud.
+Verified remotely on 2026-10-11: both Sprint 0 `202610110001` and Sprint 1 `202610110002` are applied. The Cloud dry run reports up to date with no pending migrations. No reapplication, reset or repair was performed. Dry run checks the pending list, not execution of SQL against Cloud.
 
-Review this additive migration and your Cloud backup/restore readiness before applying:
+For future reviewed migrations, inspect the dry-run list before applying. Do not reapply Sprint 1 raw SQL:
 
 ```powershell
 npx.cmd --no-install supabase migration list --linked
@@ -50,7 +50,7 @@ It creates schema objects, one zero-stock warehouse identity and tightly scoped 
 
 No new environment variables or secret keys are required. Continue using the saved `.env.local` Cloud URL/public key and existing demo account passwords privately.
 
-## Acceptance steps after migration approval
+## Operational acceptance with actual inventory
 
 1. Run `npm.cmd run dev` if the server is not already running. Sign in as the existing admin, visit Products and create one 20L jar and one carton using actual SKU/name/unit/price. Both start at zero. Edit the price/name/unit/status with a reason; expand the product again to confirm persistence. Product kind stays fixed. Duplicate SKU, negative price and excessive decimal precision must fail.
 2. Visit Inventory. Open a business day only if none is active. Record approved opening counts for each of FULL_JAR, EMPTY_JAR and BOTTLE_CARTON with a reason. Confirm the dialog. Check the product row, dashboard total and before/after history agree after each adjustment. Do not post invented demo quantities into an operational Cloud database.
@@ -64,7 +64,7 @@ No new environment variables or secret keys are required. Continue using the sav
 
 Executed on 2026-10-11: strict type-check, lint, formatting and production build passed; Vitest passed 75 tests across nine files, including 17 actual PostgreSQL integration tests. Existing Cloud browser verification passed for admin and driver on desktop/mobile, including the new protected screens and sign-out. Migration history and Cloud dry run passed and showed only Sprint 1 pending.
 
-Not yet executed: applying the Cloud migration, live product/stock write acceptance, Supabase pgTAP against staging, and simultaneous separate-session race tests. These require the reviewed migration on an approved environment. No simulated browser writes are claimed as Cloud acceptance.
+Update: Cloud migration history is now current; real Cloud rollback-only RPC checks and existing Sprint 0/Sprint 1 pgTAP suites passed. Database/UI stock totals matched after refresh and logout/login on desktop/mobile. Test products, days, stock adjustments and audit fixtures were rolled back. Actual user stock entry and simultaneous separate-session race acceptance remain to be performed with approved operational quantities or on staging. No committed browser stock writes were made for testing.
 
 ```powershell
 npm.cmd run typecheck
@@ -77,7 +77,7 @@ node --env-file=.env.local scripts/verify-cloud-login.mjs http://localhost:3000
 
 The isolated integration suite executes both migrations unmodified in embedded PostgreSQL, checks the RLS/grants/RPCs, negative stock, exact prices, stale product versions, retries, payload conflicts, actor/state/day checks, overflow, immutability and rollback after an injected audit failure. Provider-owned `auth.users`/`auth.uid()` are test stubs. PGlite has one database session; true multi-connection lock races require staging acceptance.
 
-Supabase pgTAP tests are also provided at `supabase/tests/sprint1.test.sql`; they roll back fixtures and require a disposable database with no active operational day. Cloud is not reset or seeded to run them. Browser Cloud verification is read-only apart from authentication: existing logins, dashboards, protected new screens, mobile sizing and sign-out. Live product/stock write acceptance awaits migration approval.
+Supabase pgTAP tests are also provided at `supabase/tests/sprint1.test.sql`; they roll back fixtures and require a database with no active operational day. They were safely run on Cloud when no day was active, without a reset. The repeatable Cloud verification commands and safeguards are documented in `SPRINT_1_CLOUD_VERIFICATION.md`. Browser verification reads existing stock, signs users in/out and checks denied driver writes; it does not create sample stock or commit a test day.
 
 ## Next work
 

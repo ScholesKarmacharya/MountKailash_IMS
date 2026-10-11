@@ -1,14 +1,10 @@
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/empty-state";
+import { TripList } from "@/components/trip-summary";
 import { getAdminDashboard } from "@/services/dashboard";
 import { formatNepalTime, isOvernightDay } from "@/domain/business-days/time";
 import { WarehouseStock } from "@/components/warehouse-stock";
 import Link from "next/link";
 const metrics = [
-  {
-    title: "Pending trips",
-    description: "Assignment and reconciliation arrive in Sprint 2.",
-  },
   {
     title: "Collected payments",
     description: "Cash and pending Fonepay records arrive in Sprint 3.",
@@ -19,7 +15,7 @@ const metrics = [
   },
 ];
 export default async function Dashboard() {
-  const { businessDay, inventory } = await getAdminDashboard();
+  const { businessDay, inventory, operations } = await getAdminDashboard();
   return (
     <div className="space-y-7">
       <div>
@@ -73,6 +69,21 @@ export default async function Dashboard() {
         Manage warehouse inventory
       </Link>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <Card>
+          <h2 className="text-sm font-semibold">Pending trips</h2>
+          <p className="my-5 text-3xl font-bold">
+            {operations.available
+              ? operations.trips.filter((t) =>
+                  ["SUBMITTED", "UNDER_REVIEW", "DISCREPANCY"].includes(
+                    t.status,
+                  ),
+                ).length
+              : "Unavailable"}
+          </p>
+          <Link href="/admin/trips" className="text-sm text-primary underline">
+            Review trip queue
+          </Link>
+        </Card>
         {metrics.map((metric) => (
           <Card key={metric.title}>
             <h2 className="text-sm font-semibold">{metric.title}</h2>
@@ -86,10 +97,17 @@ export default async function Dashboard() {
         ))}
       </div>
       <Card>
-        <EmptyState
-          title="Trip queue is not yet live"
-          description="Assigned, submitted and unresolved trips will appear here once trip services are implemented. Trip totals are not yet calculated."
-        />
+        <h2 className="mb-4 font-semibold">Open trip queue</h2>
+        {operations.available ? (
+          <TripList
+            trips={operations.trips.filter((t) => t.status !== "CLOSED")}
+            admin
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sprint 2 migrations are required before trip data can load.
+          </p>
+        )}
       </Card>
       <p className="text-sm text-muted-foreground">
         Collections will include repayments of prior credit. Refundable deposits

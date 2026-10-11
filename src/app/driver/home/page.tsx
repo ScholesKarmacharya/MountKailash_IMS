@@ -1,48 +1,95 @@
-import { requirePermission } from "@/services/auth";
+import Link from "next/link";
+import { randomUUID } from "node:crypto";
+import { getOperations } from "@/services/operations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/empty-state";
-import { Plus } from "lucide-react";
+import {
+  MigrationRequired,
+  OperationsHeading,
+} from "@/components/operations-layout";
+import { StockCards, TripList } from "@/components/trip-summary";
+import { OperationForm } from "@/components/operation-form";
 export default async function DriverHome() {
-  await requirePermission("driver:read");
+  const overview = await getOperations(false);
+  const trip = overview.trips.find((t) => t.status !== "CLOSED");
+  const w = trip ? await getOperations(false, trip.id) : overview;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
-          Delivery workspace
-        </p>
-        <h1 className="text-3xl font-bold">My day</h1>
-        <p className="mt-2 text-muted-foreground">
-          Your assigned trip and customer visits.
-        </p>
-      </div>
-      <Card>
-        <h2 className="font-semibold">
-          Assigned trip{" "}
-          <span className="ml-2 text-xs font-normal text-muted-foreground">
-            Not yet live
-          </span>
-        </h2>
-        <EmptyState
-          title="Trip assignments are not connected"
-          description="Your admin-assigned trip, loaded stock and return status will appear here in Sprint 2."
-        />
-      </Card>
-      <Card>
-        <h2 className="mb-3 font-semibold">New customer visit</h2>
-        <p id="visit-help" className="mb-5 text-sm text-muted-foreground">
-          Not yet live. Recording visits requires an assigned open trip and
-          server-validated inventory. Repeated customer visits will be
-          supported.
-        </p>
-        <Button disabled aria-describedby="visit-help" className="w-full">
-          <Plus className="size-4" aria-hidden="true" />
-          New visit · Coming in Sprint 2
-        </Button>
-      </Card>
-      <p className="text-sm text-muted-foreground">
-        Trip submission will request admin reconciliation. Your declaration will
-        not approve warehouse returns.
+      <OperationsHeading
+        title="My day"
+        description="Your trip, stock and deliveries."
+      />
+      {!w.available ? (
+        <MigrationRequired />
+      ) : trip ? (
+        <>
+          <Card className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+              Assigned trip
+            </p>
+            <h2 className="text-2xl font-bold">
+              Trip #{trip.trip_number} · {trip.plate_number}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Business day {trip.date_label} ·{" "}
+              {trip.status.replaceAll("_", " ")}
+            </p>
+            {trip.status === "ACTIVE" ? (
+              <Button asChild className="min-h-14 w-full text-lg">
+                <Link href={`/driver/trips/${trip.id}#add-delivery`}>
+                  Add Delivery
+                </Link>
+              </Button>
+            ) : trip.status === "LOADED" ? (
+              <OperationForm
+                operation="start"
+                trip={trip.id}
+                requestKey={randomUUID()}
+                label="Start trip"
+                confirm="Start this loaded trip?"
+              />
+            ) : (
+              <p className="text-sm">
+                {trip.status === "DRAFT"
+                  ? "Your admin is preparing the vehicle load."
+                  : "Your submitted counts await warehouse verification."}
+              </p>
+            )}
+            <Link
+              className="inline-block py-3 font-semibold text-primary underline"
+              href={`/driver/trips/${trip.id}`}
+            >
+              View trip / return counts
+            </Link>
+          </Card>
+          {w.loads.length > 0 && (
+            <>
+              <h2 className="font-semibold">Remaining vehicle stock</h2>
+              <StockCards workspace={w} trip={trip} />
+            </>
+          )}
+        </>
+      ) : (
+        <Card>
+          <h2 className="font-semibold">No assigned trip</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Your admin will assign a driver, vehicle and load before you can
+            record deliveries.
+          </p>
+        </Card>
+      )}
+      {overview.available && (
+        <>
+          <h2 className="font-semibold">Recent trips</h2>
+          <TripList
+            trips={overview.trips.filter((t) => t.status === "CLOSED")}
+            admin={false}
+          />
+        </>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Payments remain unverified until Sprint 3. Your return declaration
+        requires warehouse approval.
       </p>
     </div>
   );

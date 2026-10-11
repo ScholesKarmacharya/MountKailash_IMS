@@ -3,6 +3,8 @@ import type { Profile } from "@/domain/auth/roles";
 import { signOut } from "@/app/sign-in/actions";
 import { Button } from "./ui/button";
 import { Navigation } from "./navigation";
+import { cn } from "@/lib/utils";
+import { OperationFeedback } from "./operation-feedback";
 export function AppShell({
   profile,
   children,
@@ -11,9 +13,27 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[250px_1fr]">
-      <aside className="border-b border-border bg-card p-5 lg:sticky lg:top-0 lg:h-dvh lg:border-r">
-        <div className="mb-7 flex items-center gap-3">
+    <div
+      className={cn(
+        "min-h-dvh",
+        profile.role === "ADMIN" && "lg:grid lg:grid-cols-[250px_1fr]",
+      )}
+    >
+      <OperationFeedback />
+      <aside
+        className={cn(
+          "border-b border-border bg-card p-5",
+          profile.role === "ADMIN"
+            ? "lg:sticky lg:top-0 lg:h-dvh lg:border-r"
+            : "flex items-center justify-between gap-3",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-3",
+            profile.role === "ADMIN" && "mb-7",
+          )}
+        >
           <Droplets className="size-8 text-primary" aria-hidden="true" />
           <div>
             <p className="font-bold">Mount Kailash</p>
@@ -29,7 +49,7 @@ export function AppShell({
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-6 py-4">
           <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">
-            Sprint 1 · Products & stock
+            Operations workspace
           </span>
           <div className="flex items-center gap-4">
             <span className="text-sm">{profile.name}</span>

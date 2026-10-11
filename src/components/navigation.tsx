@@ -1,19 +1,10 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Truck,
-  Package,
-  Users,
-  Wallet,
-  ClipboardCheck,
-} from "lucide-react";
+import { LayoutDashboard, Package, Wallet, ClipboardCheck } from "lucide-react";
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
 const futureAdmin = [
-  ["Trips", Truck],
-  ["Customers", Users],
   ["Payments", Wallet],
   ["Daily close", ClipboardCheck],
 ] as const;
@@ -41,6 +32,10 @@ export function Navigation({ role }: { role: Role }) {
           [
             ["Products", "/admin/products"],
             ["Inventory", "/admin/inventory"],
+            ["Trips", "/admin/trips"],
+            ["Customers", "/admin/customers"],
+            ["Vehicles", "/admin/vehicles"],
+            ["Drivers", "/admin/drivers"],
           ] as const
         ).map(([label, target]) => (
           <Link
@@ -56,21 +51,23 @@ export function Navigation({ role }: { role: Role }) {
             {label}
           </Link>
         ))}
-      <p className="px-4 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Coming in later sprints
-      </p>
-      {(role === "ADMIN" ? futureAdmin : ([["My trips", Truck]] as const)).map(
-        ([label, Icon]) => (
-          <span
-            key={label}
-            className="flex min-h-11 items-center gap-3 px-4 text-sm text-muted-foreground"
-            aria-disabled="true"
-          >
-            <Icon className="size-4" aria-hidden="true" />
-            {label}
-            <span className="ml-auto text-xs">Not live</span>
-          </span>
-        ),
+      {role === "ADMIN" && (
+        <>
+          <p className="px-4 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Coming in later sprints
+          </p>
+          {futureAdmin.map(([label, Icon]) => (
+            <span
+              key={label}
+              className="flex min-h-11 items-center gap-3 px-4 text-sm text-muted-foreground"
+              aria-disabled="true"
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              {label}
+              <span className="ml-auto text-xs">Not live</span>
+            </span>
+          ))}
+        </>
       )}
     </nav>
   );

@@ -28,11 +28,8 @@ for (const role of ["ADMIN", "DRIVER"] as const) {
       ).toBeDisabled();
     } else {
       await expect(
-        page.getByText("No active day", { exact: true }),
-      ).toBeVisible();
-      await expect(
         page.getByText("Not yet available", { exact: true }),
-      ).toHaveCount(4);
+      ).toHaveCount(3);
     }
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL(/\/sign-in/);

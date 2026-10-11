@@ -1,6 +1,6 @@
 # Mount Kailash Water Distribution Management System
 
-Specification pack and Sprint 0 application foundation, v0.1 (2026-10-11). This is a local development app, **not a deployed ERP**. Stock, trips, payments and day closing are intentionally not yet live.
+Specification pack, authenticated application foundation and Sprint 1 product/warehouse implementation (2026-10-11). Product and inventory screens use real Supabase data after the reviewed Sprint 1 migration is applied. Trips, payments, refilling and day closing remain future work. See [Sprint 1 implementation, migration review and testing](docs/SPRINT_1_IMPLEMENTATION.md).
 
 ## Goal
 
@@ -93,6 +93,8 @@ Vitest covers role permissions, server guards, and Nepal midnight behavior. Play
 
 `src/domain` holds pure policy; `src/data-access` holds server-only queries; `src/services` owns authorization and orchestration; `src/app` holds routes and server actions; `src/components/ui` holds shadcn-compatible primitives. Authenticated pages use dynamic cookie-backed identity checks and no shared user-data cache. Tailwind tokens and shadcn generator aliases are configured in `components.json`.
 
-Only `profiles` and `business_days` are migrated. Browser roles have read-only, RLS-filtered access. A provisional single operating unit permits one OPEN/CLOSING_REVIEW day. No day-write API is enabled before audited lifecycle services exist. See `docs/SPRINT_0_IMPLEMENTATION.md` for journal/transaction/idempotency boundaries, deferred client decisions and acceptance demonstration. Do not treat the later ERP acceptance scenarios as implemented.
+Sprint 0 migrates `profiles` and `business_days`; Sprint 1 adds products, warehouse locations, balances, stock movements, adjustments, operation requests and audit events. Direct table writes remain blocked. Authenticated admin-only RPCs validate identity and commit inventory changes atomically. A provisional single operating unit permits one OPEN/CLOSING_REVIEW day. A minimal audited day-opening action enables stock operations; close/reconciliation remain deferred. The app uses the caller's cookie-backed session, never a service-role key. Missing Sprint 1 schema produces a setup state, never fake zero stock.
 
-**Next task: S1.1** — products, customer identities and configurable default/customer prices, without fixing unresolved deposit or tax policy. Then S1.2/S1.3 add stock journals and atomic retry-safe transfers before exposing stock writes.
+`npm test` also runs isolated real PostgreSQL migration/RPC/RLS tests using PGlite, with provider identities stubbed and application SQL unchanged. These tests do not need Docker, Cloud credentials or an environment file. They do not replace multi-connection race testing on staging or live Supabase acceptance after migration approval. Supabase pgTAP coverage is in `supabase/tests/sprint1.test.sql` for a disposable database with no active day; never reset Cloud to run tests.
+
+**Next work:** customer identities/customer prices, vehicle management and a dedicated atomic refill/damage workflow are still open Sprint 1 backlog items outside this product/warehouse request. Then Sprint 2 adds admin-approved trip loading, assigned-driver operational reads, repeated visits and return reconciliation. Do not implement loading or refilling as manual stock corrections.

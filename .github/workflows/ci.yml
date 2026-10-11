@@ -1,4 +1,4 @@
-name: Sprint 0 checks
+name: Application and database checks
 on:
   push:
   pull_request:

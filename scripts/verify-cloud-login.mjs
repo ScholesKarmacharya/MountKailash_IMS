@@ -64,6 +64,27 @@ try {
           stage = `DRIVER ${viewport.name} admin-route exclusion`;
           await page.goto(`${baseURL}/admin/dashboard`);
           await page.waitForURL((url) => url.pathname === "/driver/home");
+          for (const route of ["/admin/products", "/admin/inventory"]) {
+            await page.goto(`${baseURL}${route}`);
+            await page.waitForURL((url) => url.pathname === "/driver/home");
+          }
+        } else {
+          for (const [route, heading] of [
+            ["/admin/products", "Products"],
+            ["/admin/inventory", "Warehouse inventory"],
+          ]) {
+            stage = `ADMIN ${viewport.name} ${heading} screen`;
+            await page.goto(`${baseURL}${route}`);
+            await page
+              .getByRole("heading", { name: heading, exact: true })
+              .waitFor();
+            if (
+              !(await page.evaluate(
+                () => document.documentElement.scrollWidth <= window.innerWidth,
+              ))
+            )
+              throw new Error("Layout overflows.");
+          }
         }
         stage = `${role} ${viewport.name} sign-out`;
         await page

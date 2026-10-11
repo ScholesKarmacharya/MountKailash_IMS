@@ -13,7 +13,14 @@ test("sign-in explains missing configuration and has accessible fields", async (
     page.getByRole("button", { name: "Sign in", exact: true }),
   ).toBeDisabled();
 });
-for (const route of ["/admin", "/admin/dashboard", "/driver", "/driver/home"])
+for (const route of [
+  "/admin",
+  "/admin/dashboard",
+  "/admin/products",
+  "/admin/inventory",
+  "/driver",
+  "/driver/home",
+])
   test(`unauthenticated direct ${route} access is guarded`, async ({
     page,
   }) => {

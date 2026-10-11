@@ -4,7 +4,7 @@
 
 Application operations use the caller's verified Supabase Auth session, server permission checks and PostgreSQL RPCs. No service-role key is used by the application. Sprint 0 authentication and Sprint 1 product/warehouse operations remain intact. Sprint 2 screens query real database data; before its migrations are applied, they report the missing migration explicitly.
 
-The three migrations below are **pending Cloud review**. No Cloud reset, user deletion, password change, sample inventory, customer or vehicle seeding is part of this implementation. The isolated browser tests provision synthetic identities and stock exclusively in an ephemeral PGlite database, never in Supabase Cloud.
+The three migrations below are **applied to the linked Supabase Cloud project after explicit user approval**. See [Cloud verification results](SPRINT_2_CLOUD_VERIFICATION.md). No Cloud reset, user deletion, password change, sample inventory, customer or vehicle seeding is part of this implementation. The isolated browser tests provision synthetic identities and stock exclusively in an ephemeral PGlite database, never in Supabase Cloud.
 
 ## Migration review
 
@@ -101,7 +101,7 @@ Sprint 3 should establish append-only finance/receivables journals, verified cas
 | `node --env-file=.env.local scripts/verify-cloud-login.mjs http://localhost:3000` | 4 passed: existing Cloud ADMIN/DRIVER on desktop/mobile, correct dashboard, responsive navigation, all new admin-route exclusions, and sign-out. Read-only operations apart from Auth sessions. |
 | `npm.cmd run format:check`                                                        | Passed.                                                                                                                                                                                         |
 | `npm.cmd run build`                                                               | Passed; all existing and new routes compile.                                                                                                                                                    |
-| `supabase migration list --linked` / `supabase db push --linked --dry-run`        | Sprint 0/1 applied; exactly migrations 003–005 pending. No seeds or extra migrations. Cloud application remains pending review.                                                                 |
+| `supabase migration list --linked` / `supabase db push --linked --dry-run`        | All five migrations are now applied locally/remotely. The initial dry run listed exactly 003–005; subsequent Cloud verification passed.                                                         |
 
 Changed files are grouped by their purpose:
 
@@ -113,4 +113,4 @@ Changed files are grouped by their purpose:
 - Verification: `tests/integration/operations-db.test.ts`, `tests/unit/{operations,operations-service}.test.ts`, `tests/operations-e2e/trip-cycle.spec.ts`, `tests/helpers/operations-provider.mjs`, `tests/auth-e2e/auth.spec.ts`, `scripts/verify-cloud-login.mjs`, `playwright.operations.config.ts`.
 - Tooling and documentation: `.gitignore`, `.prettierignore`, `eslint.config.mjs`, `next.config.ts`, `tsconfig.json`, `package.json`, `README.md`, this report. The separate test build directory is ignored; no new dependency or environment variable is required for the application.
 
-Remaining deployment dependencies are migration review/application, Cloud PostgREST/schema verification afterward, and manual acceptance using approved real stock. True multi-connection race tests belong on staging. No Cloud operational data was created, historical data removed, or existing account password/role changed during implementation.
+Cloud migration application and PostgREST/schema/read-only browser verification are complete. Manual write acceptance using approved real stock remains user-controlled. True multi-connection race tests belong on staging. No Cloud operational data was created, historical data removed, or existing account password/role changed during implementation.

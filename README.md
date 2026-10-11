@@ -101,6 +101,8 @@ Sprint 0 migrates `profiles` and `business_days`; Sprint 1 adds products, wareho
 
 Customer, driver, vehicle, trip, delivery and physical return workflows are implemented. Read [Sprint 2 migration review, provisional assumptions and browser acceptance](docs/SPRINT_2_IMPLEMENTATION.md) before applying the three forward-only migrations to Cloud. No new environment variables, database reset or automatic sample stock are required.
 
+See the [Sprint 2 integration audit](docs/SPRINT_2_INTEGRATION_AUDIT.md) for the executed trip cycle, retry/rollback/authorization results, UI fixes and staging checks required before operational sign-off.
+
 `npm run test:e2e:operations` runs the real screens and application SQL against disposable PostgreSQL with a test-only Auth/PostgREST adapter, using separate loopback ports and build output. It does not modify the connected Cloud project. Existing Cloud login verification reuses the running development server; do not launch two Next dev instances against the same build directory.
 
 **Next work:** Sprint 3 financial journals, credit repayments, verified collections, settlement and finance reconciliation. Product-specific customer pricing, deposits and tax need confirmed rules. Refilling/damage and daily close remain separate workflows.

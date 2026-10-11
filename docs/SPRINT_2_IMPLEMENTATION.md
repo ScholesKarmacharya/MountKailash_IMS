@@ -4,6 +4,8 @@
 
 Application operations use the caller's verified Supabase Auth session, server permission checks and PostgreSQL RPCs. No service-role key is used by the application. Sprint 0 authentication and Sprint 1 product/warehouse operations remain intact. Sprint 2 screens query real database data; before its migrations are applied, they report the missing migration explicitly.
 
+The follow-up [Sprint 2 integration audit](SPRINT_2_INTEGRATION_AUDIT.md) records the stale-stock UI fix, expanded 121-test suite, desktop/mobile trip and retry checks, current Cloud read-only verification and remaining staging acceptance limits.
+
 The three migrations below are **applied to the linked Supabase Cloud project after explicit user approval**. See [Cloud verification results](SPRINT_2_CLOUD_VERIFICATION.md). No Cloud reset, user deletion, password change, sample inventory, customer or vehicle seeding is part of this implementation. The isolated browser tests provision synthetic identities and stock exclusively in an ephemeral PGlite database, never in Supabase Cloud.
 
 ## Migration review

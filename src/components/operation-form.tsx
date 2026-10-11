@@ -1,7 +1,6 @@
 "use client";
 import { useActionState, useEffect, useState, useId } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { operationAction } from "@/app/operations-actions";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -96,7 +95,6 @@ export function OperationForm({
   const [stableRequest] = useState(requestKey);
   const [stableId] = useState(id);
   const [stableVersion] = useState(version);
-  const router = useRouter();
   useEffect(() => {
     if (!dirty || state?.success) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -158,7 +156,6 @@ export function OperationForm({
               type="button"
               variant="outline"
               onClick={() => {
-                router.refresh();
                 window.location.reload();
               }}
             >

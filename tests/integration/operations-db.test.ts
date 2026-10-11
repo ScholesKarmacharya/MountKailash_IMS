@@ -34,7 +34,6 @@ async function rejects(name: string, args: unknown[], message: RegExp) {
 const items = (full = 40, empty = 30, cartons = 0) =>
   JSON.stringify([
     { product_id: jar, full_jars: full, empty_jars: empty, cartons },
-    ...(cartons ? [] : []),
   ]);
 const counts = (full = 20, empty = 65, cartons = 10) =>
   JSON.stringify([
@@ -643,4 +642,287 @@ it("denies anonymous and disabled identities and direct sequence manipulation", 
     db.exec("select public.operations_workspace(null)"),
   ).rejects.toThrow(/permission/);
   await db.exec("rollback to savepoint anonymous");
+});
+
+// Capture every physical effect, including request/audit rows, rather than only
+// asserting a failed RPC's error text. Read as the isolated database owner:
+// request journals are intentionally inaccessible even to application admins.
+async function physicalSnapshot() {
+  await db.exec("reset role");
+  const result = await scalar(`select jsonb_build_object(
+    'balances',(select jsonb_agg(to_jsonb(b) order by location_id,product_id,stock_kind) from public.inventory_balances b),
+    'custody',(select jsonb_agg(to_jsonb(c) order by customer_id,product_id) from public.jar_custody_balances c),
+    'trips',(select jsonb_agg(to_jsonb(t) order by id) from public.trips t),
+    'movements',(select count(*) from public.stock_movements),
+    'loads',(select count(*) from public.trip_load_items),
+    'visits',(select count(*) from public.trip_visits),
+    'items',(select count(*) from public.visit_items),
+    'custody_entries',(select count(*) from public.jar_custody_entries),
+    'values',(select count(*) from public.delivery_value_snapshots),
+    'payments',(select count(*) from public.delivery_payment_intents),
+    'declarations',(select count(*) from public.trip_return_declarations),
+    'checks',(select count(*) from public.trip_return_checks),
+    'check_items',(select count(*) from public.trip_return_check_items),
+    'discrepancies',(select count(*) from public.trip_discrepancies),
+    'requests',(select count(*) from public.operation_requests),
+    'audit',(select count(*) from public.audit_events))`);
+  await db.exec("set role authenticated");
+  return result;
+}
+it("rolls back earlier load lines when a later product is out of stock", async () => {
+  const before = await physicalSnapshot();
+  // SQL sorts product IDs; make the first line valid and the second too large.
+  const loadItems = [
+    { product_id: jar, stock_kind: "FULL_JAR", quantity: 1 },
+    { product_id: carton, stock_kind: "BOTTLE_CARTON", quantity: 1 },
+  ].sort((a, b) => a.product_id.localeCompare(b.product_id));
+  loadItems[1]!.quantity = 101;
+  await rejects(
+    "load_trip",
+    [trip, JSON.stringify(loadItems), randomUUID()],
+    /Insufficient/,
+  );
+  expect(await physicalSnapshot()).toEqual(before);
+});
+it("rolls back all visit effects when a later line cannot be delivered", async () => {
+  await active();
+  await who(admin);
+  const before = await physicalSnapshot();
+  const lines = [
+    { product_id: jar, full_jars: 1, empty_jars: 1, cartons: 0 },
+    { product_id: carton, full_jars: 0, empty_jars: 0, cartons: 1 },
+  ].sort((a, b) => a.product_id.localeCompare(b.product_id));
+  if (lines[1]!.product_id === jar) lines[1]!.full_jars = 101;
+  else lines[1]!.cartons = 11;
+  await who(driver);
+  await rejects(
+    "post_trip_visit",
+    [
+      trip,
+      customer,
+      "",
+      "",
+      JSON.stringify(lines),
+      '{"selection":"CASH"}',
+      "",
+      randomUUID(),
+    ],
+    /Insufficient/,
+  );
+  await who(admin);
+  expect(await physicalSnapshot()).toEqual(before);
+});
+it.each([-1, 1.5, 2147483648, null])(
+  "rejects invalid delivery quantity %s without ledger changes",
+  async (quantity) => {
+    await active();
+    await who(admin);
+    const before = await physicalSnapshot();
+    await who(driver);
+    await rejects(
+      "post_trip_visit",
+      [
+        trip,
+        customer,
+        "",
+        "",
+        JSON.stringify([
+          { product_id: jar, full_jars: quantity, empty_jars: 0, cartons: 0 },
+        ]),
+        '{"selection":"CASH"}',
+        "",
+        randomUUID(),
+      ],
+      /whole|integer|range/i,
+    );
+    await who(admin);
+    expect(await physicalSnapshot()).toEqual(before);
+  },
+);
+it("retries the entire completed trip without adding any physical or audit effects", async () => {
+  const loadKey = randomUUID(),
+    startKey = randomUUID(),
+    visitKey = randomUUID(),
+    submitKey = randomUUID(),
+    closeKey = randomUUID();
+  const loadLines = JSON.stringify([
+    { product_id: jar, stock_kind: "FULL_JAR", quantity: 100 },
+    { product_id: carton, stock_kind: "BOTTLE_CARTON", quantity: 10 },
+  ]);
+  await rpc("load_trip", [trip, loadLines, loadKey]);
+  await who(driver);
+  await rpc("transition_trip", [trip, "START", "", startKey]);
+  const visitId = await visit(80, 65, visitKey);
+  await rpc("submit_trip", [trip, counts(), submitKey]);
+  await who(admin);
+  await rpc("reconcile_trip", [
+    trip,
+    counts(),
+    "Verified physical return",
+    false,
+    closeKey,
+  ]);
+  const before = await physicalSnapshot();
+  expect(await rpc("load_trip", [trip, loadLines, loadKey])).toBe(trip);
+  expect(
+    await rpc("reconcile_trip", [
+      trip,
+      counts(),
+      "Verified physical return",
+      false,
+      closeKey,
+    ]),
+  ).toBe(trip);
+  await who(driver);
+  expect(await rpc("transition_trip", [trip, "START", "", startKey])).toBe(
+    trip,
+  );
+  expect(await visit(80, 65, visitKey)).toBe(visitId);
+  expect(await rpc("submit_trip", [trip, counts(), submitKey])).toBe(trip);
+  await rejects("submit_trip", [trip, counts(), randomUUID()], /active trip/);
+  await who(admin);
+  await rejects(
+    "reconcile_trip",
+    [trip, counts(), "Repeated with new key", false, randomUUID()],
+    /submitted trip/,
+  );
+  expect(await physicalSnapshot()).toEqual(before);
+});
+it("reconstructs every warehouse/vehicle balance from its immutable journal and links actors, days and audits", async () => {
+  await active();
+  await visit(40, 30);
+  await visit(40, 35);
+  await rpc("submit_trip", [trip, counts(), randomUUID()]);
+  await who(admin);
+  await rpc("reconcile_trip", [
+    trip,
+    counts(),
+    "Audited physical return",
+    false,
+    randomUUID(),
+  ]);
+  await db.exec("reset role");
+  expect(
+    await scalar(`select count(*) from public.inventory_balances b where b.quantity <> coalesce((
+    select sum(case when m.to_location_id=b.location_id then m.quantity::bigint else -m.quantity::bigint end)
+    from public.stock_movements m where m.product_id=b.product_id and m.stock_kind=b.stock_kind
+      and b.location_id in(m.from_location_id,m.to_location_id)),0)`),
+  ).toBe(0);
+  expect(
+    await scalar(
+      "select count(*) from public.inventory_balances b join public.vehicles v on v.location_id=b.location_id where b.quantity<>0",
+    ),
+  ).toBe(0);
+  expect(
+    await scalar(
+      `select count(*) from public.stock_movements m where m.trip_id=$1 and (
+    m.business_day_id<>$2 or m.actor_user_id not in($3,$4)
+    or (m.from_location_id is not null and (m.from_quantity_before is null or m.from_quantity_after<>m.from_quantity_before-m.quantity))
+    or (m.to_location_id is not null and (m.to_quantity_before is null or m.to_quantity_after<>m.to_quantity_before+m.quantity))
+    or not exists(select 1 from public.operation_requests r where r.actor_user_id=m.actor_user_id and r.idempotency_key=m.idempotency_key))`,
+      [trip, day, admin, driver],
+    ),
+  ).toBe(0);
+  expect(
+    await scalar(`select count(*) from public.trip_visits v where not exists(
+    select 1 from public.audit_events a where a.entity='trip_visits' and a.entity_id=v.id and a.actor_user_id=v.actor_user_id and a.action='DELIVERY_POSTED')`),
+  ).toBe(0);
+  const actions = (
+    await db.query<{ action: string }>(
+      "select action from public.audit_events where entity='trips' and entity_id=$1",
+      [trip],
+    )
+  ).rows.map((r) => r.action);
+  expect(actions).toEqual(
+    expect.arrayContaining([
+      "TRIP_CREATED",
+      "TRIP_LOADED",
+      "TRIP_START",
+      "TRIP_SUBMITTED",
+      "TRIP_CLOSED",
+    ]),
+  );
+  expect(
+    await scalar(
+      "select count(*) from public.jar_custody_balances b where b.quantity<>(select sum(delta) from public.jar_custody_entries e where e.customer_id=b.customer_id and e.product_id=b.product_id)",
+    ),
+  ).toBe(0);
+});
+it("preserves all inventory when return counts contain duplicates or an unknown stock line", async () => {
+  await active();
+  await visit(80, 65);
+  await who(admin);
+  const before = await physicalSnapshot();
+  await who(driver);
+  for (const invalid of [
+    JSON.stringify([...JSON.parse(counts()), JSON.parse(counts())[0]]),
+    JSON.stringify([
+      { product_id: randomUUID(), stock_kind: "FULL_JAR", quantity: 0 },
+      ...JSON.parse(counts()).slice(1),
+    ]),
+  ])
+    await rejects("submit_trip", [trip, invalid, randomUUID()], /every/);
+  await who(admin);
+  expect(await physicalSnapshot()).toEqual(before);
+});
+it("denies every admin master-data operation and unassigned customer delivery for drivers", async () => {
+  const unassigned = randomUUID();
+  await rpc("save_customer", [
+    unassigned,
+    "Unassigned",
+    "",
+    "",
+    "",
+    "",
+    true,
+    0,
+    "Other route",
+    randomUUID(),
+  ]);
+  await active();
+  await rejects(
+    "save_vehicle",
+    [randomUUID(), "FORBIDDEN", "", true, 0, "Forbidden", randomUUID()],
+    /authorized/,
+  );
+  await rejects(
+    "save_driver",
+    [other, "Changed", true, 1, "Forbidden", randomUUID()],
+    /authorized/,
+  );
+  await rejects(
+    "create_trip",
+    [randomUUID(), driver, vehicle, day, "[]", "", randomUUID()],
+    /authorized/,
+  );
+  await rejects(
+    "assign_trip_customer",
+    [trip, unassigned, randomUUID()],
+    /authorized/,
+  );
+  await rejects(
+    "adjust_customer_custody",
+    [customer, jar, 1, day, "Forbidden", randomUUID()],
+    /authorized/,
+  );
+  await rejects(
+    "transition_trip",
+    [trip, "CANCEL", "Forbidden", randomUUID()],
+    /authorized/,
+  );
+  await rejects(
+    "post_trip_visit",
+    [
+      trip,
+      unassigned,
+      "",
+      "",
+      items(1, 0),
+      '{"selection":"CASH"}',
+      "",
+      randomUUID(),
+    ],
+    /route/,
+  );
+  expect(await scalar("select count(*) from public.trip_visits")).toBe(0);
 });

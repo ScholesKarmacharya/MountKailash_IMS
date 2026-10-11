@@ -105,7 +105,12 @@ async function snapshot(client) {
     if (balance.quantity < 0) throw new Error("Negative stock.");
     totals[balance.stock_kind] += balance.quantity;
   }
-  return { balances, adjustmentCount: adjustments.length, totals };
+  return {
+    warehouseId: location.id,
+    balances,
+    adjustmentCount: adjustments.length,
+    totals,
+  };
 }
 async function login(page, role) {
   await page.goto(`${baseURL}/sign-in`);
@@ -158,17 +163,30 @@ try {
   );
   const driver = await session("DRIVER");
   stage = "Driver RLS and direct RPC denial";
-  for (const table of [
-    "products",
-    "stock_locations",
-    "inventory_balances",
-    "stock_movements",
-    "stock_adjustments",
-    "audit_events",
+  // Sprint 2 legitimately exposes assigned products, vehicle balances, trip
+  // movements and trip audits. Check warehouse/manual scope specifically.
+  for (const query of [
+    driver
+      .from("stock_locations")
+      .select("id", { head: true, count: "exact" })
+      .eq("kind", "WAREHOUSE"),
+    driver
+      .from("inventory_balances")
+      .select("product_id", { head: true, count: "exact" })
+      .eq("location_id", before.warehouseId),
+    driver
+      .from("stock_movements")
+      .select("id", { head: true, count: "exact" })
+      .in("movement_type", ["MANUAL_INCREASE", "MANUAL_DECREASE"]),
+    driver
+      .from("stock_adjustments")
+      .select("id", { head: true, count: "exact" }),
+    driver
+      .from("audit_events")
+      .select("id", { head: true, count: "exact" })
+      .eq("entity", "stock_adjustments"),
   ]) {
-    const result = await driver
-      .from(table)
-      .select("*", { head: true, count: "exact" });
+    const result = await query;
     if (result.error || result.count !== 0)
       throw new Error("Driver reads global stock.");
   }

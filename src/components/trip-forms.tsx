@@ -229,11 +229,26 @@ export function DeliveryForm({
         )?.quantity ?? 0) +
           i.full_jars,
     );
+  const stockProblem = items.some((i) =>
+    (
+      [
+        ["FULL_JAR", i.full_jars],
+        ["BOTTLE_CARTON", i.cartons],
+      ] as const
+    ).some(
+      ([kind, quantity]) =>
+        quantity >
+        (counts.find(
+          (c) => c.product_id === i.product_id && c.stock_kind === kind,
+        )?.quantity ?? 0),
+    ),
+  );
   const eligible =
     items.length > 0 &&
     (walk ? !!walkName.trim() : !!customer) &&
     !walkProblem &&
-    !custodyProblem;
+    !custodyProblem &&
+    !stockProblem;
   const router = useRouter();
   return (
     <div className="space-y-5">
@@ -278,7 +293,7 @@ export function DeliveryForm({
         operation="visit"
         trip={trip.id}
         requestKey={requestKey}
-        showSubmit={review}
+        showSubmit={review && eligible}
         label="Save confirmed delivery"
         confirm={`Save ${walk ? walkName : selected?.name}: ${items.map((i) => `${i.full_jars} full, ${i.empty_jars} empty, ${i.cartons} cartons`).join("; ")}? Payment remains unverified.`}
       >
@@ -469,6 +484,12 @@ export function DeliveryForm({
               <p role="alert" className="text-sm text-red-700">
                 Empty collection exceeds the customer&apos;s tracked jars. Ask
                 admin to verify legacy custody first.
+              </p>
+            )}
+            {stockProblem && (
+              <p role="alert" className="text-sm text-red-700">
+                This draft exceeds the remaining vehicle stock. Correct the
+                quantities before reviewing the delivery.
               </p>
             )}
             <Button

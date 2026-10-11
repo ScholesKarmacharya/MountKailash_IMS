@@ -29,7 +29,7 @@ export function AppShell({
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-6 py-4">
           <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">
-            Sprint 0 · Foundation
+            Sprint 1 · Products & stock
           </span>
           <div className="flex items-center gap-4">
             <span className="text-sm">{profile.name}</span>

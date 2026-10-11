@@ -12,7 +12,6 @@ import {
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
 const futureAdmin = [
-  ["Inventory", Package],
   ["Trips", Truck],
   ["Customers", Users],
   ["Payments", Wallet],
@@ -37,6 +36,26 @@ export function Navigation({ role }: { role: Role }) {
         <LayoutDashboard className="size-4" aria-hidden="true" />
         {role === "ADMIN" ? "Overview" : "My day"}
       </Link>
+      {role === "ADMIN" &&
+        (
+          [
+            ["Products", "/admin/products"],
+            ["Inventory", "/admin/inventory"],
+          ] as const
+        ).map(([label, target]) => (
+          <Link
+            key={target}
+            href={target}
+            aria-current={pathname === target ? "page" : undefined}
+            className={cn(
+              "flex min-h-11 items-center gap-3 rounded-lg px-4 text-sm font-semibold",
+              pathname === target ? "bg-primary text-white" : "hover:bg-muted",
+            )}
+          >
+            <Package className="size-4" aria-hidden="true" />
+            {label}
+          </Link>
+        ))}
       <p className="px-4 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Coming in later sprints
       </p>

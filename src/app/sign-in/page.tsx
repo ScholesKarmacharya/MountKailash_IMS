@@ -39,7 +39,7 @@ export default async function SignInPage({
           </p>
         </div>
         <p className="text-xs text-slate-300">
-          Sprint 0 · Foundation only · Nepal business time
+          Mount Kailash operations · Nepal business time
         </p>
       </section>
       <section className="flex items-center justify-center p-6 lg:p-12">

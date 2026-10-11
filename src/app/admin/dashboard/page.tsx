@@ -2,14 +2,12 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { getAdminDashboard } from "@/services/dashboard";
 import { formatNepalTime, isOvernightDay } from "@/domain/business-days/time";
+import { WarehouseStock } from "@/components/warehouse-stock";
+import Link from "next/link";
 const metrics = [
   {
     title: "Pending trips",
     description: "Assignment and reconciliation arrive in Sprint 2.",
-  },
-  {
-    title: "Warehouse stock",
-    description: "Full jars, empty jars and cartons arrive in Sprint 1.",
   },
   {
     title: "Collected payments",
@@ -21,7 +19,7 @@ const metrics = [
   },
 ];
 export default async function Dashboard() {
-  const { businessDay } = await getAdminDashboard();
+  const { businessDay, inventory } = await getAdminDashboard();
   return (
     <div className="space-y-7">
       <div>
@@ -58,12 +56,23 @@ export default async function Dashboard() {
           </>
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">
-            No open business day is recorded. Opening and closing workflows are
-            not yet live; they arrive in Sprint 4.
+            No open business day is recorded. Open a day from warehouse
+            inventory before posting stock adjustments. Closing arrives in
+            Sprint 4.
           </p>
         )}
       </Card>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <WarehouseStock
+        balances={inventory.balances}
+        available={inventory.available}
+      />
+      <Link
+        className="inline-block text-sm font-semibold text-primary underline"
+        href="/admin/inventory"
+      >
+        Manage warehouse inventory
+      </Link>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {metrics.map((metric) => (
           <Card key={metric.title}>
             <h2 className="text-sm font-semibold">{metric.title}</h2>
@@ -79,7 +88,7 @@ export default async function Dashboard() {
       <Card>
         <EmptyState
           title="Trip queue is not yet live"
-          description="Assigned, submitted and unresolved trips will appear here once trip services are implemented. No trip totals are calculated in Sprint 0."
+          description="Assigned, submitted and unresolved trips will appear here once trip services are implemented. Trip totals are not yet calculated."
         />
       </Card>
       <p className="text-sm text-muted-foreground">

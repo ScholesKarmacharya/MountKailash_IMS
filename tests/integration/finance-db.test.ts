@@ -714,7 +714,9 @@ it("reports separate sales, old-credit recovery, pending receipts and deposits",
     m = financeMetrics(f, day);
   expect(m.sales).toBe("3005.00");
   expect(m.collections).toBe("500.00");
-  expect(m.recovered).toBe("500.00");
+  // Repaying an earlier invoice on this same business day is a collection,
+  // but does not represent recovery of credit carried from a previous day.
+  expect(m.recovered).toBe("0.00");
   expect(m.pending).toBe("1502.50");
   expect(m.outstanding).toBe("2505.00");
 });

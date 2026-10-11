@@ -21,9 +21,11 @@ export function financeMetrics(f: FinanceWorkspace, day: string | null) {
   )) {
     const p = f.payments.find((p) => p.id === event.payment_id);
     if (!p) continue;
-    for (const a of f.allocations.filter(
-      (a) => a.payment_id === p.id && a.invoice_id !== p.current_invoice_id,
-    ))
+    for (const a of f.allocations.filter((a) => {
+      const invoice = f.invoices.find((i) => i.id === a.invoice_id);
+      const sale = f.sales.find((s) => s.id === invoice?.sale_id);
+      return a.payment_id === p.id && sale && sale.business_day_id !== day;
+    }))
       recovered += cents(a.amount) * (event.status === "REVERSED" ? -1n : 1n);
   }
   return {

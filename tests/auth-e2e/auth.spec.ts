@@ -24,12 +24,12 @@ for (const role of ["ADMIN", "DRIVER"] as const) {
       await page.goto("/admin/dashboard");
       await expect(page).toHaveURL(/\/driver\/home/);
       await expect(
-        page.getByRole("button", { name: /New visit/ }),
-      ).toBeDisabled();
+        page.getByRole("heading", { name: "My day", exact: true }),
+      ).toBeVisible();
     } else {
       await expect(
         page.getByText("Not yet available", { exact: true }),
-      ).toHaveCount(3);
+      ).toHaveCount(2);
     }
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL(/\/sign-in/);

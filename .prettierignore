@@ -1,5 +1,6 @@
 node_modules
 .next
+.next-sprint2-e2e
 package-lock.json
 playwright-report
 test-results

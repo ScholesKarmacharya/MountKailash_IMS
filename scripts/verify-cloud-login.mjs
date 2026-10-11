@@ -64,7 +64,14 @@ try {
           stage = `DRIVER ${viewport.name} admin-route exclusion`;
           await page.goto(`${baseURL}/admin/dashboard`);
           await page.waitForURL((url) => url.pathname === "/driver/home");
-          for (const route of ["/admin/products", "/admin/inventory"]) {
+          for (const route of [
+            "/admin/products",
+            "/admin/inventory",
+            "/admin/customers",
+            "/admin/vehicles",
+            "/admin/drivers",
+            "/admin/trips",
+          ]) {
             await page.goto(`${baseURL}${route}`);
             await page.waitForURL((url) => url.pathname === "/driver/home");
           }
@@ -72,6 +79,10 @@ try {
           for (const [route, heading] of [
             ["/admin/products", "Products"],
             ["/admin/inventory", "Warehouse inventory"],
+            ["/admin/customers", "Customers"],
+            ["/admin/vehicles", "Vehicles"],
+            ["/admin/drivers", "Drivers"],
+            ["/admin/trips", "Trips"],
           ]) {
             stage = `ADMIN ${viewport.name} ${heading} screen`;
             await page.goto(`${baseURL}${route}`);

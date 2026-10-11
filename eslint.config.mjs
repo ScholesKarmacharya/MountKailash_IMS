@@ -6,6 +6,7 @@ export default defineConfig([
   ...nextTs,
   globalIgnores([
     ".next/**",
+    ".next-sprint2-e2e/**",
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",

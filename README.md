@@ -97,4 +97,10 @@ Sprint 0 migrates `profiles` and `business_days`; Sprint 1 adds products, wareho
 
 `npm test` also runs isolated real PostgreSQL migration/RPC/RLS tests using PGlite, with provider identities stubbed and application SQL unchanged. These tests do not need Docker, Cloud credentials or an environment file. They do not replace multi-connection race testing on staging or live Supabase acceptance after migration approval. Supabase pgTAP coverage is in `supabase/tests/sprint1.test.sql` for a disposable database with no active day; never reset Cloud to run tests.
 
-**Next work:** customer identities/customer prices, vehicle management and a dedicated atomic refill/damage workflow are still open Sprint 1 backlog items outside this product/warehouse request. Then Sprint 2 adds admin-approved trip loading, assigned-driver operational reads, repeated visits and return reconciliation. Do not implement loading or refilling as manual stock corrections.
+## Sprint 2 operations
+
+Customer, driver, vehicle, trip, delivery and physical return workflows are implemented. Read [Sprint 2 migration review, provisional assumptions and browser acceptance](docs/SPRINT_2_IMPLEMENTATION.md) before applying the three forward-only migrations to Cloud. No new environment variables, database reset or automatic sample stock are required.
+
+`npm run test:e2e:operations` runs the real screens and application SQL against disposable PostgreSQL with a test-only Auth/PostgREST adapter, using separate loopback ports and build output. It does not modify the connected Cloud project. Existing Cloud login verification reuses the running development server; do not launch two Next dev instances against the same build directory.
+
+**Next work:** Sprint 3 financial journals, credit repayments, verified collections, settlement and finance reconciliation. Product-specific customer pricing, deposits and tax need confirmed rules. Refilling/damage and daily close remain separate workflows.

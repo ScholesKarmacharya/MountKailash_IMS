@@ -29,6 +29,8 @@ describe("server permission policy", () => {
     "trip:assign",
     "trip:approve",
     "stock:adjust",
+    "product:manage",
+    "day:open",
     "day:close",
   ])("denies driver %s", (permission) => {
     expect(can(driver, permission)).toBe(false);
@@ -44,6 +46,8 @@ describe("server permission policy", () => {
     "trip:assign",
     "trip:approve",
     "stock:adjust",
+    "product:manage",
+    "day:open",
     "day:close",
   ])("rejects missing and disabled identities for %s", (permission) => {
     expect(can(null, permission)).toBe(false);

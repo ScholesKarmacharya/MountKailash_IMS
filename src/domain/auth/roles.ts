@@ -12,6 +12,8 @@ export type Permission =
   | "trip:assign"
   | "trip:approve"
   | "stock:adjust"
+  | "product:manage"
+  | "day:open"
   | "day:close";
 export function isRole(value: unknown): value is Role {
   return value === "ADMIN" || value === "DRIVER";

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { saveOperation } from "@/services/operations";
 import { saveFinance } from "@/services/finance";
+import { saveDay } from "@/services/business-days";
 export type OperationState = {
   error?: string;
   success?: string;
@@ -13,9 +14,10 @@ export async function operationAction(
   form: FormData,
 ): Promise<OperationState> {
   try {
-    const id =
-      typeof form.get("operation") === "string" &&
-      String(form.get("operation")).startsWith("finance:")
+    const operation = String(form.get("operation"));
+    const id = operation.startsWith("day:")
+      ? await saveDay(form)
+      : operation.startsWith("finance:")
         ? await saveFinance(form)
         : await saveOperation(form);
     revalidatePath("/admin", "layout");

@@ -69,8 +69,8 @@ export default async function InventoryPage({
               <div className="space-y-4">
                 <p>
                   No active business day. Open one before posting stock. Opening
-                  uses Nepal time and does not reset any balance. Closing
-                  arrives in Sprint 4.
+                  uses Nepal time and does not reset any balance. Review and
+                  close the day from Daily close.
                 </p>
                 <OpenDayForm requestKey={randomUUID()} />
               </div>

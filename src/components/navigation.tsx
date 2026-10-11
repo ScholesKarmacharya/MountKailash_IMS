@@ -1,10 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ClipboardCheck } from "lucide-react";
+import { LayoutDashboard, Package } from "lucide-react";
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
-const futureAdmin = [["Daily close", ClipboardCheck]] as const;
 export function Navigation({ role }: { role: Role }) {
   const pathname = usePathname();
   const href = role === "ADMIN" ? "/admin/dashboard" : "/driver/home";
@@ -29,6 +28,7 @@ export function Navigation({ role }: { role: Role }) {
           [
             ["Products", "/admin/products"],
             ["Inventory", "/admin/inventory"],
+            ["Refilling and damage", "/admin/refilling"],
             ["Trips", "/admin/trips"],
             ["Customers", "/admin/customers"],
             ["Vehicles", "/admin/vehicles"],
@@ -36,6 +36,8 @@ export function Navigation({ role }: { role: Role }) {
             ["Payments", "/admin/payments"],
             ["Customer credit", "/admin/credit"],
             ["Billing settings", "/admin/billing"],
+            ["Daily close", "/admin/daily-close"],
+            ["Daily history", "/admin/reports"],
           ] as const
         ).map(([label, target]) => (
           <Link
@@ -51,24 +53,6 @@ export function Navigation({ role }: { role: Role }) {
             {label}
           </Link>
         ))}
-      {role === "ADMIN" && (
-        <>
-          <p className="px-4 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Coming in later sprints
-          </p>
-          {futureAdmin.map(([label, Icon]) => (
-            <span
-              key={label}
-              className="flex min-h-11 items-center gap-3 px-4 text-sm text-muted-foreground"
-              aria-disabled="true"
-            >
-              <Icon className="size-4" aria-hidden="true" />
-              {label}
-              <span className="ml-auto text-xs">Not live</span>
-            </span>
-          ))}
-        </>
-      )}
     </nav>
   );
 }

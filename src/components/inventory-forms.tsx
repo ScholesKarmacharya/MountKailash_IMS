@@ -285,7 +285,7 @@ export function OpenDayForm({ requestKey }: { requestKey: string }) {
       onSubmit={(event) => {
         if (
           !window.confirm(
-            "Open a business day for warehouse operations? Its date uses Nepal time. Closing and reconciliation arrive in Sprint 4.",
+            "Open a business day for warehouse operations? Its date uses Nepal time and existing balances carry forward.",
           )
         )
           event.preventDefault();

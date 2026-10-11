@@ -24,7 +24,7 @@ export function AppShell({
         className={cn(
           "border-b border-border bg-card p-5",
           profile.role === "ADMIN"
-            ? "lg:sticky lg:top-0 lg:h-dvh lg:border-r"
+            ? "lg:sticky lg:top-0 lg:h-dvh lg:overflow-y-auto lg:border-r"
             : "flex items-center justify-between gap-3",
         )}
       >

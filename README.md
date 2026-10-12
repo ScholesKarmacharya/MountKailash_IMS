@@ -1,6 +1,6 @@
 # Mount Kailash Water Distribution Management System
 
-Application through Sprint 4 with Sprint 6 integration, driver workflow and dated FIFO pending-jar tracking (2026-10-12). Cloud migrations 001-011 are verified applied; new migrations 012-013 remain pending approval. See [Sprint 6 validation, migration review and acceptance](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved.
+Application through Sprint 4 with Sprint 6 integration, driver workflow and dated FIFO pending-jar tracking (2026-10-12). Cloud migrations 001-013 are verified applied, including the explicitly approved driver/FIFO migrations. See [Sprint 6 validation, migration review and acceptance](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved; hosted operational write acceptance remains outstanding.
 
 ## Goal
 
@@ -127,4 +127,4 @@ npx.cmd --no-install supabase db push --linked --dry-run
 
 The first two commands exercise disposable PostgreSQL only. The third checks Cloud history without applying SQL. No Docker, seed or environment changes are needed. The existing Cloud development server remains at http://localhost:3000.
 
-**Next work:** review/apply migrations 012-013 and complete hosted staging acceptance, simultaneous-connection close/posting tests, backup/restore verification and operational training. Automatic Fonepay still requires official merchant access; deposits remain explicitly configurable and tax unconfigured until confirmed.
+**Next work:** complete hosted staging acceptance, simultaneous-connection close/posting tests, backup/restore verification and operational training. Cloud migrations 012-013 are applied and read-only connected checks pass. Automatic Fonepay still requires official merchant access; deposits remain explicitly configurable and tax unconfigured until confirmed.

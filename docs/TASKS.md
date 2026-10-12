@@ -52,5 +52,6 @@ Tests pass, no outstanding negative stock or double-spend issue, all finance amo
 - [x] Connected driver-selected customer workflow, inline contacts, backend restrictions and migration upgrade preservation tests.
 - [x] FIFO pending jars/original dates, return-only posting, driver dashboard and admin reports implemented against actual PostgreSQL RPCs.
 - [x] Final automated validation and documented results: see `SPRINT_6_IMPLEMENTATION.md`.
-- [ ] Approve/apply Cloud migrations 012-013 and execute hosted staging write acceptance.
+- [x] Explicitly approve/apply Cloud migrations 012-013; verify catalog/grants, record preservation and connected read-only desktop/mobile flows.
+- [ ] Execute hosted staging write acceptance for customer creation, delivery/FIFO, return-only posting and closing.
 - [ ] Multi-connection contention/races, production-volume checks, restore drill and staff acceptance before deployment.

@@ -60,13 +60,59 @@ try {
   } else {
     if (result.error || !result.data) throw new Error("Workspace unavailable.");
     const workspace = result.data;
+    if (workspace.driver_workflow !== true)
+      throw new Error("Driver workflow migration unavailable.");
+    stage = "Cloud customer directory and pending-jar readers";
+    const directory = await admin.rpc("delivery_customer_directory");
+    const pending = await admin.rpc("pending_jar_workspace");
+    if (
+      directory.error ||
+      !Array.isArray(directory.data) ||
+      pending.error ||
+      !Array.isArray(pending.data?.rows)
+    )
+      throw new Error("New Cloud readers unavailable.");
+    expect(directory.data.map((c) => c.id).sort()).toEqual(
+      workspace.customers.map((c) => c.id).sort(),
+    );
+    console.log(
+      `Cloud driver workflow enabled; contact directory and ${pending.data.rows.length} pending-jar lots readable.`,
+    );
     console.log(
       `Cloud workspace: ${workspace.customers.length} customers, ${workspace.vehicles.length} vehicles, ${workspace.drivers.length} driver profiles, ${workspace.trips.length} listed trips.`,
     );
     const driver = await session("DRIVER");
     const own = await driver.rpc("operations_workspace", { p_trip: null });
-    if (own.error || !own.data)
+    const identity = await driver.auth.getUser();
+    if (
+      own.error ||
+      !own.data ||
+      own.data.driver_workflow !== true ||
+      identity.error ||
+      own.data.trips.some((t) => t.driver_id !== identity.data.user.id)
+    )
       throw new Error("Driver workspace unavailable.");
+    const eligible = own.data.trips.find(
+      (t) =>
+        t.status === "ACTIVE" &&
+        own.data.days.some(
+          (d) => d.id === t.business_day_id && d.status === "OPEN",
+        ),
+    );
+    const driverPending = await driver.rpc("pending_jar_workspace", {
+      p_trip: eligible?.id ?? null,
+    });
+    if (
+      eligible
+        ? driverPending.error || !Array.isArray(driverPending.data?.rows)
+        : driverPending.error?.code !== "42501"
+    )
+      throw new Error("Driver pending-jar scope failed.");
+    console.log(
+      eligible
+        ? "Assigned active-trip pending-jar read passed."
+        : "Pending-jar reads correctly denied without an ACTIVE assigned trip on an OPEN day.",
+    );
     const warehouse = await driver
       .from("stock_locations")
       .select("id")
@@ -123,12 +169,43 @@ try {
           await page.reload();
           await expect(links).toHaveCount(rows.length);
         }
+        stage = `Pending-jar report ${viewport.width}px Cloud page`;
+        await page.goto(`${baseURL}/admin/reports`);
+        await expect(
+          page.getByRole("heading", { name: "Daily history", exact: true }),
+        ).toBeVisible();
+        const pendingRegion = page.locator("#pending-jars");
+        await expect(
+          pendingRegion.getByRole("heading", {
+            name: "Current pending jars (carry-forward)",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(
+          page.getByText(/migrations? (?:is|are) required/),
+        ).toHaveCount(0);
+        await expect(pendingRegion.locator("li")).toHaveCount(
+          pending.data.rows.length,
+        );
+        if (!pending.data.rows.length)
+          await expect(
+            pendingRegion.getByText("No pending jars.", { exact: true }),
+          ).toBeVisible();
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await page.reload();
+        await expect(pendingRegion.locator("li")).toHaveCount(
+          pending.data.rows.length,
+        );
         await page
           .getByRole("button", { name: "Sign out", exact: true })
           .click();
         await page.waitForURL((u) => u.pathname === "/sign-in");
         console.log(
-          `All four admin pages: real Cloud row counts, empty states, refresh and responsive layout passed at ${viewport.width}px.`,
+          `All four admin directories and pending-jar report: real Cloud row counts, empty states, refresh and responsive layout passed at ${viewport.width}px.`,
         );
       } finally {
         await context.close();

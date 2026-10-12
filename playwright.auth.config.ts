@@ -16,6 +16,9 @@ const baseURL = process.env.AUTH_E2E_BASE_URL ?? "http://127.0.0.1:3001";
 export default defineConfig({
   testDir: "./tests/auth-e2e",
   outputDir: "./test-results/auth",
+  // Cloud Auth and development route compilation can exceed the default 5s.
+  timeout: 60000,
+  expect: { timeout: 30000 },
   use: {
     channel: "chromium",
     baseURL,

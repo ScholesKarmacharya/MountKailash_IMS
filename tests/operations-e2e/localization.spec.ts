@@ -161,7 +161,7 @@ test("Nepali driver delivery preserves drafts during language switches and downl
     "SUBMITTED",
   );
   await page
-    .getByRole("button", { name: message("ne", "Sign out"), exact: true })
+    .getByRole("button", { name: message("ne", "Sign Out"), exact: true })
     .click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "admin");
@@ -287,7 +287,7 @@ test("independent user preferences persist through navigation, refresh and login
     expect(bad.status()).toBe(400);
     expect((await client.workspace()).balances).toEqual(before.balances);
     await driverPage
-      .getByRole("button", { name: "Sign out", exact: true })
+      .getByRole("button", { name: "Sign Out", exact: true })
       .click();
     await expect(driverPage).toHaveURL(/\/sign-in/);
     await login(driverPage);

@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { requirePermission } from "@/services/auth";
+import { requireIdentity } from "@/services/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isLocale } from "@/domain/localization/locale";
 export async function POST(request: Request) {
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   origin.host = request.headers.get("host") ?? origin.host;
   if (request.headers.get("origin") !== origin.origin)
     return new Response(null, { status: 403 });
-  await requirePermission("driver:read");
+  await requireIdentity();
   const body: unknown = await request.json().catch(() => null);
   const locale =
     body && typeof body === "object" && "locale" in body ? body.locale : null;

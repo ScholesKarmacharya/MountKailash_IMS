@@ -252,11 +252,11 @@ try {
       )
         throw new Error("Layout overflow.");
       stage = "Stock after sign-out and reauthentication";
-      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await page.getByRole("button", { name: "Sign Out", exact: true }).click();
       await page.waitForURL((u) => u.pathname === "/sign-in");
       await login(page, "ADMIN");
       await displayedStock(page, before.totals);
-      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await page.getByRole("button", { name: "Sign Out", exact: true }).click();
       await page.waitForURL((u) => u.pathname === "/sign-in");
       await login(page, "DRIVER");
       for (const route of [
@@ -267,7 +267,7 @@ try {
         await page.goto(`${baseURL}${route}`);
         await page.waitForURL((u) => u.pathname === "/driver/home");
       }
-      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await page.getByRole("button", { name: "Sign Out", exact: true }).click();
       await page.waitForURL((u) => u.pathname === "/sign-in");
       console.log(
         `${viewport.width}px: database/UI totals, refresh, sign-out/sign-in persistence and driver route denial passed.`,

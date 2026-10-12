@@ -242,7 +242,7 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
   await page.goto("/admin/daily-close");
@@ -256,7 +256,7 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
     { maxRedirects: 0 },
   );
   expect([303, 307]).toContain(deniedRange.status());
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page);
   await page.goto(`/admin/reports/${day}`);

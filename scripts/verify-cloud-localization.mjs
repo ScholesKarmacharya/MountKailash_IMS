@@ -259,7 +259,7 @@ try {
           await expect(page).toHaveURL(/driver\/home/);
         }
         await page
-          .getByRole("button", { name: label("Sign out"), exact: true })
+          .getByRole("button", { name: label("Sign Out"), exact: true })
           .click();
         await expect(page).toHaveURL(/sign-in/);
         if (savePreference) {
@@ -286,7 +286,7 @@ try {
             }),
           ).toHaveAttribute("aria-pressed", "true");
           await page
-            .getByRole("button", { name: label("Sign out"), exact: true })
+            .getByRole("button", { name: label("Sign Out"), exact: true })
             .click();
           await expect(page).toHaveURL(/sign-in/);
         }

@@ -1,43 +1,57 @@
+﻿import Link from "next/link";
 import { T } from "@/components/localization";
-import { getOperations } from "@/services/operations";
-import { DriverForm } from "@/components/master-forms";
-import { Directory } from "@/components/directory";
+import { getDriverAccounts } from "@/services/accounts";
 import {
-  OperationsHeading,
-  MigrationRequired,
-} from "@/components/operations-layout";
+  DriverAccountForm,
+  DriverAccessActions,
+} from "@/components/account-forms";
+import { DriverAccountSummary } from "@/components/driver-account-summary";
+import { OperationsHeading } from "@/components/operations-layout";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 export default async function Page() {
-  const w = await getOperations(true);
+  const directory = await getDriverAccounts();
   return (
     <div className="space-y-6">
       <OperationsHeading
         title="Drivers"
-        description="Provision new accounts through Supabase Auth first. Existing user IDs and roles are preserved."
+        description="Review driver access. Names and email addresses come from existing accounts."
       />
-      {!w.available ? (
-        <MigrationRequired />
+      {!directory.available ? (
+        <Card>
+          <p role="status">
+            <T k="The driver approval migration is required." />
+          </p>
+        </Card>
       ) : (
         <>
-          <Directory
-            label="drivers"
-            href="/admin/drivers"
-            rows={w.drivers.map((r) => ({
-              id: r.id,
-              name: r.name,
-              detail: "Authorized delivery account",
-              displayDetail: <T k="Authorized delivery account" />,
-              active: r.is_active,
-            }))}
-          />
-          <Card>
-            <h2 className="mb-5 text-lg font-semibold">
+          {!directory.drivers.length && (
+            <Card>
+              <T k="No driver profiles yet. Create an Auth account, then add a pending driver below." />
+            </Card>
+          )}
+          <div className="grid items-start gap-5 xl:grid-cols-2">
+            {directory.drivers.map((driver) => (
+              <Card key={driver.id} className="min-w-0 space-y-5">
+                <h2 className="text-lg font-semibold">{driver.name}</h2>
+                <DriverAccountSummary driver={driver} />
+                <Button asChild variant="outline">
+                  <Link href={`/admin/drivers/${driver.id}`}>
+                    <T k="View Driver Details" />
+                  </Link>
+                </Button>
+                <DriverAccessActions driver={driver} />
+              </Card>
+            ))}
+          </div>
+          <Card className="space-y-5">
+            <h2 className="text-lg font-semibold">
               <T k="Add driver" />
             </h2>
-            <p className="mb-5 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               <T k="Create the account in Supabase Dashboard → Authentication → Users using a deliverable email and a unique initial password. Give the credentials to the driver securely, then copy the existing user UUID here. Passwords are managed in Supabase Auth." />
             </p>
-            <DriverForm />
+            <DriverAccountForm />
           </Card>
         </>
       )}

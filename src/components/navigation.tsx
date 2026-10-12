@@ -3,7 +3,15 @@ import { Message } from "@/components/localization";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  PlusCircle,
+  Users,
+  History,
+  Truck,
+  Droplets,
+} from "lucide-react";
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
 import { useLocale } from "./localization";
@@ -38,13 +46,13 @@ export function Navigation({ role }: { role: Role }) {
       {role === "DRIVER" &&
         (
           [
-            ["New Delivery", "/driver/delivery"],
-            ["Customers", "/driver/customers"],
-            ["Pending Jars", "/driver/pending-jars"],
-            ["Sales History", "/driver/sales"],
-            ["Return to Warehouse", "/driver/return"],
+            ["New Sale", "/driver/delivery", PlusCircle],
+            ["Customers", "/driver/customers", Users],
+            ["Unreturned Jars", "/driver/pending-jars", Droplets],
+            ["Sales History", "/driver/sales", History],
+            ["Return to Warehouse", "/driver/return", Truck],
           ] as const
-        ).map(([label, target]) => (
+        ).map(([label, target, Icon]) => (
           <Link
             key={target}
             href={target}
@@ -54,7 +62,7 @@ export function Navigation({ role }: { role: Role }) {
               pathname === target ? "bg-primary text-white" : "hover:bg-muted",
             )}
           >
-            <Package className="size-4" aria-hidden="true" />
+            <Icon className="size-4" aria-hidden="true" />
             <Message value={label} />
           </Link>
         ))}

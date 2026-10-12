@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   cookie: vi.fn(),
   client: vi.fn(),
 }));
-vi.mock("@/services/auth", () => ({ requirePermission: mocks.guard }));
+vi.mock("@/services/auth", () => ({ requireIdentity: mocks.guard }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({ set: mocks.cookie }),
@@ -33,7 +33,7 @@ describe("per-user locale storage is separate from permissions", () => {
       request({ locale: "ne", role: "ADMIN", id: "other-user" }),
     );
     expect(response.status).toBe(200);
-    expect(mocks.guard).toHaveBeenCalledWith("driver:read");
+    expect(mocks.guard).toHaveBeenCalledWith();
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
       data: { locale: "ne" },
     });
@@ -58,7 +58,7 @@ describe("per-user locale storage is separate from permissions", () => {
       expect(mocks.update).not.toHaveBeenCalled();
     },
   );
-  it("requires the active server profile before updating Auth metadata", async () => {
+  it("requires verified identity, including pending accounts, before updating display metadata", async () => {
     mocks.guard.mockRejectedValue(new Error("Forbidden"));
     await expect(POST(request({ locale: "en" }))).rejects.toThrow("Forbidden");
     expect(mocks.update).not.toHaveBeenCalled();

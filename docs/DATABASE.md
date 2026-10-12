@@ -5,7 +5,7 @@ All tables: UUID primary key, `created_at timestamptz`, optional `updated_at`, w
 ## Core tables
 | Table | Notable columns / relationships |
 |---|---|
-| `profiles` | `id -> auth.users`, name, role ADMIN/DRIVER, is_active |
+| `profiles` | `id -> auth.users`, name, role ADMIN/DRIVER, is_active; migration 016 adds phone, approval_status, approved_at/by and status_changed_at/by |
 | `business_days` | id, date_label, opened_at, opened_by, status OPEN/CLOSING_REVIEW/CLOSED, closed_at/by, version |
 | `vehicles` | id, plate_number UNIQUE, active |
 | `products` | id, sku UNIQUE, name, kind FULL_JAR/BOTTLE_CARTON, unit, default_price numeric, active |

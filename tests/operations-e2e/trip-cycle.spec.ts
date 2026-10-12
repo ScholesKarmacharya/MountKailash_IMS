@@ -93,7 +93,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.getByLabel("Test water carton load", { exact: true }).fill("10");
   await save(page, "Confirm warehouse loading");
   await updated(page);
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
   await save(page, "Start delivering");
@@ -220,7 +220,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "other");
   const other = await fixtureClient(request, "other");
@@ -229,7 +229,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
   await page.goto("/admin/trips");
   await expect(page).toHaveURL(/driver\/home/);
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page);
   await page.goto(tripPath);
@@ -263,7 +263,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.goto("/admin/inventory");
   await expect(page.getByText("20", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("65", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page);
   await page.goto(tripPath);

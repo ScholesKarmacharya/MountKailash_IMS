@@ -161,7 +161,7 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
       .filter({ hasText: "Credit requires a registered customer" }),
   ).toBeVisible();
   await expect(review).toBeDisabled();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "admin");
   await page.goto("/admin/credit");

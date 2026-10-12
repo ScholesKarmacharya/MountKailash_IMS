@@ -234,7 +234,7 @@ try {
           pending.data.rows.length,
         );
         await page
-          .getByRole("button", { name: "Sign out", exact: true })
+          .getByRole("button", { name: "Sign Out", exact: true })
           .click();
         await page.waitForURL((u) => u.pathname === "/sign-in");
         console.log(
@@ -296,7 +296,7 @@ try {
         await page.goto(`${baseURL}/admin/inventory`);
         await page.waitForURL((u) => u.pathname === "/driver/home");
         await page
-          .getByRole("button", { name: "Sign out", exact: true })
+          .getByRole("button", { name: "Sign Out", exact: true })
           .click();
         await page.waitForURL((u) => u.pathname === "/sign-in");
         console.log(

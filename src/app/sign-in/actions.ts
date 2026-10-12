@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfig } from "@/lib/supabase/env";
 import { readCurrentProfile } from "@/data-access/profiles";
-import { homeFor } from "@/domain/auth/roles";
+import { accountHome } from "@/domain/auth/roles";
 export type SignInState = { error: string } | null;
 export async function signIn(
   _previous: SignInState,
@@ -32,19 +32,32 @@ export async function signIn(
       error: "Unable to sign in. Check your credentials or try again later.",
     };
   const profile = await readCurrentProfile();
-  if (!profile?.is_active) {
+  if (profile?.role === "ADMIN" && !profile.is_active) {
     await client.auth.signOut();
     return {
       error: "Account access is unavailable. Contact your administrator.",
     };
   }
-  redirect(homeFor(profile.role));
+  redirect(accountHome(profile));
 }
 export async function signOut() {
-  if (supabaseConfig()) {
-    const client = await createClient();
-    const { error } = await client.auth.signOut();
-    if (error) throw new Error("Could not sign out. Please try again.");
+  let clearedWithWarning = false;
+  try {
+    if (supabaseConfig()) {
+      const client = await createClient();
+      const { error } = await client.auth.signOut({ scope: "local" });
+      if (error) {
+        // Installed Auth SDK may remove the local session even on provider errors.
+        // getSession here only inspects logout state; it never grants permissions.
+        const {
+          data: { session },
+        } = await client.auth.getSession();
+        if (session) return { error: "Could not sign out. Please try again." };
+        clearedWithWarning = true;
+      }
+    }
+  } catch {
+    return { error: "Could not sign out. Please try again." };
   }
-  redirect("/sign-in");
+  redirect(clearedWithWarning ? "/sign-in?reason=signout" : "/sign-in");
 }

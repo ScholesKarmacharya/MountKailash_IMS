@@ -7,12 +7,15 @@ const ids = {
   admin: "00000000-0000-0000-0000-000000000001",
   driver: "00000000-0000-0000-0000-000000000002",
   other: "00000000-0000-0000-0000-000000000003",
+  pending: "00000000-0000-0000-0000-000000000004",
   jar: "00000000-0000-0000-0000-000000000011",
   carton: "00000000-0000-0000-0000-000000000012",
 };
 let db;
+let logoutFailures = 0;
 const preferences = new Map();
 async function reset() {
+  logoutFailures = 0;
   preferences.clear();
   await db?.close();
   db = new PGlite();
@@ -22,7 +25,7 @@ async function reset() {
   for (const file of readdirSync("supabase/migrations").sort())
     await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
   await db.query(
-    "insert into auth.users(id,email) values($1,$2),($3,$4),($5,$6)",
+    "insert into auth.users(id,email) values($1,$2),($3,$4),($5,$6),($7,$8)",
     [
       ids.admin,
       "admin@fixture.example",
@@ -30,10 +33,12 @@ async function reset() {
       "driver@fixture.example",
       ids.other,
       "other@fixture.example",
+      ids.pending,
+      "pending@fixture.example",
     ],
   );
   await db.query(
-    "insert into public.profiles(id,name,role) values($1,'Fixture admin','ADMIN'),($2,'Fixture driver','DRIVER'),($3,'Other driver','DRIVER')",
+    "insert into public.profiles(id,name,role,approval_status) values($1,'Fixture admin', 'ADMIN','APPROVED'),($2,'Fixture driver', 'DRIVER','APPROVED'),($3,'Other driver', 'DRIVER','APPROVED')",
     [ids.admin, ids.driver, ids.other],
   );
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
@@ -88,7 +93,9 @@ function tokenId(req) {
     const id = JSON.parse(
       Buffer.from(token.split(".")[1], "base64url").toString(),
     ).sub;
-    return [ids.admin, ids.driver, ids.other].includes(id) ? id : null;
+    return [ids.admin, ids.driver, ids.other, ids.pending].includes(id)
+      ? id
+      : null;
   } catch {
     return null;
   }
@@ -106,6 +113,10 @@ const allowedTables = new Set([
   "customer_ledger",
 ]);
 const allowedRpc = new Set([
+  "save_own_profile",
+  "save_driver_account",
+  "change_driver_status",
+  "admin_driver_directory",
   "save_delivery_customer",
   "save_delivery_contact",
   "delivery_customer_context",
@@ -152,6 +163,10 @@ async function handle(req, res) {
     await reset();
     return reply(200, { ready: true });
   }
+  if (req.method === "POST" && url.pathname === "/logout-failure") {
+    logoutFailures = 1;
+    return reply(200, { ready: true });
+  }
   let body = {};
   if (req.method === "POST" || req.method === "PUT") {
     const chunks = [];
@@ -161,7 +176,7 @@ async function handle(req, res) {
   if (url.pathname === "/auth/v1/token") {
     const key = String(body.email ?? "").split("@")[0];
     if (
-      !["admin", "driver", "other"].includes(key) ||
+      !["admin", "driver", "other", "pending"].includes(key) ||
       body.password !== "fixture-password"
     )
       return reply(400, { message: "Invalid fixture credentials" });
@@ -178,7 +193,13 @@ async function handle(req, res) {
     return actor
       ? reply(200, user(actor))
       : reply(401, { message: "Missing fixture session" });
-  if (url.pathname === "/auth/v1/logout") return reply(200, {});
+  if (url.pathname === "/auth/v1/logout") {
+    if (logoutFailures > 0) {
+      logoutFailures--;
+      return reply(503, { message: "Simulated fixture outage" });
+    }
+    return reply(200, {});
+  }
   if (!actor) return reply(401, { message: "Unauthorized fixture request" });
   await db.exec("begin; set local role authenticated");
   await db.query("select set_config('request.jwt.claim.sub',$1,true)", [actor]);

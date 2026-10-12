@@ -155,7 +155,7 @@ test("carton-only sale has no jar fields in EN/NE forms, history, details, PDFs 
     ),
   ).toBe(true);
   await language(page, "en");
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "admin");
   await page.goto(`/admin/customers/${customer}`);

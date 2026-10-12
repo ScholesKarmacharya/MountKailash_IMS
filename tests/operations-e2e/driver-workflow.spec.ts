@@ -18,7 +18,7 @@ async function login(page: Page, role: string) {
   ).toBeEnabled();
 }
 async function logout(page: Page) {
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
 }
 async function save(page: Page, label: string) {

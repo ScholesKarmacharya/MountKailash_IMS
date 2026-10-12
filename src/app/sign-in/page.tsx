@@ -3,7 +3,7 @@ import { Droplets, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { supabaseConfig } from "@/lib/supabase/env";
 import { readCurrentProfile } from "@/data-access/profiles";
-import { homeFor } from "@/domain/auth/roles";
+import { accountHome } from "@/domain/auth/roles";
 import { redirect } from "next/navigation";
 import { SignInForm } from "./sign-in-form";
 import { LanguageSwitcher } from "@/components/localization";
@@ -15,7 +15,8 @@ export default async function SignInPage({
   const configured = !!supabaseConfig();
   if (configured) {
     const profile = await readCurrentProfile();
-    if (profile?.is_active) redirect(homeFor(profile.role));
+    if (profile?.role === "DRIVER" || profile?.is_active)
+      redirect(accountHome(profile));
   }
   const { reason } = await searchParams;
   return (
@@ -73,6 +74,14 @@ export default async function SignInPage({
           {configured && reason === "access" && (
             <p role="alert" className="mb-5 text-sm text-red-800">
               <T k="Your session or account access is unavailable. Contact your administrator if this continues." />
+            </p>
+          )}
+          {reason === "signout" && (
+            <p
+              role="status"
+              className="mb-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <T k="You are signed out on this device. The authentication service could not confirm the request." />
             </p>
           )}
           <SignInForm configured={configured} />

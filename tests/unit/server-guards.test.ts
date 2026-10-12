@@ -27,7 +27,7 @@ describe("route and service guards", () => {
   it("denies missing profiles", async () => {
     mocks.profile.mockResolvedValue(null);
     await expect(requirePermission("admin:read")).rejects.toThrow(
-      "REDIRECT:/sign-in?reason=access",
+      "REDIRECT:/account",
     );
   });
   it("denies disabled admins", async () => {
@@ -42,6 +42,19 @@ describe("route and service guards", () => {
       "REDIRECT:/driver/home",
     );
   });
+  it.each(["PENDING", "REJECTED", "SUSPENDED"])(
+    "checks current %s status on every service call",
+    async (status) => {
+      mocks.profile.mockResolvedValue({
+        role: "DRIVER",
+        is_active: true,
+        approval_status: status,
+      });
+      await expect(requirePermission("customer:operate")).rejects.toThrow(
+        "REDIRECT:/account",
+      );
+    },
+  );
   it("returns enabled authorized identity", async () => {
     const profile = { id: "a", role: "ADMIN", is_active: true };
     mocks.profile.mockResolvedValue(profile);

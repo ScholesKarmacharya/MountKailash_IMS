@@ -6,6 +6,13 @@ English/Nepali localization and the Bikram Sambat business calendar are implemen
 
 Driver New Delivery now uses **Paid / Credit**. Paid requires the exact invoice total; Credit requires a registered customer and records no collection. Admin advanced payments and previous-credit recovery remain available. The additive validation migration `202610120015_driver_payment_ui.sql` was explicitly approved, applied and verified in Cloud; no records or accounts were changed. Run `node --env-file=.env.local scripts/verify-cloud-driver-payments.mjs http://localhost:3000` for Cloud connectivity and unsaved desktop/mobile form checks. See [payment behavior, safety review and acceptance checklist](docs/DRIVER_PAYMENT_UI.md).
 
+Driver approval, profile editing and compact navigation are implemented. New
+drivers wait for admin review; existing active drivers retain access. Migration
+`202610120016_driver_approval.sql` is reviewed but pending Cloud approval. See
+[approval safety review, account instructions and tests](docs/DRIVER_APPROVAL.md).
+Headers use the actual saved profile name; enter a real name through My Profile
+after applying the migration. No existing DEMO name or account ID is rewritten.
+
 ## Goal
 
 Track 20L full jars, collected empty jars, water-bottle cartons, multiple drivers and vehicles, repeated customer visits, trip reconciliation, refilling, customer deposits, monthly credit, payments, invoices, and manually closed business days.
@@ -75,7 +82,7 @@ npm run seed:demo
 npm run dev
 ```
 
-Open http://localhost:3000. Seeded emails are `admin@mount-kailash.example` and `driver@mount-kailash.example`; use the passwords you supplied. The seed refuses non-loopback hosts, creates labeled DEMO profiles, preserves existing passwords on reruns, and creates no fake operational balances. With no Supabase configuration, sign-in shows an honest setup state and protected routes remain inaccessible.
+Open http://localhost:3000. Seeded emails are `admin@mount-kailash.example` and `driver@mount-kailash.example`; use the passwords you supplied. The seed refuses non-loopback hosts, creates labeled DEMO profiles, preserves existing names/passwords/access decisions on reruns, and creates no fake operational balances. Newly seeded drivers require approval through the admin Drivers page. With no Supabase configuration, sign-in shows an honest setup state and protected routes remain inaccessible.
 
 ## Validation
 

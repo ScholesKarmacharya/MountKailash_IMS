@@ -43,7 +43,7 @@ async function record(page: Page, full: number, empty: number) {
   expect((await response).ok()).toBe(true);
 }
 async function logout(page: Page) {
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 }
 test("FIFO pending dates, return-only collection and admin report persist through refresh and login", async ({

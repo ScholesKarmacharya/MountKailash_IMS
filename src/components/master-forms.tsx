@@ -1,11 +1,6 @@
 import { T, Value } from "@/components/localization";
 import { randomUUID } from "node:crypto";
-import type {
-  Customer,
-  Driver,
-  Vehicle,
-  Workspace,
-} from "@/domain/operations/types";
+import type { Customer, Vehicle, Workspace } from "@/domain/operations/types";
 import { OperationForm, Field, Select } from "./operation-form";
 import { Card } from "./ui/card";
 function Status({ active = true }: { active?: boolean }) {
@@ -88,40 +83,6 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
         maxLength={500}
       />
       <Status active={vehicle?.is_active} />
-      <Field
-        name="reason"
-        label="Reason for this change"
-        required
-        maxLength={500}
-      />
-    </OperationForm>
-  );
-}
-export function DriverForm({ driver }: { driver?: Driver }) {
-  return (
-    <OperationForm
-      operation="driver"
-      id={driver?.id}
-      version={driver?.version}
-      requestKey={randomUUID()}
-      label={driver ? "Save driver" : "Authorize existing Auth account"}
-    >
-      {!driver && (
-        <Field
-          name="id"
-          label="Existing Supabase Auth user UUID"
-          required
-          maxLength={36}
-        />
-      )}
-      <Field
-        name="name"
-        label="Driver name"
-        value={driver?.name}
-        required
-        maxLength={120}
-      />
-      <Status active={driver?.is_active} />
       <Field
         name="reason"
         label="Reason for this change"

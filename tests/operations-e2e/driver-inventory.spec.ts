@@ -387,7 +387,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await page.getByRole("button", { name: "Sign Out", exact: true }).click();
     await expect(page).toHaveURL(/sign-in/);
     await login(page);
     await page.goto(`/driver/pending-jars?customer=${hotel.id}`);

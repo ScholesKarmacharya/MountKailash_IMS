@@ -99,7 +99,7 @@ try {
         }
         stage = `${role} ${viewport.name} sign-out`;
         await page
-          .getByRole("button", { name: "Sign out", exact: true })
+          .getByRole("button", { name: "Sign Out", exact: true })
           .click();
         await page.waitForURL((url) => url.pathname === "/sign-in");
         await page.goto(`${baseURL}${home}`);

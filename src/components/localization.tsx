@@ -36,7 +36,10 @@ export function LocaleProvider({
   const [saving, setSaving] = useState(false),
     [failed, setFailed] = useState(false);
   useEffect(() => {
-    if (!userId && /^\/(admin|driver)(\/|$)/.test(window.location.pathname))
+    if (
+      !userId &&
+      /^\/(admin|driver|account)(\/|$)/.test(window.location.pathname)
+    )
       return;
     document.documentElement.lang = locale;
     // Allow the root accessibility-text provider to register its listener first.

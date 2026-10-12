@@ -4,6 +4,7 @@ import { unstable_rethrow } from "next/navigation";
 import { saveOperation, getDeliveryCustomer } from "@/services/operations";
 import { saveFinance } from "@/services/finance";
 import { saveDay } from "@/services/business-days";
+import { saveAccount } from "@/services/accounts";
 export type OperationState = {
   error?: string;
   success?: string;
@@ -29,13 +30,16 @@ export async function operationAction(
 ): Promise<OperationState> {
   try {
     const operation = String(form.get("operation"));
-    const id = operation.startsWith("day:")
-      ? await saveDay(form)
-      : operation.startsWith("finance:")
-        ? await saveFinance(form)
-        : await saveOperation(form);
+    const id = operation.startsWith("account:")
+      ? await saveAccount(form)
+      : operation.startsWith("day:")
+        ? await saveDay(form)
+        : operation.startsWith("finance:")
+          ? await saveFinance(form)
+          : await saveOperation(form);
     revalidatePath("/admin", "layout");
     revalidatePath("/driver", "layout");
+    revalidatePath("/account", "layout");
     return { success: "Saved to the database.", id };
   } catch (error) {
     unstable_rethrow(error);

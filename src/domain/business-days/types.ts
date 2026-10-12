@@ -121,6 +121,7 @@ export type DayPayment = {
 };
 export type AuditRow = { id: string; [key: string]: unknown };
 export type DayReport = {
+  pending_jars?: import("@/domain/operations/pending-jars").PendingJar[];
   schema_version: number;
   source: "LIVE" | "ARCHIVED" | "LEGACY_RECONSTRUCTED";
   day: Day;

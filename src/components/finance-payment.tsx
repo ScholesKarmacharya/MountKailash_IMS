@@ -6,6 +6,7 @@ import { OperationForm } from "./operation-form";
 import { allocations, cents, npr, sum } from "@/domain/finance/money";
 import type { FinanceWorkspace } from "@/domain/finance/types";
 import type { Workspace, Trip } from "@/domain/operations/types";
+import { useDeliveryCustomer } from "./delivery-customers";
 export function AmountInput({
   label,
   value,
@@ -77,11 +78,14 @@ export function CollectCreditForm({
 }) {
   const customerInput = useId(),
     methodInput = useId();
-  const [customer, setCustomer] = useState(""),
-    [amount, setAmount] = useState(""),
+  const lookup = useDeliveryCustomer(trip.id, w.driver_workflow);
+  const { customer } = lookup;
+  const [amount, setAmount] = useState(""),
     [method, setMethod] = useState("CASH"),
     [reference, setReference] = useState("");
-  const credit = f.credit.filter((i) => i.customer_id === customer);
+  const credit =
+    lookup.context?.credit ??
+    f.credit.filter((i) => i.customer_id === customer);
   let error = "",
     list: { invoice_id: string; amount: string }[] = [];
   try {
@@ -95,7 +99,14 @@ export function CollectCreditForm({
       trip={trip.id}
       requestKey={requestKey}
       label="Collect outstanding credit"
-      showSubmit={!!customer && list.length > 0 && !error}
+      showSubmit={
+        !!customer &&
+        list.length > 0 &&
+        !error &&
+        !lookup.loading &&
+        !lookup.error &&
+        (!w.driver_workflow || !!lookup.context)
+      }
       confirm={`Record ${amount} NPR ${method} against existing invoices? Fonepay remains pending until reconciled.`}
     >
       <div className="grid gap-2 text-sm font-semibold">
@@ -103,15 +114,20 @@ export function CollectCreditForm({
         <select
           id={customerInput}
           value={customer}
-          onChange={(e) => setCustomer(e.target.value)}
+          onChange={(e) => {
+            setAmount("");
+            void lookup.selectCustomer(e.target.value);
+          }}
           className="min-h-12 rounded-lg border px-3"
         >
-          <option value="">Choose assigned customer</option>
+          <option value="">Choose customer</option>
           {w.customers
             .filter((c) =>
-              w.route.some(
-                (r) => r.customer_id === c.id && r.trip_id === trip.id,
-              ),
+              w.driver_workflow
+                ? c.is_active
+                : w.route.some(
+                    (r) => r.customer_id === c.id && r.trip_id === trip.id,
+                  ),
             )
             .map((c) => (
               <option key={c.id} value={c.id}>
@@ -120,6 +136,19 @@ export function CollectCreditForm({
             ))}
         </select>
       </div>
+      {lookup.loading && <p role="status">Loading customer balances…</p>}
+      {lookup.error && (
+        <p role="alert" className="text-red-800">
+          {lookup.error}{" "}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void lookup.selectCustomer(customer)}
+          >
+            Retry customer lookup
+          </Button>
+        </p>
+      )}
       <input type="hidden" name="customer" value={customer} />
       <input
         type="hidden"

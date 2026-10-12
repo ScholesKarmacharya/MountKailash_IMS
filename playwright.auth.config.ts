@@ -15,6 +15,7 @@ for (const key of [
 const baseURL = process.env.AUTH_E2E_BASE_URL ?? "http://127.0.0.1:3001";
 export default defineConfig({
   testDir: "./tests/auth-e2e",
+  outputDir: "./test-results/auth",
   use: {
     channel: "chromium",
     baseURL,

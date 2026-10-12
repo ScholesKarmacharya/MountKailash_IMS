@@ -158,7 +158,7 @@ beforeEach(async () => {
     driver,
     vehicle,
     day,
-    JSON.stringify([customer]),
+    "[]",
     "",
     randomUUID(),
   ]);
@@ -574,7 +574,7 @@ it("locks operations to their explicit business day and preserves the trip after
   );
   expect(await scalar("select count(*) from public.trips")).toBe(1);
 });
-it("supports independent simultaneous drivers and vehicles, while separating route data", async () => {
+it("keeps trip ownership isolated and unlocks the active customer directory only during operations", async () => {
   const secondVehicle = randomUUID(),
     secondCustomer = randomUUID(),
     secondTrip = randomUUID();
@@ -604,21 +604,29 @@ it("supports independent simultaneous drivers and vehicles, while separating rou
     other,
     secondVehicle,
     day,
-    JSON.stringify([secondCustomer]),
+    "[]",
     "",
     randomUUID(),
   ]);
   await active();
   await who(other);
   expect(await scalar("select count(*) from public.trips")).toBe(1);
-  expect(await scalar("select name from public.customers")).toBe(
-    "Second customer",
-  );
+  expect(await scalar("select count(*) from public.customers")).toBe(0);
   await rejects(
     "post_trip_visit",
     [trip, customer, "", "", items(), '{"selection":"CASH"}', "", randomUUID()],
     /access/,
   );
+  await who(driver);
+  expect(
+    (
+      (await rpc("operations_workspace", [trip])) as unknown as {
+        customers: unknown[];
+      }
+    ).customers,
+  ).toHaveLength(2);
+  expect(await scalar("select count(*) from public.customers")).toBe(0);
+  expect(await scalar("select count(*) from public.trips")).toBe(1);
 });
 it("denies anonymous and disabled identities and direct sequence manipulation", async () => {
   await db.exec("savepoint sequence");
@@ -865,7 +873,7 @@ it("preserves all inventory when return counts contain duplicates or an unknown 
   await who(admin);
   expect(await physicalSnapshot()).toEqual(before);
 });
-it("denies every admin master-data operation and unassigned customer delivery for drivers", async () => {
+it("denies admin master-data operations while allowing driver-selected active customers", async () => {
   const unassigned = randomUUID();
   await rpc("save_customer", [
     unassigned,
@@ -910,19 +918,15 @@ it("denies every admin master-data operation and unassigned customer delivery fo
     [trip, "CANCEL", "Forbidden", randomUUID()],
     /authorized/,
   );
-  await rejects(
-    "post_trip_visit",
-    [
-      trip,
-      unassigned,
-      "",
-      "",
-      items(1, 0),
-      '{"selection":"CASH"}',
-      "",
-      randomUUID(),
-    ],
-    /route/,
-  );
-  expect(await scalar("select count(*) from public.trip_visits")).toBe(0);
+  await rpc("post_trip_visit", [
+    trip,
+    unassigned,
+    "",
+    "",
+    items(1, 0),
+    '{"selection":"CASH"}',
+    "",
+    randomUUID(),
+  ]);
+  expect(await scalar("select count(*) from public.trip_visits")).toBe(1);
 });

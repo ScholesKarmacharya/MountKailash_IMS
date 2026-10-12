@@ -100,6 +100,9 @@ const allowedTables = new Set([
   "stock_adjustments",
 ]);
 const allowedRpc = new Set([
+  "save_delivery_customer",
+  "delivery_customer_context",
+  "pending_jar_workspace",
   "operations_workspace",
   "finance_workspace",
   "finance_command",

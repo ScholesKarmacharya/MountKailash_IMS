@@ -8,6 +8,8 @@ export type Customer = {
   notes: string;
   is_active: boolean;
   version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
 };
 export type Vehicle = {
   id: string;
@@ -70,6 +72,7 @@ export type Visit = {
 };
 export type Workspace = {
   available: boolean;
+  driver_workflow: boolean;
   customers: Customer[];
   vehicles: Vehicle[];
   drivers: Driver[];
@@ -131,6 +134,7 @@ export type Workspace = {
 };
 export const emptyWorkspace: Workspace = {
   available: false,
+  driver_workflow: false,
   customers: [],
   vehicles: [],
   drivers: [],

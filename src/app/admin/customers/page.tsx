@@ -24,7 +24,12 @@ export default async function Page() {
             rows={w.customers.map((r) => ({
               id: r.id,
               name: r.name,
-              detail: [r.shop_name, r.phone, r.address]
+              detail: [
+                r.shop_name,
+                r.phone,
+                r.address,
+                r.created_by_name && `Added by ${r.created_by_name}`,
+              ]
                 .filter(Boolean)
                 .join(" · "),
               active: r.is_active,

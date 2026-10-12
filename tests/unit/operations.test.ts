@@ -20,6 +20,46 @@ function form(operation: string, fields: Record<string, string> = {}) {
   return f;
 }
 describe("operations request and quantity boundaries", () => {
+  it("prevents destination preassignment and whitelists contact-only driver changes", () => {
+    expect(() => parseCommand(form("route"))).toThrow("preassignment");
+    const create = form("create", {
+      id,
+      driver: id,
+      vehicle: id,
+      day: id,
+      notes: "",
+    });
+    create.append("customers", id);
+    expect(parseCommand(create).args.p_customers).toEqual([]);
+    const c = parseCommand(
+      form("delivery-customer", {
+        id,
+        version: "0",
+        name: "Customer",
+        shop_name: "Shop",
+        phone: "123",
+        address: "Kathmandu",
+        active: "false",
+        notes: "Overwritten",
+        balance: "9999",
+        deposit_amount: "999",
+        price: "0",
+        created_by: id,
+      }),
+    );
+    expect(c.admin).toBe(false);
+    expect(c.args).toEqual({
+      p_id: id,
+      p_trip: id,
+      p_name: "Customer",
+      p_shop: "Shop",
+      p_phone: "123",
+      p_address: "Kathmandu",
+      p_version: 0,
+      p_duplicate_confirmed: false,
+      p_key: id,
+    });
+  });
   it("computes indicative totals in exact integer cents", () => {
     expect(
       moneyTotal([
@@ -61,7 +101,6 @@ describe("operations request and quantity boundaries", () => {
     "driver",
     "create",
     "load",
-    "route",
     "review",
     "cancel",
     "reconcile",

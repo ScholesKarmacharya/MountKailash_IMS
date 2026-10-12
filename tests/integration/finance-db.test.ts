@@ -6,6 +6,7 @@ import { receiptPdf } from "@/services/pdf";
 import { invoiceDocument } from "@/domain/finance/documents";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { financeMetrics } from "@/domain/finance/reports";
+import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
 const admin = randomUUID(),
   driver = randomUUID(),
   other = randomUUID();
@@ -162,7 +163,7 @@ beforeEach(async () => {
     driver,
     vehicle,
     day,
-    JSON.stringify([customer]),
+    "[]",
     "",
     randomUUID(),
   ]);
@@ -560,7 +561,7 @@ it("old credit can be recovered on a new day/trip without increasing sales", asy
     driver,
     vehicle,
     newDay,
-    JSON.stringify([customer]),
+    "[]",
     "",
     randomUUID(),
   ]);
@@ -786,7 +787,7 @@ it("new assigned driver can collect limited prior credit without reading the old
     other,
     secondVehicle,
     day,
-    JSON.stringify([customer]),
+    "[]",
     "",
     randomUUID(),
   ]);
@@ -798,10 +799,15 @@ it("new assigned driver can collect limited prior credit without reading the old
   await who(other);
   await rpc("transition_trip", [secondTrip, "START", "", randomUUID()]);
   let f = await workspace();
-  expect(f.credit[0]!.id).toBe(old.id);
+  expect(f.credit).toHaveLength(0);
+  const context = (await rpc("delivery_customer_context", [
+    secondTrip,
+    customer,
+  ])) as unknown as DeliveryCustomerContext;
+  expect(context.credit[0]!.id).toBe(old.id);
   expect(f.invoices).toHaveLength(0);
   expect(f.sales).toHaveLength(0);
-  expect(f.credit[0]).not.toHaveProperty("trip_id");
+  expect(context.credit[0]).not.toHaveProperty("trip_id");
   expect(await scalar("select count(*) from public.invoices")).toBe(0);
   await finance("PAYMENT", {
     trip: secondTrip,

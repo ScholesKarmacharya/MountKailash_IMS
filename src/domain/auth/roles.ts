@@ -12,6 +12,7 @@ export type Permission =
   | "trip:assign"
   | "trip:approve"
   | "trip:operate"
+  | "customer:operate"
   | "stock:adjust"
   | "product:manage"
   | "day:open"
@@ -30,6 +31,7 @@ export function can(profile: Profile | null, permission: Permission): boolean {
     profile.role === "ADMIN" ||
     permission === "driver:read" ||
     permission === "payment:record" ||
+    permission === "customer:operate" ||
     permission === "trip:operate"
   );
 }

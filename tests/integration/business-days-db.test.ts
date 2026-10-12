@@ -68,7 +68,7 @@ async function newTrip(load = 100) {
     driver,
     vehicle,
     day,
-    JSON.stringify([customer]),
+    "[]",
     "",
     randomUUID(),
   ]);

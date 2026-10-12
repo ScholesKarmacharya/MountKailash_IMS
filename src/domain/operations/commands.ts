@@ -2,6 +2,7 @@ import { uuid } from "@/domain/inventory/validation";
 import { paymentDraft } from "@/domain/finance/commands";
 export type Operation =
   | "customer"
+  | "delivery-customer"
   | "vehicle"
   | "driver"
   | "create"
@@ -101,16 +102,30 @@ export function parseCommand(form: FormData): Command {
           p_driver: id("driver"),
           p_vehicle: id("vehicle"),
           p_day: id("day"),
-          p_customers: form.getAll("customers").map((v) => uuid(String(v))),
+          p_customers: [],
           p_notes: str("notes"),
           ...common,
         },
       };
     case "route":
+      throw new Error(
+        "Drivers choose customers during delivery; preassignment is disabled.",
+      );
+    case "delivery-customer":
       return {
-        admin: true,
-        rpc: "assign_trip_customer",
-        args: { p_trip: id("trip"), p_customer: id("customer"), ...common },
+        admin: false,
+        rpc: "save_delivery_customer",
+        args: {
+          p_trip: id("trip"),
+          p_id: id("id"),
+          p_name: str("name", 120),
+          p_shop: str("shop_name", 160),
+          p_phone: str("phone", 40),
+          p_address: str("address", 500),
+          p_version: integer("version"),
+          p_duplicate_confirmed: form.get("duplicate_confirmed") === "on",
+          ...common,
+        },
       };
     case "load":
       return {

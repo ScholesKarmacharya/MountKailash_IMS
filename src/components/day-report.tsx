@@ -5,6 +5,7 @@ import type { DayReport, AuditRow } from "@/domain/business-days/types";
 import { formatNepalTime } from "@/domain/business-days/time";
 import { npr } from "@/domain/finance/money";
 import { stockLabels } from "@/domain/inventory/validation";
+import { PendingJars } from "./pending-jars";
 export function DayReportView({ report: r }: { report: DayReport }) {
   const audits: [string, AuditRow[]][] = [
     ["Stock adjustments", r.adjustments],
@@ -17,6 +18,13 @@ export function DayReportView({ report: r }: { report: DayReport }) {
   ];
   return (
     <div className="space-y-6">
+      {r.pending_jars && (
+        <PendingJars
+          workspace={{ available: true, rows: r.pending_jars }}
+          admin
+          title="Pending jars at report cutoff"
+        />
+      )}
       <Card>
         <h2 className="text-xl font-semibold">
           {r.day.date_label} · {r.day.status.replaceAll("_", " ")}

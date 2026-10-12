@@ -34,7 +34,10 @@ export async function fixtureClient(
       rpc<Workspace>("operations_workspace", { p_trip: trip }),
   };
 }
-export async function activeFixtureTrip(request: APIRequestContext) {
+export async function activeFixtureTrip(
+  request: APIRequestContext,
+  load = 100,
+) {
   expect((await request.post(`${provider}/reset`)).ok()).toBe(true);
   const admin = await fixtureClient(request);
   const customer = randomUUID(),
@@ -69,14 +72,14 @@ export async function activeFixtureTrip(request: APIRequestContext) {
     p_driver: fixtureIds.driver,
     p_vehicle: vehicle,
     p_day: day,
-    p_customers: [customer],
+    p_customers: [],
     p_notes: "",
     p_key: randomUUID(),
   });
   await admin.rpc("load_trip", {
     p_trip: trip,
     p_items: [
-      { product_id: fixtureIds.jar, stock_kind: "FULL_JAR", quantity: 100 },
+      { product_id: fixtureIds.jar, stock_kind: "FULL_JAR", quantity: load },
     ],
     p_key: randomUUID(),
   });

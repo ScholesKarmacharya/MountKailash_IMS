@@ -270,6 +270,13 @@ export function reportRows(r: DayReport): ReportRow[] {
       label: `${c.name} / ${c.product_name}`,
       quantity: c.quantity,
     });
+  for (const p of r.pending_jars ?? [])
+    rows.push({
+      section: "Pending jars by original date",
+      id: p.entry_id,
+      label: `${p.customer_name} · ${p.product_name} · ${formatNepalTime(p.original_date)} · ${p.source}`,
+      quantity: p.pending,
+    });
   for (const c of r.credit)
     rows.push({
       section: "Customer credit carry-forward",

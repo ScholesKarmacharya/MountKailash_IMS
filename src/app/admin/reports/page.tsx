@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { npr, sum } from "@/domain/finance/money";
 import { dateFilter } from "@/domain/business-days/commands";
+import { getPendingJars } from "@/services/pending-jars";
+import { PendingJars } from "@/components/pending-jars";
 export default async function History({
   searchParams,
 }: {
@@ -27,6 +29,7 @@ export default async function History({
     error ? undefined : (to ?? undefined),
   );
   const query = new URLSearchParams();
+  const pending = await getPendingJars(true);
   if (from) query.set("from", from);
   if (to) query.set("to", to);
   return (
@@ -39,6 +42,10 @@ export default async function History({
         </p>
       </div>
       <Card>
+        <p className="text-sm">
+          Date filters apply to archived business-day reports below. Current
+          pending jars are shown separately.
+        </p>
         <form className="flex flex-wrap items-end gap-4">
           <label className="grid gap-2 text-sm font-medium">
             From date
@@ -60,13 +67,26 @@ export default async function History({
         )}
       </Card>
       {!history.available ? (
-        <Card>
-          <p role="status">
-            Sprint 4 migrations are required before historical reports can load.
-          </p>
-        </Card>
+        <>
+          <PendingJars
+            workspace={pending}
+            admin
+            title="Current pending jars (carry-forward)"
+          />
+          <Card>
+            <p role="status">
+              Sprint 4 migrations are required before historical reports can
+              load.
+            </p>
+          </Card>
+        </>
       ) : (
         <>
+          <PendingJars
+            workspace={pending}
+            admin
+            title="Current pending jars (carry-forward)"
+          />
           <div className="grid gap-4 sm:grid-cols-3">
             {[
               [

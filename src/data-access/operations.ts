@@ -2,6 +2,29 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { emptyWorkspace, type Workspace } from "@/domain/operations/types";
 import type { Command } from "@/domain/operations/commands";
+import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
+export async function readDeliveryCustomer(
+  trip: string,
+  customer: string,
+): Promise<DeliveryCustomerContext> {
+  const client = await createClient();
+  const { data, error } = await client.rpc("delivery_customer_context", {
+    p_trip: trip,
+    p_customer: customer,
+  });
+  if (error) {
+    if (["42P01", "PGRST202", "PGRST205"].includes(error.code))
+      throw new Error("The driver customer workflow migration is required.");
+    if (
+      ["22023", "42501"].includes(error.code) &&
+      error.message.length < 250 &&
+      !error.message.includes("permission denied")
+    )
+      throw new Error(error.message);
+    throw new Error("Customer details could not be loaded. Please retry.");
+  }
+  return data as DeliveryCustomerContext;
+}
 export async function readOperations(
   trip: string | null = null,
 ): Promise<Workspace> {

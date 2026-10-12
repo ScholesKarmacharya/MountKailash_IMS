@@ -69,7 +69,6 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page
     .getByLabel("Vehicle", { exact: true })
     .selectOption({ label: "TEST-BROWSER" });
-  await page.getByRole("checkbox", { name: /Browser Customer/ }).check();
   await save(page, "Create draft trip");
   await page
     .getByRole("link", { name: "Open saved trip", exact: true })
@@ -188,7 +187,12 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   ).toBeVisible();
   const fullInput = page.getByLabel("Full jars delivered", { exact: true });
   await fullInput.fill("21");
-  await expect(fullInput).not.toHaveValue("21");
+  await expect(fullInput).toHaveValue("21");
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "exceeds the remaining vehicle stock" }),
+  ).toBeVisible();
   await expect(
     page.getByLabel("Full jars counted", { exact: true }),
   ).toHaveValue("20");

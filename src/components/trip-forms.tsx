@@ -13,6 +13,11 @@ import { OperationForm, Counter, Field, Select } from "./operation-form";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
+import {
+  DeliveryCustomerForm,
+  DeliveryCustomerHistory,
+  useDeliveryCustomer,
+} from "./delivery-customers";
 export function CreateTripForm({
   workspace: w,
   requestKey,
@@ -65,28 +70,10 @@ export function CreateTripForm({
             </option>
           ))}
       </Select>
-      <fieldset className="max-h-64 space-y-3 overflow-auto rounded-lg border border-border p-4">
-        <legend className="text-sm font-semibold">Assigned customers</legend>
-        {w.customers
-          .filter((c) => c.is_active)
-          .map((c) => (
-            <label key={c.id} className="flex min-h-12 items-center gap-3">
-              <input
-                type="checkbox"
-                name="customers"
-                value={c.id}
-                className="size-5"
-              />
-              {c.name} {c.shop_name && `· ${c.shop_name}`}
-            </label>
-          ))}
-        {!w.customers.some((c) => c.is_active) && (
-          <p className="text-sm text-muted-foreground">
-            No registered customers. Create them in the customer directory, or
-            record walk-in exchanges.
-          </p>
-        )}
-      </fieldset>
+      <p className="text-sm text-muted-foreground">
+        Drivers choose their customers and destinations during delivery. Admin
+        assigns only the driver, vehicle and authorized load.
+      </p>
       <Field name="notes" label="Trip notes" />
     </OperationForm>
   );
@@ -178,10 +165,12 @@ export function DeliveryForm({
   requestKey: string;
 }) {
   const [search, setSearch] = useState(""),
-    [customer, setCustomer] = useState(""),
     [walk, setWalk] = useState(false),
     [walkName, setWalkName] = useState(""),
     [phone, setPhone] = useState("");
+  const lookup = useDeliveryCustomer(trip.id, w.driver_workflow);
+  const { customer, context } = lookup;
+  const [editor, setEditor] = useState<"new" | "edit" | null>(null);
   const [payment, setPayment] = useState("CASH"),
     [amount, setAmount] = useState(""),
     [reference, setReference] = useState(""),
@@ -193,7 +182,11 @@ export function DeliveryForm({
   const [oldAmount, setOldAmount] = useState(""),
     [deposit, setDeposit] = useState(""),
     [fonepayPart, setFonepayPart] = useState("");
-  const credit = f?.credit.filter((i) => i.customer_id === customer) ?? [];
+  const credit =
+    context?.credit ??
+    f?.credit.filter((i) => i.customer_id === customer) ??
+    [];
+  const custody = context?.custody ?? w.custody;
   const counts = vehicleCounts(w, trip);
   const products = w.products.filter((p) =>
     w.loads.some((l) => l.product_id === p.id),
@@ -214,7 +207,7 @@ export function DeliveryForm({
   const total = moneyTotal(
     products.map((p) => ({
       price:
-        f?.prices.find(
+        (context?.prices ?? f?.prices)?.find(
           (r) =>
             r.customer_id === (walk ? null : customer) &&
             r.product_id === p.id &&
@@ -265,7 +258,8 @@ export function DeliveryForm({
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const selected = w.customers.find((c) => c.id === customer);
+  const selected =
+    context?.customer ?? w.customers.find((c) => c.id === customer);
   const walkProblem =
     walk &&
     (payment === "UNPAID" ||
@@ -276,7 +270,7 @@ export function DeliveryForm({
     items.some(
       (i) =>
         i.empty_jars >
-        (w.custody.find(
+        (custody.find(
           (c) => c.customer_id === customer && c.product_id === i.product_id,
         )?.quantity ?? 0) +
           i.full_jars,
@@ -297,7 +291,11 @@ export function DeliveryForm({
   );
   const eligible =
     items.length > 0 &&
-    (walk ? !!walkName.trim() : !!customer) &&
+    (walk
+      ? w.driver_workflow || !!walkName.trim()
+      : !!customer && (!w.driver_workflow || !!context)) &&
+    (walk || (!lookup.loading && !lookup.error)) &&
+    !editor &&
     !walkProblem &&
     !custodyProblem &&
     !stockProblem &&
@@ -320,6 +318,22 @@ export function DeliveryForm({
           Refresh stock
         </Button>
       </div>
+      {editor && w.driver_workflow && (
+        <DeliveryCustomerForm
+          key={editor === "edit" ? selected?.id : "new"}
+          trip={trip.id}
+          customer={editor === "edit" ? selected : undefined}
+          onCancel={() => setEditor(null)}
+          onSaved={(id) => {
+            setEditor(null);
+            setWalk(false);
+            setReview(false);
+            setOldAmount("");
+            setDeposit("");
+            void lookup.selectCustomer(id);
+          }}
+        />
+      )}
       <div className="grid grid-cols-2 gap-2">
         <Button
           type="button"
@@ -375,18 +389,18 @@ export function DeliveryForm({
           <>
             {walk ? (
               <label className="grid gap-2 text-sm font-semibold">
-                Walk-in name
+                Walk-in name (optional)
                 <Input
                   value={walkName}
                   maxLength={120}
-                  required
+                  required={!w.driver_workflow}
                   onChange={(e) => setWalkName(e.target.value)}
                 />
               </label>
             ) : (
               <div className="space-y-3">
                 <label className="grid gap-2 text-sm font-semibold">
-                  Search assigned customers
+                  Search active customers
                   <Input
                     type="search"
                     value={search}
@@ -401,7 +415,7 @@ export function DeliveryForm({
                       variant={customer === c.id ? "default" : "outline"}
                       className="min-h-14 w-full justify-start whitespace-normal text-left"
                       onClick={() => {
-                        setCustomer(c.id);
+                        void lookup.selectCustomer(c.id);
                         setOldAmount("");
                         setDeposit("");
                         setReview(false);
@@ -414,8 +428,8 @@ export function DeliveryForm({
                   ))}
                   {customers.length === 0 && (
                     <p className="text-sm">
-                      No matching route customers. Ask admin to assign this
-                      customer, or use walk-in for an immediate exchange.
+                      No matching active customers. Add a customer here or use a
+                      walk-in for an immediate exchange.
                     </p>
                   )}
                 </div>
@@ -423,6 +437,62 @@ export function DeliveryForm({
                   <p className="text-sm font-semibold">
                     Selected: {selected.name}
                   </p>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    id="add-customer"
+                    type="button"
+                    variant="outline"
+                    className="min-h-14"
+                    disabled={!w.driver_workflow}
+                    onClick={() => {
+                      setEditor("new");
+                      setReview(false);
+                    }}
+                  >
+                    Add New Customer
+                  </Button>
+                  {selected && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-14"
+                      disabled={!w.driver_workflow || lookup.loading}
+                      onClick={() => {
+                        setEditor("edit");
+                        setReview(false);
+                      }}
+                    >
+                      Edit customer contact
+                    </Button>
+                  )}
+                </div>
+                {!w.driver_workflow && (
+                  <p role="status" className="text-sm text-amber-800">
+                    The driver customer workflow migration is required for
+                    customer creation and unrestricted destination selection.
+                  </p>
+                )}
+                {lookup.loading && (
+                  <p role="status">Loading customer balances…</p>
+                )}
+                {lookup.error && (
+                  <p role="alert" className="text-red-800">
+                    {lookup.error}{" "}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void lookup.selectCustomer(customer)}
+                    >
+                      Retry customer lookup
+                    </Button>
+                  </p>
+                )}
+                {context && (
+                  <DeliveryCustomerHistory
+                    context={context}
+                    products={w.products}
+                  />
                 )}
               </div>
             )}
@@ -465,7 +535,7 @@ export function DeliveryForm({
                       {selected && !walk && (
                         <p className="text-xs text-muted-foreground">
                           Customer holds{" "}
-                          {w.custody.find(
+                          {custody.find(
                             (c) =>
                               c.customer_id === customer &&
                               c.product_id === p.id,
@@ -544,11 +614,13 @@ export function DeliveryForm({
                       value={oldAmount}
                       onChange={setOldAmount}
                     />
-                    {f.billing.some(
-                      (b) =>
-                        b.customer_id === customer &&
-                        b.deposit_mode === "MANUAL",
-                    ) && (
+                    {(context
+                      ? context.billing?.deposit_mode === "MANUAL"
+                      : f.billing.some(
+                          (b) =>
+                            b.customer_id === customer &&
+                            b.deposit_mode === "MANUAL",
+                        )) && (
                       <AmountInput
                         label="Refundable jar deposit received (NPR)"
                         value={deposit}

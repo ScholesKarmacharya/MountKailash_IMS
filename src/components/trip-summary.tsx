@@ -1,4 +1,5 @@
 import { getFinance } from "@/services/finance";
+import { npr, sum } from "@/domain/finance/money";
 import { CollectCreditForm } from "./finance-payment";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
@@ -18,7 +19,7 @@ import {
   OperationsHeading,
   TripLink,
 } from "./operations-layout";
-import { OperationForm, Field, Select } from "./operation-form";
+import { OperationForm, Field } from "./operation-form";
 import { DeliveryForm, LoadTripForm, ReturnForm } from "./trip-forms";
 export function TripList({ trips, admin }: { trips: Trip[]; admin: boolean }) {
   return (
@@ -71,6 +72,30 @@ export function StockCards({
             {counts
               .filter((c) => c.stock_kind === kind)
               .reduce((sum, c) => sum + c.quantity, 0)}
+          </p>
+        </Card>
+      ))}
+    </div>
+  );
+}
+export function LoadedStock({
+  workspace: w,
+  trip,
+}: {
+  workspace: Workspace;
+  trip: Trip;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {(["FULL_JAR", "EMPTY_JAR", "BOTTLE_CARTON"] as const).map((kind) => (
+        <Card key={kind} className="p-3 sm:p-5">
+          <p className="text-xs font-semibold text-muted-foreground">
+            {stockLabels[kind]}
+          </p>
+          <p className="mt-3 text-3xl font-bold">
+            {w.loads
+              .filter((l) => l.trip_id === trip.id && l.stock_kind === kind)
+              .reduce((s, l) => s + l.quantity, 0)}
           </p>
         </Card>
       ))}
@@ -140,6 +165,12 @@ export async function TripDetail({
         {trip.status.replaceAll("_", " ")}
       </p>
       {trip.notes && <p className="text-sm">{trip.notes}</p>}
+      {w.loads.length > 0 && (
+        <>
+          <h2 className="font-semibold">Loaded Stock</h2>
+          <LoadedStock workspace={w} trip={trip} />
+        </>
+      )}
       {operational && w.loads.length > 0 && (
         <>
           <h2 className="font-semibold">Remaining vehicle stock</h2>
@@ -151,6 +182,55 @@ export async function TripDetail({
           The assigned business day is no longer OPEN. Operations are locked for
           admin review.
         </p>
+      )}
+      {f.available && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            [
+              "Invoice sales",
+              sum(
+                f.invoices
+                  .filter((i) =>
+                    f.sales.some(
+                      (s) => s.trip_id === trip.id && s.id === i.sale_id,
+                    ),
+                  )
+                  .map((i) => i.total),
+              ),
+            ],
+            [
+              "Confirmed collections",
+              sum(
+                f.payments
+                  .filter(
+                    (p) => p.trip_id === trip.id && p.status === "CONFIRMED",
+                  )
+                  .map((p) => p.amount),
+              ),
+            ],
+            [
+              "Credit issued",
+              sum(
+                f.issued
+                  .filter((c) =>
+                    f.invoices.some(
+                      (i) =>
+                        i.id === c.invoice_id &&
+                        f.sales.some(
+                          (s) => s.id === i.sale_id && s.trip_id === trip.id,
+                        ),
+                    ),
+                  )
+                  .map((c) => c.amount),
+              ),
+            ],
+          ].map(([label, value]) => (
+            <Card key={label}>
+              <h2 className="text-sm text-muted-foreground">{label}</h2>
+              <p className="mt-3 font-bold">{npr(value!)}</p>
+            </Card>
+          ))}
+        </div>
       )}
       {f.available && f.payments.some((p) => p.trip_id === trip.id) && (
         <Card>
@@ -190,7 +270,7 @@ export async function TripDetail({
       {dayOpen && trip.status === "ACTIVE" && (
         <>
           <Card id="add-delivery">
-            <h2 className="mb-5 text-xl font-bold">Add Delivery</h2>
+            <h2 className="mb-5 text-xl font-bold">New Delivery</h2>
             <DeliveryForm
               finance={f}
               workspace={w}
@@ -272,37 +352,6 @@ export async function TripDetail({
           </p>
         </Card>
       )}
-      {admin &&
-        dayOpen &&
-        ["DRAFT", "LOADED", "ACTIVE"].includes(trip.status) && (
-          <Card>
-            <h2 className="mb-5 font-semibold">Add route customer</h2>
-            <OperationForm
-              operation="route"
-              trip={id}
-              requestKey={randomUUID()}
-              label="Assign customer"
-            >
-              <Select name="customer" label="Registered customer">
-                <option value="">Choose customer</option>
-                {w.customers
-                  .filter(
-                    (c) =>
-                      c.is_active &&
-                      !w.route.some((r) => r.customer_id === c.id),
-                  )
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-              </Select>
-            </OperationForm>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Assign additional customers from the full customer directory.
-            </p>
-          </Card>
-        )}
       <Card>
         <h2 className="mb-5 text-lg font-semibold">Customer totals</h2>
         {groups.size === 0 ? (
@@ -364,7 +413,11 @@ export async function TripDetail({
                 {f.available
                   ? f.sales.some((s) => s.visit_id === v.id)
                     ? "Invoice recorded; Fonepay requires reconciliation"
-                    : "Legacy visit: finance has not been posted"
+                    : w.items
+                          .filter((i) => i.visit_id === v.id)
+                          .every((i) => i.full_jars + i.cartons === 0)
+                      ? "Empty-return visit; no new sale or invoice"
+                      : "Legacy visit: finance has not been posted"
                   : "Finance migration required; legacy payment intent"}
               </p>
               {f.invoices
@@ -480,7 +533,7 @@ export async function TripDetail({
       {!admin && trip.status === "ACTIVE" && (
         <div className="sticky bottom-3 grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 shadow-lg">
           <Button asChild className="min-h-14">
-            <a href="#add-delivery">Add Delivery</a>
+            <a href="#add-delivery">New Delivery</a>
           </Button>
           <Button asChild variant="outline" className="min-h-14">
             <a href="#submit-trip">End trip</a>

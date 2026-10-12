@@ -40,6 +40,16 @@ describe("server permission policy", () => {
     expect(can(driver, "driver:read")).toBe(true);
     expect(can({ ...driver, is_active: false }, "driver:read")).toBe(false);
   });
+  it("allows contact operations for active admins and drivers without granting loading or financial management", () => {
+    expect(can(admin, "customer:operate")).toBe(true);
+    expect(can(driver, "customer:operate")).toBe(true);
+    expect(can({ ...driver, is_active: false }, "customer:operate")).toBe(
+      false,
+    );
+    expect(can(null, "customer:operate")).toBe(false);
+    expect(can(driver, "finance:manage")).toBe(false);
+    expect(can(driver, "trip:assign")).toBe(false);
+  });
   it.each<Permission>([
     "admin:read",
     "driver:read",

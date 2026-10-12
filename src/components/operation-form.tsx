@@ -202,7 +202,7 @@ export function Counter({
           value={value}
           onChange={(e) => {
             const n = Number(e.target.value);
-            if (Number.isInteger(n) && n >= 0 && n <= max) onChange(n);
+            if (Number.isInteger(n) && n >= 0 && n <= 1000000000) onChange(n);
           }}
           className="h-14 text-center text-xl"
           aria-label={label}

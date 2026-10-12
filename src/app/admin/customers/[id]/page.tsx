@@ -12,6 +12,8 @@ import {
 } from "@/components/operations-layout";
 import { CustomerReport } from "@/components/customer-report";
 import { Card } from "@/components/ui/card";
+import { getPendingJars } from "@/services/pending-jars";
+import { PendingJars } from "@/components/pending-jars";
 export default async function Page({
   params,
 }: {
@@ -22,6 +24,7 @@ export default async function Page({
   if (!w.available) return <MigrationRequired />;
   const record = w.customers.find((r) => r.id === id);
   if (!record) notFound();
+  const pending = await getPendingJars(true, undefined, id);
   return (
     <div className="space-y-6">
       <Link className="text-primary underline" href="/admin/customers">
@@ -36,6 +39,7 @@ export default async function Page({
       </Card>
       <CustodyForm workspace={w} customer={record} />
       <CustomerReport id={id} />
+      <PendingJars workspace={pending} admin />
       {f.available ? (
         <>
           <CustomerFinance id={id} finance={f} />

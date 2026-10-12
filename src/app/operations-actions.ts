@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
-import { saveOperation } from "@/services/operations";
+import { saveOperation, getDeliveryCustomer } from "@/services/operations";
 import { saveFinance } from "@/services/finance";
 import { saveDay } from "@/services/business-days";
 export type OperationState = {
@@ -9,6 +9,20 @@ export type OperationState = {
   success?: string;
   id?: string;
 } | null;
+export async function deliveryCustomerAction(trip: string, customer: string) {
+  try {
+    return { data: await getDeliveryCustomer(trip, customer), error: null };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Customer could not be loaded.",
+    };
+  }
+}
 export async function operationAction(
   _state: OperationState,
   form: FormData,

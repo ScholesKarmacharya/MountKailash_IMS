@@ -62,6 +62,8 @@ try {
     const workspace = result.data;
     if (workspace.driver_workflow !== true)
       throw new Error("Driver workflow migration unavailable.");
+    if (workspace.customer_details !== true)
+      throw new Error("Driver inventory workspace migration unavailable.");
     stage = "Cloud customer directory and pending-jar readers";
     const directory = await admin.rpc("delivery_customer_directory");
     const pending = await admin.rpc("pending_jar_workspace");
@@ -121,6 +123,37 @@ try {
       throw new Error("Driver warehouse scope failed.");
     console.log(
       "Driver workspace readable; warehouse locations hidden by RLS.",
+    );
+    stage = "Driver contact privacy and global pending-jar lookup";
+    const driverContacts = await driver.rpc("delivery_customer_directory");
+    const pendingDirectory = await driver.rpc("pending_jar_directory");
+    const rawCustomers = await driver.from("customers").select("id");
+    if (
+      driverContacts.error ||
+      pendingDirectory.error ||
+      rawCustomers.error ||
+      rawCustomers.data.length !== 0
+    )
+      throw new Error("Driver contact privacy failed.");
+    expect(
+      driverContacts.data
+        .filter((c) => c.is_active)
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(
+      directory.data
+        .filter((c) => c.is_active)
+        .map((c) => c.id)
+        .sort(),
+    );
+    expect(
+      driverContacts.data.every(
+        (c) =>
+          c.notes === "" && c.billing === undefined && c.deposit === undefined,
+      ),
+    ).toBe(true);
+    console.log(
+      "Driver active-customer lookup and pending jars available; private raw customer rows remain hidden.",
     );
     browser = await chromium.launch({ channel: "chromium" });
     for (const viewport of [
@@ -206,6 +239,68 @@ try {
         await page.waitForURL((u) => u.pathname === "/sign-in");
         console.log(
           `All four admin directories and pending-jar report: real Cloud row counts, empty states, refresh and responsive layout passed at ${viewport.width}px.`,
+        );
+        stage = `Driver workspace ${viewport.width}px Cloud pages`;
+        await page
+          .getByLabel("Email address")
+          .fill("driver@mount-kailash.example");
+        await page
+          .getByLabel("Password", { exact: true })
+          .fill(process.env.DEMO_DRIVER_PASSWORD);
+        await page
+          .getByRole("button", { name: "Sign in", exact: true })
+          .click();
+        await page.waitForURL((u) => u.pathname === "/driver/home");
+        await expect(
+          page.getByRole("heading", { name: "My day", exact: true }),
+        ).toBeVisible();
+        if (!own.data.trips.some((t) => t.status !== "CLOSED"))
+          await expect(
+            page.getByText(
+              "No active delivery stock. Waiting for warehouse loading.",
+              { exact: true },
+            ),
+          ).toBeVisible();
+        for (const [path, heading] of [
+          ["delivery", "New Delivery"],
+          ["return", "Return to Warehouse"],
+          ["customers", "Customers"],
+          ["pending-jars", "Pending Jars"],
+          ["sales", "Sales History"],
+        ]) {
+          await page.goto(`${baseURL}/driver/${path}`);
+          await expect(
+            page.getByRole("heading", { name: heading, exact: true, level: 1 }),
+          ).toBeVisible();
+          await expect(
+            page.getByText(/migrations? (?:is|are) required/),
+          ).toHaveCount(0);
+          if (path === "customers")
+            await expect(page.locator("main li")).toHaveCount(
+              driverContacts.data.filter((c) => c.is_active).length,
+            );
+          if (path === "pending-jars")
+            await expect(page.locator("main li")).toHaveCount(
+              pendingDirectory.data.rows.length,
+            );
+          expect(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+          ).toBe(true);
+          await page.reload();
+          await expect(
+            page.getByRole("heading", { name: heading, exact: true, level: 1 }),
+          ).toBeVisible();
+        }
+        await page.goto(`${baseURL}/admin/inventory`);
+        await page.waitForURL((u) => u.pathname === "/driver/home");
+        await page
+          .getByRole("button", { name: "Sign out", exact: true })
+          .click();
+        await page.waitForURL((u) => u.pathname === "/sign-in");
+        console.log(
+          `All six driver pages: Cloud reads, refresh, responsive layout and admin exclusion passed at ${viewport.width}px; no business writes.`,
         );
       } finally {
         await context.close();

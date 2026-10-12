@@ -38,3 +38,6 @@ Fonepay verification requires official credentials/docs and security review. Ful
 
 ## Sprint 6 custody read model
 Immutable custody entries remain authoritative. An append-only ordering table captures exact new posting order; existing entries are indexed chronologically with a documented stable tie-break. FIFO outstanding lots and return allocations are derived from cumulative posting intervals, with no mutable pending date or duplicate physical journal. New closing snapshots include dated lots; old archives are untouched. Contact command parsing, authorized services and checked RPCs retain domain/data-access separation.
+
+## Driver workspace projections
+`domain/operations/driver-workspace.ts` derives round counters from a trip-scoped stock/visit snapshot and exact journal money. `services/driver-workspace.ts` authorizes and orchestrates existing operations/finance readers; no stock/finance posting logic is duplicated. Closed rounds use their immutable return movements instead of the vehicle's later balance. Active-day finance spans rounds and excludes previous-credit collections from sales. Read-only pages poll while visible; mutable delivery drafts refresh explicitly. Driver directories expose ordinary contact/pending projections while raw customer notes and finance/trip RLS remain protected.

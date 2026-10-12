@@ -55,3 +55,13 @@ Tests pass, no outstanding negative stock or double-spend issue, all finance amo
 - [x] Explicitly approve/apply Cloud migrations 012-013; verify catalog/grants, record preservation and connected read-only desktop/mobile flows.
 - [ ] Execute hosted staging write acceptance for customer creation, delivery/FIFO, return-only posting and closing.
 - [ ] Multi-connection contention/races, production-volume checks, restore drill and staff acceptance before deployment.
+
+## Driver inventory and simple rounds (2026-10-12)
+- [x] Dedicated stock, delivery, customer lookup, pending, sales-history and warehouse-return screens with mobile navigation.
+- [x] Actual loaded/sold/remaining/returned counters and journal-backed finance; cross-session refresh with draft preservation.
+- [x] Contact metadata and private-note isolation, waiting-driver contact/pending lookup, checked operational writes and preserved legacy retries.
+- [x] Complete 100-jar round, repeated/empty-only visits, admin return, automatic same-day 80-jar reload and next-day carry-forward executed on desktop/mobile disposable PostgreSQL.
+- [x] Local broader regression: 221 unit/database checks, 48 protected-route browser checks, all 16 operational scenarios across full/targeted runs, type/lint/format/build. Exact commands and initial failures in `DRIVER_INVENTORY_WORKSPACE.md`.
+- [x] Existing Cloud admin/driver login and inventory read-only regression; preserve accounts and records.
+- [ ] Approve/apply migration 014 and execute extended six-page Cloud contact/pending/privacy acceptance; automatic approval review requires explicit approval for this exact migration.
+- [ ] Hosted staging write/UAT, independent-connection races and production-volume/deployment checks remain outstanding.

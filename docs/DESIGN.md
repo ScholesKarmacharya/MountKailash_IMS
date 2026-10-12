@@ -28,3 +28,6 @@ Responsive web app, desktop-first admin and mobile-first driver. Fast numeric en
 
 ## Accessibility / validation
 Accessible labels, keyboard support, confirmation dialogs for irreversible actions, readable monetary separators, inline inventory shortfall errors, high contrast, and explicit unsaved state warnings.
+
+## Implemented driver inventory workspace (2026-10-12)
+The essential navigation now uses `/driver/home`, `/driver/delivery`, `/driver/customers`, `/driver/pending-jars`, `/driver/sales` and `/driver/return`. Mobile navigation is fixed with six touch targets and reserved content space. Home prioritizes four jar cards, cartons, vehicle and simple round labels, then New Delivery and day/round collections. Dedicated delivery and return screens reuse the original checked trip forms; historical `/driver/trips/[id]` remains supported. Contact forms are inline and preserve quantity drafts. Read-only screens check database updates every 10 seconds and on focus; mutable delivery forms refresh explicitly. See `DRIVER_INVENTORY_WORKSPACE.md` for actual routes and acceptance; earlier screen examples describe the original design scope.

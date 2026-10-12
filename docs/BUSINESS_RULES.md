@@ -16,6 +16,8 @@
 7. Driver submits a trip at warehouse with declared physical returns and payment totals. After submission, visit editing is locked absent admin-authorized correction.
 8. Admin compares expected vehicle remaining balances against actual counts. Mark discrepancy and resolve; approve only when balanced or approved adjustment is recorded. Stock is physically returned via admin-confirmed reconciliation, not on driver declaration alone.
 9. Drivers may execute multiple approved trips during one open business day. Reuse previously returned/refilled jars only once warehouse stock is available.
+10. A delivery round's visible states are Ready to Start, Delivering, Returned / Awaiting Confirmation and Completed; internal DRAFT/review/discrepancy states remain for enforcement. Closed-round stock counters never use a subsequent load on the same vehicle. Business-day financial counters span rounds; pending jars and credit span days independently.
+11. Active drivers may look up ordinary active customer contacts and dated pending jars while waiting for loading. Registration/contact edits, deliveries, returns and selected financial context require an assigned ACTIVE trip and OPEN day. Contact person, customer type and delivery notes are operational fields; customer type never changes billing and delivery notes are separate from private admin notes.
 
 ## 3. Jar custody and deposits
 - For registered customer C: **closing jars held = opening jars held + full jars delivered - empty jars collected - documented jar writeoffs/returns**.

@@ -107,6 +107,8 @@ See the [Sprint 2 integration audit](docs/SPRINT_2_INTEGRATION_AUDIT.md) for the
 
 ## Sprint 3 finance
 
+The current [driver inventory and simple-round workspace](docs/DRIVER_INVENTORY_WORKSPACE.md) adds dedicated mobile stock, delivery, customers, pending jars, sales history and warehouse-return pages while retaining the existing stock/finance transactions. Its forward-only migration `202610120014_driver_inventory_workspace.sql` adds ordinary contact fields, projected lookup for waiting drivers and tighter private-note access. Read the safety review and pending/application status before pushing Cloud migrations. No new credentials, Docker or sample business data are needed.
+
 Read [Sprint 3 implementation, migration review and manual acceptance](docs/SPRINT_3_IMPLEMENTATION.md). New trip visits atomically issue sales/invoices with approved price snapshots and post cash, pending Fonepay, allocations, credit and explicit deposits. Admin Payments, Customer credit and Billing settings use real Supabase RPC data. Invoice/receipt PDFs are private, generated on demand and support English/Nepali with bundled fonts.
 
 Cloud migrations 006–008 were verified applied on 2026-10-12; the original Sprint 3 implementation report records the earlier pending state. No new secrets, Docker or sample records are needed. Existing Sprint 2 payment intents are preserved without automatic financial backfill. Keep tax unconfigured until confirmed and configure manual deposit arrangements per customer.

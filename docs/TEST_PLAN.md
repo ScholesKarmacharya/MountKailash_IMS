@@ -49,4 +49,8 @@ Unit: price resolution, ledger math, closing state machine. Integration: SQL tra
 
 **T25 Simultaneous driver sessions:** independent drivers/vehicles post through separate browser sessions together, preserve assignment isolation and shared-customer custody. Browser fixture serializes PostgreSQL; repeat overlapping last-stock/close/posting/duplicate races on approved multi-connection staging before sign-off.
 
+**T26 Driver stock and reload:** load 100 jars/cartons; inline-contact partial delivery 35 full/30 empty; a second customer's 20-jar sale; walk-in exchange; independent empty-only return; reject over-stock; replay exact request with unchanged journals; declare/approve physical returns; immediately load a same-day 80-jar round without driver logout; collect previous credit without a sale; close/open the day and verify stock/credit/custody/archive persistence. Executed on desktop/mobile disposable PostgreSQL in `driver-inventory.spec.ts`.
+
+**T27 Contact privacy and report dates:** active drivers may read projected active contacts and pending dates while waiting, but raw private customer rows and finance/trips remain protected. Mutations require owned ACTIVE trip/OPEN day; extended fields retain legacy retries and one audit/version transaction. Closing review retains visible financial totals while posting is locked; archived pending age uses the closing cutoff. See `DRIVER_INVENTORY_WORKSPACE.md` for exact results and remaining Cloud approval/UAT.
+
 **T26 Dated carry-forward:** close with dated pending jars and credit, open next day, verify original dates/quantities and fresh daily counters; later returns must not change the old archive/PDF/CSV.

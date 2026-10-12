@@ -83,7 +83,7 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  await save(page, "Save confirmed delivery");
+  await save(page, "Save Delivery");
   await expect.poll(async () => (await finance()).invoices.length).toBe(1);
   let f = await finance();
   const invoice = f.invoices[0]!;

@@ -82,21 +82,28 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   expect((await admin.workspace(trip)).route).toHaveLength(0);
   await logout(page);
   await login(page, "driver");
-  await save(page, "Start trip");
+  await save(page, "Start delivering");
   await expect(
-    page.getByRole("link", { name: "New Delivery", exact: true }),
+    page
+      .locator("main")
+      .getByRole("link", { name: "New Delivery", exact: true }),
   ).toBeVisible();
   for (const heading of [
     "My Active Trip",
-    "Loaded Stock",
-    "Remaining Stock",
-    "Recent Sales",
-    "Payments Collected",
+    "Total Jars Loaded",
+    "Remaining Full Jars",
+    "Full Jars Sold",
+    "Empty Jars Collected",
   ])
     await expect(
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
-  await page.getByRole("link", { name: "New Delivery", exact: true }).click();
+  await page
+    .locator("main")
+    .getByRole("link", { name: "New Delivery", exact: true })
+    .click();
+  // Historical trip detail remains a supported operational entry point.
+  await page.goto(`/driver/trips/${trip}`);
   await page
     .getByRole("button", { name: "Increase Full jars delivered", exact: true })
     .click();
@@ -154,7 +161,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  await save(page, "Save confirmed delivery");
+  await save(page, "Save Delivery");
   await expect
     .poll(async () => (await admin.workspace(trip)).visits.length)
     .toBe(1);
@@ -177,7 +184,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  await save(page, "Save confirmed delivery");
+  await save(page, "Save Delivery");
   await expect
     .poll(async () => (await admin.workspace(trip)).visits.length)
     .toBe(2);
@@ -191,7 +198,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  await save(page, "Save confirmed delivery");
+  await save(page, "Save Delivery");
   await expect
     .poll(async () => (await admin.workspace(trip)).visits.length)
     .toBe(3);
@@ -210,7 +217,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  await save(page, "Save confirmed delivery");
+  await save(page, "Save Delivery");
   await expect
     .poll(async () => (await admin.workspace(trip)).visits.length)
     .toBe(4);
@@ -254,7 +261,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await expect.poll(async () => (await finance()).payments.length).toBe(4);
   await page.reload();
   const before = await admin.workspace(trip);
-  await save(page, "Submit trip counts");
+  await save(page, "Submit warehouse returns");
   await expect
     .poll(async () => (await admin.workspace(trip)).trips[0]?.status)
     .toBe("SUBMITTED");
@@ -262,7 +269,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     before.movements.length,
   );
   await expect(
-    page.getByRole("button", { name: "Save confirmed delivery", exact: true }),
+    page.getByRole("button", { name: "Save Delivery", exact: true }),
   ).toHaveCount(0);
   await logout(page);
   await login(page, "admin");

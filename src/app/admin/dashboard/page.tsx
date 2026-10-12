@@ -6,6 +6,8 @@ import { formatNepalTime, isOvernightDay } from "@/domain/business-days/time";
 import { WarehouseStock } from "@/components/warehouse-stock";
 import Link from "next/link";
 import { npr } from "@/domain/finance/money";
+import { OperationalRefresh } from "@/components/operational-refresh";
+import { AdminDriverActivity } from "@/components/admin-driver-activity";
 export default async function Dashboard() {
   const { businessDay, inventory, operations, finance, dayDetail } =
     await getAdminDashboard();
@@ -46,6 +48,7 @@ export default async function Dashboard() {
         </p>
       </div>
       <Card className="border-l-4 border-l-primary">
+        <OperationalRefresh />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">Business day</h2>
           <span className="rounded-full bg-muted px-3 py-1 text-xs">
@@ -221,6 +224,12 @@ export default async function Dashboard() {
         Deposits remain separate from sales. Fonepay requires explicit admin
         reconciliation.
       </p>
+      <AdminDriverActivity
+        overview={operations}
+        finance={finance}
+        day={businessDay?.id}
+        openedAt={businessDay?.opened_at}
+      />
     </div>
   );
 }

@@ -15,7 +15,7 @@ export async function getOperations(admin: boolean, trip?: string) {
 export async function saveOperation(form: FormData) {
   const command = parseCommand(form);
   await requirePermission(
-    command.rpc === "save_delivery_customer"
+    ["save_delivery_customer", "save_delivery_contact"].includes(command.rpc)
       ? "customer:operate"
       : command.admin
         ? "trip:assign"

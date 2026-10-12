@@ -89,8 +89,10 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
-  await save(page, "Start trip");
-  await page.getByRole("link", { name: "View trip / return counts" }).click();
+  await save(page, "Start delivering");
+  await page
+    .getByRole("link", { name: "View round and return history" })
+    .click();
   let visitCount = 0;
   for (const [full, empty] of [
     [40, 30],
@@ -170,7 +172,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       p_notes: "",
       p_key: await form.locator('input[name="key"]').inputValue(),
     };
-    await save(page, "Save confirmed delivery");
+    await save(page, "Save Delivery");
     await expect
       .poll(async () => (await admin.workspace(tripId)).visits.length)
       .toBe(++visitCount);
@@ -200,7 +202,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
     page.getByLabel("Empty jars counted", { exact: true }),
   ).toHaveValue("65");
   const beforeSubmission = await admin.workspace(tripId);
-  await save(page, "Submit trip counts");
+  await save(page, "Submit warehouse returns");
   await updated(page);
   await expect(
     page.getByText("Awaiting warehouse verification", { exact: true }),

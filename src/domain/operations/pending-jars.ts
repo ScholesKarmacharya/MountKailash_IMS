@@ -9,5 +9,7 @@ export type PendingJar = {
   original_date: string;
   business_date: string;
   source: string;
+  driver_name?: string | null;
+  trip_number?: number | null;
 };
 export type PendingJarWorkspace = { available: boolean; rows: PendingJar[] };

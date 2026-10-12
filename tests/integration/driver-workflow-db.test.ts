@@ -185,6 +185,105 @@ afterEach(async () => {
   await db.exec("rollback;reset role");
 });
 
+it("permits active drivers to look up contacts and pending jars before loading, without raw private records", async () => {
+  await who(other);
+  const directory = await rpc<Workspace["customers"]>(
+    "delivery_customer_directory",
+    [],
+  );
+  expect(directory.map((c) => c.id)).toContain(existing);
+  expect(directory.every((c) => c.notes === "")).toBe(true);
+  expect(await scalar("select count(*) from public.customers")).toBe(0);
+  expect(await rpc("pending_jar_directory", [null])).toEqual({ rows: [] });
+  expect((await finance()).invoices).toEqual([]);
+  await rejected(
+    "save_delivery_customer",
+    [trip, randomUUID(), "No load", "", "", "", 0, false, randomUUID()],
+    /assigned/i,
+  );
+  await rejected(
+    "save_customer_contact",
+    [trip, existing, "Forbidden", "", "", "", 1, false, randomUUID(), null],
+    /permission denied/,
+  );
+  await db.exec("reset role");
+  await db.query("update public.profiles set is_active=false where id=$1", [
+    other,
+  ]);
+  await who(other);
+  await rejected("pending_jar_directory", [null], /Active account/);
+  await rejected("delivery_customer_directory", [], /Active account/);
+});
+
+it("extended contact fields share an atomic audited canonical request and retain legacy contact retries", async () => {
+  await start();
+  const customer = randomUUID(),
+    key = randomUUID();
+  const args = [
+    trip,
+    customer,
+    "ABC Hotel",
+    "Hotel",
+    "9801231231",
+    "Kathmandu",
+    0,
+    false,
+    key,
+    "Manager",
+    "Hotel",
+    "Call before arriving",
+  ];
+  expect(await rpc("save_delivery_contact", args)).toBe(customer);
+  const c = (
+    await rpc<Workspace["customers"]>("delivery_customer_directory", [])
+  ).find((c) => c.id === customer)!;
+  expect(c).toMatchObject({
+    contact_person: "Manager",
+    customer_type: "Hotel",
+    delivery_notes: "Call before arriving",
+    version: 1,
+    notes: "",
+  });
+  expect(await rpc("save_delivery_contact", args)).toBe(customer);
+  await rejected(
+    "save_delivery_contact",
+    [...args.slice(0, 11), "Changed notes"],
+    /different|reused|payload/i,
+  );
+  await who();
+  expect(
+    await scalar(
+      "select count(*) from public.audit_events where entity_id=$1 and action='CUSTOMER_CREATED'",
+      [customer],
+    ),
+  ).toBe(1);
+  expect(
+    await scalar(
+      "select count(*) from public.customer_billing where customer_id=$1",
+      [customer],
+    ),
+  ).toBe(0);
+  expect(
+    await scalar("select created_by from public.customers where id=$1", [
+      customer,
+    ]),
+  ).toBe(driver);
+  expect(
+    await scalar("select notes from public.customers where id=$1", [existing]),
+  ).toBe("Private admin contact note");
+  await who(driver);
+  await contact(customer, "ABC Hotel contact edit", "9801231231", 1);
+  expect((await context(customer)).customer).toMatchObject({
+    contact_person: "Manager",
+    delivery_notes: "Call before arriving",
+    version: 2,
+  });
+  // Served customers still expose no private notes via direct table reads.
+  await visit(existing, 1, 0, { selection: "UNPAID" });
+  expect(await scalar("select count(*) from public.customers")).toBe(0);
+  expect((await context()).customer.notes).toBe("");
+});
+
 it("upgrades an existing closed trip/day without changing users, journals, archives or earlier retry results", async () => {
   const legacy = new PGlite();
   try {
@@ -350,7 +449,7 @@ it("upgrades an existing closed trip/day without changing users, journals, archi
         await legacy.query<{ value: unknown }>(`select jsonb_build_object(
       'users',(select jsonb_agg(id order by id) from auth.users),
       'profiles',(select jsonb_agg(to_jsonb(p) order by id) from public.profiles p),
-      'customers',(select jsonb_agg(to_jsonb(c)-'created_by' order by id) from public.customers c),
+      'customers',(select jsonb_agg(to_jsonb(c)-array['created_by','contact_person','customer_type','delivery_notes'] order by id) from public.customers c),
       'trips',(select jsonb_agg(to_jsonb(t) order by id) from public.trips t),
       'visits',(select jsonb_agg(to_jsonb(v) order by id) from public.trip_visits v),
       'stock',(select jsonb_agg(to_jsonb(m) order by id) from public.stock_movements m),
@@ -370,6 +469,12 @@ it("upgrades an existing closed trip/day without changing users, journals, archi
     await legacy.exec(
       readFileSync(
         "supabase/migrations/202610120013_sprint6_pending_jars.sql",
+        "utf8",
+      ),
+    );
+    await legacy.exec(
+      readFileSync(
+        "supabase/migrations/202610120014_driver_inventory_workspace.sql",
         "utf8",
       ),
     );

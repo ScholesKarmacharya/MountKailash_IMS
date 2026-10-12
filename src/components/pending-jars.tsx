@@ -2,22 +2,25 @@ import Link from "next/link";
 import { Card } from "./ui/card";
 import { formatNepalTime } from "@/domain/business-days/time";
 import type { PendingJarWorkspace } from "@/domain/operations/pending-jars";
+import { pendingDays } from "@/domain/operations/pending-age";
 export function PendingJars({
   workspace,
   admin = false,
   title = "Pending Jars",
+  asOf,
 }: {
   workspace: PendingJarWorkspace;
   admin?: boolean;
   title?: string;
+  asOf?: string | null;
 }) {
   return (
     <Card id="pending-jars" className="space-y-4">
       <h2 className="font-semibold">{title}</h2>
       {!workspace.available ? (
         <p role="status">
-          The Sprint 6 pending-jar migration is required before dated balances
-          can load.
+          The pending-jar or driver lookup migration is required before these
+          dated balances can load.
         </p>
       ) : (
         <>
@@ -56,6 +59,15 @@ export function PendingJars({
                     {r.source}; this date is the correction date.
                   </p>
                 )}
+                <p>
+                  {pendingDays(
+                    r.original_date,
+                    asOf ? new Date(asOf) : new Date(),
+                  )}{" "}
+                  days pending
+                  {r.trip_number != null && ` · Round #${r.trip_number}`}
+                  {r.driver_name && ` · ${r.driver_name}`}
+                </p>
               </li>
             ))}
           </ul>

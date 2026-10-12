@@ -40,11 +40,13 @@ export function DeliveryCustomerForm({
   customer,
   onSaved,
   onCancel,
+  detailsEnabled = false,
 }: {
   trip: string;
   customer?: Customer;
   onSaved: (id: string) => void;
   onCancel: () => void;
+  detailsEnabled?: boolean;
 }) {
   const [id] = useState(() => customer?.id ?? crypto.randomUUID());
   const [key] = useState(() => crypto.randomUUID());
@@ -53,6 +55,9 @@ export function DeliveryCustomerForm({
     shop_name: customer?.shop_name ?? "",
     phone: customer?.phone ?? "",
     address: customer?.address ?? "",
+    contact_person: customer?.contact_person ?? "",
+    customer_type: customer?.customer_type ?? "",
+    delivery_notes: customer?.delivery_notes ?? "",
   });
   const [duplicate, setDuplicate] = useState(false);
   const [state, action, pending] = useActionState(
@@ -73,7 +78,11 @@ export function DeliveryCustomerForm({
         deposits and jar balances are managed separately.
       </p>
       <form action={action} className="space-y-4">
-        <input type="hidden" name="operation" value="delivery-customer" />
+        <input
+          type="hidden"
+          name="operation"
+          value={detailsEnabled ? "delivery-contact" : "delivery-customer"}
+        />
         <input type="hidden" name="trip" value={trip} />
         <input type="hidden" name="id" value={id} />
         <input type="hidden" name="key" value={key} />
@@ -105,6 +114,32 @@ export function DeliveryCustomerForm({
               />
             </label>
           ))}
+          {detailsEnabled &&
+            (
+              [
+                ["contact_person", "Contact person (optional)", 120],
+                ["customer_type", "Customer type (optional)", 80],
+                ["delivery_notes", "Delivery notes (optional)", 2000],
+              ] as const
+            ).map(([field, label, max]) => (
+              <label key={field} className="grid gap-2 text-sm font-semibold">
+                {label}
+                <Input
+                  name={field}
+                  value={contacts[field]}
+                  maxLength={max}
+                  onChange={(e) =>
+                    setContacts({ ...contacts, [field]: e.target.value })
+                  }
+                />
+              </label>
+            ))}
+          {detailsEnabled && (
+            <p className="text-xs text-muted-foreground">
+              Customer type is a descriptive label. Monthly credit, prices and
+              deposits remain under existing billing arrangements.
+            </p>
+          )}
           {(duplicate || state?.error?.includes("matching customer")) && (
             <label className="flex min-h-14 items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm">
               <input

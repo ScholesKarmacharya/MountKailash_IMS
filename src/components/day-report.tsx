@@ -23,6 +23,7 @@ export function DayReportView({ report: r }: { report: DayReport }) {
           workspace={{ available: true, rows: r.pending_jars }}
           admin
           title="Pending jars at report cutoff"
+          asOf={r.day.closed_at}
         />
       )}
       <Card>

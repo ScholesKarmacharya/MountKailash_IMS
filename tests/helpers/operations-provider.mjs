@@ -101,8 +101,11 @@ const allowedTables = new Set([
 ]);
 const allowedRpc = new Set([
   "save_delivery_customer",
+  "save_delivery_contact",
   "delivery_customer_context",
+  "delivery_customer_directory",
   "pending_jar_workspace",
+  "pending_jar_directory",
   "operations_workspace",
   "finance_workspace",
   "finance_command",

@@ -25,7 +25,7 @@ export function AppShell({
           "border-b border-border bg-card p-5",
           profile.role === "ADMIN"
             ? "lg:sticky lg:top-0 lg:h-dvh lg:overflow-y-auto lg:border-r"
-            : "flex items-center justify-between gap-3",
+            : "space-y-4",
         )}
       >
         <div
@@ -62,7 +62,10 @@ export function AppShell({
         </header>
         <main
           id="main-content"
-          className="mx-auto max-w-7xl p-5 sm:p-8 lg:p-10"
+          className={cn(
+            "mx-auto max-w-7xl p-5 sm:p-8 lg:p-10",
+            profile.role === "DRIVER" && "pb-44 sm:pb-44 lg:pb-10",
+          )}
         >
           {children}
         </main>

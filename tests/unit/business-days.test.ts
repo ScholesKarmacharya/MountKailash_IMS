@@ -148,12 +148,26 @@ it("CSV protects formula-bearing names while preserving exact negative monetary 
       { customer_id: "customer2", name: "माउन्ट कैलाश", outstanding: "0" },
     ],
     deposit_balances: [],
+    pending_jars: [
+      {
+        entry_id: "lot",
+        customer_id: "customer",
+        customer_name: "Hotel",
+        product_name: "20L jar",
+        pending: 3,
+        original_date: "2026-10-10T10:00:00Z",
+        driver_name: "Delivery staff",
+        trip_number: 7,
+        source: "Delivery",
+      },
+    ],
   } as unknown as DayReport;
   const csv = dailyCsv(report);
   expect(csv.startsWith("\ufeff")).toBe(true);
   expect(csv).toContain('"\'=HYPERLINK(""bad"")",,-50.25');
   expect(csv).toContain("माउन्ट कैलाश");
   expect(csv).toContain(",,-50.25,");
+  expect(csv).toContain("2 days pending; Round #7; Delivery staff");
   expect(dailyDocument(report).lines.some((l) => l.includes("-50.25"))).toBe(
     true,
   );

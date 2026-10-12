@@ -14,17 +14,18 @@ it("admin read requires permission before data access", async () => {
   await expect(getPendingJars(true)).rejects.toThrow("denied");
   expect(guards.read).not.toHaveBeenCalled();
 });
-it("driver read requires an assigned valid trip and trip permission", async () => {
-  await expect(getPendingJars(false)).rejects.toThrow("assigned trip");
-  expect(guards.read).not.toHaveBeenCalled();
+it("driver directory lookup requires active driver permission even without a load", async () => {
+  await getPendingJars(false);
+  expect(guards.permission).toHaveBeenLastCalledWith("driver:read");
+  expect(guards.read).toHaveBeenCalledWith(null, null, true);
   await getPendingJars(false, id);
-  expect(guards.permission).toHaveBeenLastCalledWith("trip:operate");
-  expect(guards.read).toHaveBeenCalledWith(id, null);
+  expect(guards.permission).toHaveBeenLastCalledWith("driver:read");
+  expect(guards.read).toHaveBeenCalledWith(id, null, false);
 });
 it("customer filter cannot pass malformed identifiers to data access", async () => {
   await expect(getPendingJars(true, undefined, "malformed")).rejects.toThrow();
   expect(guards.read).not.toHaveBeenCalled();
   await getPendingJars(true, undefined, id);
   expect(guards.permission).toHaveBeenLastCalledWith("admin:read");
-  expect(guards.read).toHaveBeenCalledWith(null, id);
+  expect(guards.read).toHaveBeenCalledWith(null, id, false);
 });

@@ -4,7 +4,7 @@ import { cents, decimal, sum, npr } from "@/domain/finance/money";
 import { paymentPlan } from "@/domain/finance/payment-plan";
 import type { FinanceWorkspace, PaymentDraft } from "@/domain/finance/types";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Count, Trip, Workspace } from "@/domain/operations/types";
 import { moneyTotal, vehicleCounts } from "@/domain/operations/types";
@@ -158,11 +158,13 @@ export function DeliveryForm({
   finance: f,
   trip,
   requestKey,
+  initialCustomer,
 }: {
   finance?: FinanceWorkspace;
   workspace: Workspace;
   trip: Trip;
   requestKey: string;
+  initialCustomer?: string;
 }) {
   const [search, setSearch] = useState(""),
     [walk, setWalk] = useState(false),
@@ -170,6 +172,11 @@ export function DeliveryForm({
     [phone, setPhone] = useState("");
   const lookup = useDeliveryCustomer(trip.id, w.driver_workflow);
   const { customer, context } = lookup;
+  useEffect(() => {
+    if (initialCustomer) void lookup.selectCustomer(initialCustomer);
+    // Query selection initializes a draft; it must not overwrite later edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCustomer, trip.id]);
   const [editor, setEditor] = useState<"new" | "edit" | null>(null);
   const [payment, setPayment] = useState("CASH"),
     [amount, setAmount] = useState(""),
@@ -322,6 +329,7 @@ export function DeliveryForm({
         <DeliveryCustomerForm
           key={editor === "edit" ? selected?.id : "new"}
           trip={trip.id}
+          detailsEnabled={w.customer_details}
           customer={editor === "edit" ? selected : undefined}
           onCancel={() => setEditor(null)}
           onSaved={(id) => {
@@ -363,7 +371,7 @@ export function DeliveryForm({
         trip={trip.id}
         requestKey={requestKey}
         showSubmit={review && eligible}
-        label="Save confirmed delivery"
+        label="Save Delivery"
         confirm={`Save ${f?.available ? payments.map((p) => p.method + " " + p.amount + " NPR (deposit " + p.deposit_amount + ")").join("; ") : ""} ${walk ? walkName : selected?.name}: ${items.map((i) => `${i.full_jars} full, ${i.empty_jars} empty, ${i.cartons} cartons`).join("; ")}? ${f?.available ? "Cash is recorded; Fonepay remains pending." : "Payment remains unverified."}`}
       >
         {f?.available && (
@@ -515,6 +523,18 @@ export function DeliveryForm({
               return (
                 <Card key={p.id} className="space-y-5 p-4">
                   <h3 className="font-semibold">{p.name}</h3>
+                  <p className="text-sm">
+                    Unit price:{" "}
+                    {npr(
+                      (context?.prices ?? f?.prices)?.find(
+                        (r) =>
+                          r.customer_id === (walk ? null : customer) &&
+                          r.product_id === p.id &&
+                          r.active,
+                      )?.price ?? p.default_price,
+                    )}{" "}
+                    / {p.unit}
+                  </p>
                   {p.kind === "FULL_JAR" ? (
                     <>
                       <p className="text-sm">
@@ -543,6 +563,52 @@ export function DeliveryForm({
                           jars before this visit.
                         </p>
                       )}
+                      {selected && !walk && (
+                        <div className="rounded-lg bg-muted p-3 text-sm">
+                          <p>
+                            Previous Pending Jars:{" "}
+                            {custody.find(
+                              (c) =>
+                                c.customer_id === customer &&
+                                c.product_id === p.id,
+                            )?.quantity ?? 0}
+                          </p>
+                          <p>
+                            New Delivered Jars: {q.full_jars} · Empty Jars
+                            Collected: {q.empty_jars}
+                          </p>
+                          <p className="font-semibold">
+                            Updated Pending Balance:{" "}
+                            {(custody.find(
+                              (c) =>
+                                c.customer_id === customer &&
+                                c.product_id === p.id,
+                            )?.quantity ?? 0) +
+                              q.full_jars -
+                              q.empty_jars}
+                          </p>
+                          {context?.pending_jars?.filter(
+                            (r) => r.product_id === p.id,
+                          ).length ? (
+                            <p>
+                              Oldest Pending Date:{" "}
+                              {new Intl.DateTimeFormat("en-NP", {
+                                timeZone: "Asia/Kathmandu",
+                                dateStyle: "medium",
+                              }).format(
+                                new Date(
+                                  context.pending_jars
+                                    .filter((r) => r.product_id === p.id)
+                                    .map((r) => r.original_date)
+                                    .sort()[0]!,
+                                ),
+                              )}
+                            </p>
+                          ) : (
+                            <p>No earlier pending jars.</p>
+                          )}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -564,6 +630,11 @@ export function DeliveryForm({
             {f?.available ? (
               <div className="space-y-5">
                 <p className="text-xl font-bold">Payable: {npr(payable)}</p>
+                <p className="text-sm">
+                  Amount collected: {npr(sum(payments.map((p) => p.amount)))}{" "}
+                  (Fonepay stays pending). Physical quantities are independent
+                  of payment amounts.
+                </p>
                 <PaymentButtons
                   value={payment}
                   onChange={(v) => {
@@ -798,7 +869,7 @@ export function ReturnForm({
       operation={admin ? "reconcile" : "submit"}
       trip={trip.id}
       requestKey={requestKey}
-      label={admin ? "Post physical verification" : "Submit trip counts"}
+      label={admin ? "Post physical verification" : "Submit warehouse returns"}
       confirm={
         admin
           ? "Post these verified returns? Balanced counts or an explicit variance approval will close the physical trip."

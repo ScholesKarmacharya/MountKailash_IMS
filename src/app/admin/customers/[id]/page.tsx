@@ -36,6 +36,15 @@ export default async function Page({
       />
       <Card>
         <CustomerForm customer={record} />
+        {(record.contact_person ||
+          record.customer_type ||
+          record.delivery_notes) && (
+          <div className="mt-4 space-y-2 border-t pt-4 text-sm">
+            <p>Contact person: {record.contact_person || "Not recorded"}</p>
+            <p>Customer type: {record.customer_type || "Not recorded"}</p>
+            <p>Delivery notes: {record.delivery_notes || "None recorded"}</p>
+          </div>
+        )}
       </Card>
       <CustodyForm workspace={w} customer={record} />
       <CustomerReport id={id} />

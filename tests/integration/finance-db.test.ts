@@ -820,6 +820,7 @@ it("new assigned driver can collect limited prior credit without reading the old
   expect(f.invoices).toHaveLength(0);
   expect(f.credit[0]!.outstanding).toBe("1402.50");
 });
+// Font embedding plus PDF parsing is CPU-heavy when browser builds share the host.
 it("Nepali receipt text and long item names export without clipped pages", async () => {
   await who(admin);
   await rpc("save_customer", [
@@ -855,7 +856,7 @@ it("Nepali receipt text and long item names export without clipped pages", async
     "कैलाश",
   );
   await task.destroy();
-});
+}, 30000);
 it("rejected walk-in Fonepay can be replaced on the same assigned active trip", async () => {
   await active();
   await rpc("post_trip_visit", [

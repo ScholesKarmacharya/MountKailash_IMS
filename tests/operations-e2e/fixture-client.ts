@@ -37,6 +37,7 @@ export async function fixtureClient(
 export async function activeFixtureTrip(
   request: APIRequestContext,
   load = 100,
+  cartons = 0,
 ) {
   expect((await request.post(`${provider}/reset`)).ok()).toBe(true);
   const admin = await fixtureClient(request);
@@ -80,6 +81,15 @@ export async function activeFixtureTrip(
     p_trip: trip,
     p_items: [
       { product_id: fixtureIds.jar, stock_kind: "FULL_JAR", quantity: load },
+      ...(cartons
+        ? [
+            {
+              product_id: "00000000-0000-0000-0000-000000000012",
+              stock_kind: "BOTTLE_CARTON",
+              quantity: cartons,
+            },
+          ]
+        : []),
     ],
     p_key: randomUUID(),
   });

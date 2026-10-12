@@ -32,6 +32,11 @@ for (const route of [
   "/api/payments/00000000-0000-0000-0000-000000000011/pdf",
   "/driver",
   "/driver/home",
+  "/driver/delivery",
+  "/driver/customers",
+  "/driver/pending-jars",
+  "/driver/sales",
+  "/driver/return",
 ])
   test(`unauthenticated direct ${route} access is guarded`, async ({
     page,

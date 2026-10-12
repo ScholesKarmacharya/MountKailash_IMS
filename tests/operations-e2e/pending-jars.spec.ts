@@ -35,7 +35,7 @@ async function record(page: Page, full: number, empty: number) {
       r.request().method() === "POST" && !!r.request().headers()["next-action"],
   );
   await page
-    .getByRole("button", { name: "Save confirmed delivery", exact: true })
+    .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
   expect((await response).ok()).toBe(true);
 }
@@ -76,15 +76,17 @@ test("FIFO pending dates, return-only collection and admin report persist throug
     .toBe(3);
   const pending = (await context()).pending_jars!;
   await page.goto("/driver/home");
-  await expect(page.getByText("3 pending jars", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
       "2 deliveries · 2 customer visits (including return-only visits)",
       { exact: true },
     ),
   ).toBeVisible();
+  await page.goto("/driver/pending-jars");
+  await expect(page.getByText("3 pending jars", { exact: true })).toBeVisible();
   await logout(page);
   await login(page);
+  await page.goto("/driver/pending-jars");
   await expect(page.getByText("3 pending jars", { exact: true })).toBeVisible();
   expect((await context()).pending_jars).toEqual(pending);
   await page.goto(`/driver/trips/${trip}`);
@@ -103,6 +105,8 @@ test("FIFO pending dates, return-only collection and admin report persist throug
       { exact: true },
     ),
   ).toBeVisible();
+  await page.goto("/driver/pending-jars");
+  await page.goto("/driver/pending-jars");
   await expect(
     page.getByText("No pending jars.", { exact: true }),
   ).toBeVisible();

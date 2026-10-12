@@ -1,6 +1,7 @@
 import type { DayReport, DayTotals } from "./types";
 import { sum, npr } from "@/domain/finance/money";
 import { formatNepalTime } from "./time";
+import { pendingDays } from "@/domain/operations/pending-age";
 import { stockLabels } from "@/domain/inventory/validation";
 import type { ReceiptDocument } from "@/domain/finance/documents";
 export const amountLabels = {
@@ -276,6 +277,13 @@ export function reportRows(r: DayReport): ReportRow[] {
       id: p.entry_id,
       label: `${p.customer_name} · ${p.product_name} · ${formatNepalTime(p.original_date)} · ${p.source}`,
       quantity: p.pending,
+      details: [
+        `${pendingDays(p.original_date, r.day.closed_at ? new Date(r.day.closed_at) : new Date())} days pending`,
+        p.trip_number != null && `Round #${p.trip_number}`,
+        p.driver_name,
+      ]
+        .filter(Boolean)
+        .join("; "),
     });
   for (const c of r.credit)
     rows.push({

@@ -84,9 +84,13 @@ export function OperationForm({
   const [state, action, pending] = useActionState(
     async (previous: Parameters<typeof operationAction>[0], form: FormData) => {
       window.dispatchEvent(new Event("operation-saving"));
-      const result = await operationAction(previous, form);
-      if (result?.success) window.dispatchEvent(new Event("operation-saved"));
-      return result;
+      try {
+        const result = await operationAction(previous, form);
+        if (result?.success) window.dispatchEvent(new Event("operation-saved"));
+        return result;
+      } finally {
+        window.dispatchEvent(new Event("operation-settled"));
+      }
     },
     null,
   );

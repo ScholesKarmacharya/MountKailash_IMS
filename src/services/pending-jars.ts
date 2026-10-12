@@ -7,10 +7,10 @@ export async function getPendingJars(
   trip?: string,
   customer?: string,
 ) {
-  await requirePermission(admin ? "admin:read" : "trip:operate");
-  if (!admin && !trip) throw new Error("An assigned trip is required.");
+  await requirePermission(admin ? "admin:read" : "driver:read");
   return readPendingJars(
     trip ? uuid(trip) : null,
     customer ? uuid(customer) : null,
+    !admin && !trip,
   );
 }

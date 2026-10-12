@@ -13,6 +13,8 @@ import {
 import { stockLabels } from "@/domain/inventory/validation";
 import { formatNepalTime } from "@/domain/business-days/time";
 import { Card } from "./ui/card";
+import { roundLabel } from "@/domain/operations/driver-workspace";
+import { DriverStock } from "./driver-stock";
 import { Button } from "./ui/button";
 import {
   MigrationRequired,
@@ -46,7 +48,7 @@ export function TripList({ trips, admin }: { trips: Trip[]; admin: boolean }) {
             </p>
           </div>
           <span className="rounded-full bg-muted px-3 py-2 text-xs font-semibold">
-            {t.status.replaceAll("_", " ")}
+            {admin ? t.status.replaceAll("_", " ") : roundLabel(t.status)}
           </span>
         </Card>
       ))}
@@ -162,9 +164,10 @@ export async function TripDetail({
         description={`${trip.plate_number} · ${trip.driver_name} · Business day ${trip.date_label}`}
       />
       <p className="inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white">
-        {trip.status.replaceAll("_", " ")}
+        {admin ? trip.status.replaceAll("_", " ") : roundLabel(trip.status)}
       </p>
       {trip.notes && <p className="text-sm">{trip.notes}</p>}
+      {w.loads.length > 0 && <DriverStock workspace={w} trip={trip} />}
       {w.loads.length > 0 && (
         <>
           <h2 className="font-semibold">Loaded Stock</h2>

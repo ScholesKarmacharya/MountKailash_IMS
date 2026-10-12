@@ -3,6 +3,7 @@ import { paymentDraft } from "@/domain/finance/commands";
 export type Operation =
   | "customer"
   | "delivery-customer"
+  | "delivery-contact"
   | "vehicle"
   | "driver"
   | "create"
@@ -112,9 +113,13 @@ export function parseCommand(form: FormData): Command {
         "Drivers choose customers during delivery; preassignment is disabled.",
       );
     case "delivery-customer":
+    case "delivery-contact":
       return {
         admin: false,
-        rpc: "save_delivery_customer",
+        rpc:
+          operation === "delivery-contact"
+            ? "save_delivery_contact"
+            : "save_delivery_customer",
         args: {
           p_trip: id("trip"),
           p_id: id("id"),
@@ -124,6 +129,13 @@ export function parseCommand(form: FormData): Command {
           p_address: str("address", 500),
           p_version: integer("version"),
           p_duplicate_confirmed: form.get("duplicate_confirmed") === "on",
+          ...(operation === "delivery-contact"
+            ? {
+                p_contact_person: str("contact_person", 120),
+                p_customer_type: str("customer_type", 80),
+                p_delivery_notes: str("delivery_notes"),
+              }
+            : {}),
           ...common,
         },
       };

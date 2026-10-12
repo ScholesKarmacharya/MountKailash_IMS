@@ -1,3 +1,4 @@
+import { T, Message, Value, LocalizedSection } from "@/components/localization";
 import type { Trip, Workspace } from "@/domain/operations/types";
 import type { FinanceWorkspace } from "@/domain/finance/types";
 import { roundStock, roundFinance } from "@/domain/operations/driver-workspace";
@@ -13,7 +14,7 @@ export function DriverStock({
 }) {
   const s = roundStock(workspace, trip);
   return (
-    <section aria-label="Delivery stock" className="space-y-4">
+    <LocalizedSection aria-label="Delivery stock" className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         {[
           ["Total Jars Loaded", s.loadedFull],
@@ -29,8 +30,12 @@ export function DriverStock({
                 : ""
             }
           >
-            <h2 className="text-sm font-semibold">{label}</h2>
-            <p className="mt-3 text-4xl font-bold tabular-nums">{value}</p>
+            <h2 className="text-sm font-semibold">
+              <Message value={label} />
+            </h2>
+            <p className="mt-3 text-4xl font-bold tabular-nums">
+              <Value value={value} />
+            </p>
           </Card>
         ))}
       </div>
@@ -43,26 +48,34 @@ export function DriverStock({
         ].map(([label, value]) => (
           <Card key={label} className="p-4">
             <h2 className="text-xs font-semibold text-muted-foreground">
-              {label}
+              <Message value={label} />
             </h2>
-            <p className="mt-2 text-2xl font-bold tabular-nums">{value}</p>
+            <p className="mt-2 text-2xl font-bold tabular-nums">
+              <Value value={value} />
+            </p>
           </Card>
         ))}
       </div>
       <p className="text-sm text-muted-foreground">
-        {s.deliveries} deliveries · {s.visits} customer visits (including
-        return-only visits)
+        <T
+          k="{0} deliveries · {1} customer visits (including return-only visits)"
+          values={[s.deliveries, <Value key="v1" value={s.visits} />]}
+        />
       </p>
       {trip.status === "CLOSED" && (
         <Card>
-          <h2 className="font-semibold">Confirmed warehouse returns</h2>
+          <h2 className="font-semibold">
+            <T k="Confirmed warehouse returns" />
+          </h2>
           <p className="mt-2">
-            {s.returnedFull} full jars · {s.returnedEmpty} empty jars ·{" "}
-            {s.returnedCartons} cartons
+            <T
+              k="{0} full jars · {1} empty jars · {2} cartons"
+              values={[s.returnedFull, s.returnedEmpty, s.returnedCartons]}
+            />
           </p>
         </Card>
       )}
-    </section>
+    </LocalizedSection>
   );
 }
 
@@ -77,12 +90,14 @@ export function DriverMoney({
 }) {
   const f = roundFinance(finance, trip, day);
   return (
-    <section
+    <LocalizedSection
       aria-label={trip ? "Round payments" : "Business-day totals"}
       className="space-y-3"
     >
       <h2 className="font-semibold">
-        {trip ? "Round sales and collections" : "Business-day totals"}
+        <Message
+          value={trip ? "Round sales and collections" : "Business-day totals"}
+        />
       </h2>
       {f.available ? (
         <div className="grid grid-cols-2 gap-3">
@@ -95,26 +110,24 @@ export function DriverMoney({
           ].map(([label, value]) => (
             <Card key={label} className="p-4">
               <h3 className="text-xs font-semibold text-muted-foreground">
-                {label}
+                <Message value={label} />
               </h3>
               <p className="mt-2 break-words text-lg font-bold tabular-nums">
-                {npr(value!)}
+                <Value value={npr(value!)} />
               </p>
             </Card>
           ))}
         </div>
       ) : (
         <Card>
-          <p>Finance migration required before totals can load.</p>
+          <p>
+            <T k="Finance migration required before totals can load." />
+          </p>
         </Card>
       )}
       <p className="text-xs text-muted-foreground">
-        Sales include configured tax and invoice corrections. Cash and verified
-        Fonepay use receipt journals, including reversals and explicit deposits.
-        Previous-credit collections are separate from sales. Fonepay requires
-        independent admin reconciliation; deposit refunds appear in admin
-        reports.
+        <T k="Sales include configured tax and invoice corrections. Cash and verified Fonepay use receipt journals, including reversals and explicit deposits. Previous-credit collections are separate from sales. Fonepay requires independent admin reconciliation; deposit refunds appear in admin reports." />
       </p>
-    </section>
+    </LocalizedSection>
   );
 }

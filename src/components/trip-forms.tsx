@@ -1,4 +1,15 @@
 "use client";
+import { LocalizedSelect } from "@/components/localization";
+
+import {
+  T,
+  Message,
+  DateValue,
+  Value,
+  useLocale,
+} from "@/components/localization";
+import { tr } from "@/domain/localization/format";
+
 import { AmountInput, PaymentButtons } from "./finance-payment";
 import { cents, decimal, sum, npr } from "@/domain/finance/money";
 import { paymentPlan } from "@/domain/finance/payment-plan";
@@ -36,7 +47,9 @@ export function CreateTripForm({
   );
   if (!open)
     return (
-      <p>Open a business day in warehouse inventory before assigning a trip.</p>
+      <p>
+        <T k="Open a business day in warehouse inventory before assigning a trip." />
+      </p>
     );
   return (
     <OperationForm
@@ -48,10 +61,16 @@ export function CreateTripForm({
     >
       <input type="hidden" name="day" value={open.id} />
       <p className="text-sm">
-        Business day: <strong>{open.date_label}</strong>
+        {" "}
+        <T k="Business day:" />{" "}
+        <strong>
+          <DateValue value={open.date_label} />
+        </strong>
       </p>
       <Select name="driver" label="Driver">
-        <option value="">Choose available driver</option>
+        <option value="">
+          <T k="Choose available driver" />
+        </option>
         {w.drivers
           .filter((d) => d.is_active && !usedDrivers.has(d.id))
           .map((d) => (
@@ -61,7 +80,9 @@ export function CreateTripForm({
           ))}
       </Select>
       <Select name="vehicle" label="Vehicle">
-        <option value="">Choose available vehicle</option>
+        <option value="">
+          <T k="Choose available vehicle" />
+        </option>
         {w.vehicles
           .filter((v) => v.is_active && !usedVehicles.has(v.id))
           .map((v) => (
@@ -71,8 +92,7 @@ export function CreateTripForm({
           ))}
       </Select>
       <p className="text-sm text-muted-foreground">
-        Drivers choose their customers and destinations during delivery. Admin
-        assigns only the driver, vehicle and authorized load.
+        <T k="Drivers choose their customers and destinations during delivery. Admin assigns only the driver, vehicle and authorized load." />
       </p>
       <Field name="notes" label="Trip notes" />
     </OperationForm>
@@ -88,6 +108,7 @@ export function LoadTripForm({
   requestKey: string;
 }) {
   const products = w.products.filter((p) => p.is_active);
+  const { locale, number } = useLocale();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [assigned, setAssigned] = useState<Record<string, boolean>>({});
   const warehouse = w.locations.find((l) => l.code === "MAIN")?.id;
@@ -104,12 +125,18 @@ export function LoadTripForm({
       trip={trip.id}
       requestKey={requestKey}
       label="Confirm warehouse loading"
-      confirm={`Load ${selected.map((i) => `${i.quantity} ${products.find((p) => p.id === i.product_id)?.name}`).join(", ")} onto ${trip.plate_number}?`}
+      confirm={tr(locale, "Load {0} onto {1}?", [
+        selected
+          .map(
+            (i) =>
+              `${number(i.quantity)} ${products.find((p) => p.id === i.product_id)?.name}`,
+          )
+          .join(", "),
+        trip.plate_number,
+      ])}
     >
       <p className="text-sm text-muted-foreground">
-        Choose products and quantities. A jar product can be assigned with zero
-        full jars to permit empty collection; at least one load quantity must be
-        positive.
+        <T k="Choose products and quantities. A jar product can be assigned with zero full jars to permit empty collection; at least one load quantity must be positive." />
       </p>
       <input type="hidden" name="items" value={JSON.stringify(selected)} />
       {products.map((p) => {
@@ -136,10 +163,12 @@ export function LoadTripForm({
               />
               {p.name}
             </label>
-            <p className="text-sm">Warehouse available: {available}</p>
+            <p className="text-sm">
+              <T k="Warehouse available: {0}" values={[available]} />
+            </p>
             {assigned[p.id] && (
               <Counter
-                label={`${p.name} load`}
+                label={tr(locale, "{0} load", [p.name])}
                 value={quantities[p.id] ?? 0}
                 max={available}
                 onChange={(value) =>
@@ -166,6 +195,7 @@ export function DeliveryForm({
   requestKey: string;
   initialCustomer?: string;
 }) {
+  const { locale, t, number } = useLocale();
   const [search, setSearch] = useState(""),
     [walk, setWalk] = useState(false),
     [walkName, setWalkName] = useState(""),
@@ -312,7 +342,7 @@ export function DeliveryForm({
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Remaining stock is checked again when saving.
+          <T k="Remaining stock is checked again when saving." />
         </p>
         <Button
           type="button"
@@ -322,7 +352,7 @@ export function DeliveryForm({
             router.refresh();
           }}
         >
-          Refresh stock
+          <T k="Refresh stock" />
         </Button>
       </div>
       {editor && w.driver_workflow && (
@@ -351,7 +381,7 @@ export function DeliveryForm({
             setReview(false);
           }}
         >
-          Registered
+          <T k="Registered" />
         </Button>
         <Button
           type="button"
@@ -363,7 +393,7 @@ export function DeliveryForm({
             setReview(false);
           }}
         >
-          Walk-in
+          <T k="Walk-in" />
         </Button>
       </div>
       <OperationForm
@@ -372,7 +402,34 @@ export function DeliveryForm({
         requestKey={requestKey}
         showSubmit={review && eligible}
         label="Save Delivery"
-        confirm={`Save ${f?.available ? payments.map((p) => p.method + " " + p.amount + " NPR (deposit " + p.deposit_amount + ")").join("; ") : ""} ${walk ? walkName : selected?.name}: ${items.map((i) => `${i.full_jars} full, ${i.empty_jars} empty, ${i.cartons} cartons`).join("; ")}? ${f?.available ? "Cash is recorded; Fonepay remains pending." : "Payment remains unverified."}`}
+        confirm={tr(locale, "Save {0} {1}: {2}? {3}", [
+          f?.available
+            ? payments
+                .map((p) =>
+                  tr(locale, "{0} {1} NPR (deposit {2})", [
+                    t(p.method),
+                    number(p.amount),
+                    number(p.deposit_amount),
+                  ]),
+                )
+                .join("; ")
+            : "",
+          walk ? walkName : selected?.name,
+          items
+            .map((i) =>
+              tr(locale, "{0} full, {1} empty, {2} cartons", [
+                i.full_jars,
+                i.empty_jars,
+                i.cartons,
+              ]),
+            )
+            .join("; "),
+          t(
+            f?.available
+              ? "Cash is recorded; Fonepay remains pending."
+              : "Payment remains unverified.",
+          ),
+        ])}
       >
         {f?.available && (
           <input
@@ -397,7 +454,8 @@ export function DeliveryForm({
           <>
             {walk ? (
               <label className="grid gap-2 text-sm font-semibold">
-                Walk-in name (optional)
+                {" "}
+                <T k="Walk-in name (optional)" />{" "}
                 <Input
                   value={walkName}
                   maxLength={120}
@@ -408,7 +466,8 @@ export function DeliveryForm({
             ) : (
               <div className="space-y-3">
                 <label className="grid gap-2 text-sm font-semibold">
-                  Search active customers
+                  {" "}
+                  <T k="Search active customers" />{" "}
                   <Input
                     type="search"
                     value={search}
@@ -436,14 +495,13 @@ export function DeliveryForm({
                   ))}
                   {customers.length === 0 && (
                     <p className="text-sm">
-                      No matching active customers. Add a customer here or use a
-                      walk-in for an immediate exchange.
+                      <T k="No matching active customers. Add a customer here or use a walk-in for an immediate exchange." />
                     </p>
                   )}
                 </div>
                 {selected && (
                   <p className="text-sm font-semibold">
-                    Selected: {selected.name}
+                    <T k="Selected: {0}" values={[selected.name]} />
                   </p>
                 )}
                 <div className="flex flex-wrap gap-3">
@@ -458,7 +516,7 @@ export function DeliveryForm({
                       setReview(false);
                     }}
                   >
-                    Add New Customer
+                    <T k="Add New Customer" />
                   </Button>
                   {selected && (
                     <Button
@@ -471,18 +529,19 @@ export function DeliveryForm({
                         setReview(false);
                       }}
                     >
-                      Edit customer contact
+                      <T k="Edit customer contact" />
                     </Button>
                   )}
                 </div>
                 {!w.driver_workflow && (
                   <p role="status" className="text-sm text-amber-800">
-                    The driver customer workflow migration is required for
-                    customer creation and unrestricted destination selection.
+                    <T k="The driver customer workflow migration is required for customer creation and unrestricted destination selection." />
                   </p>
                 )}
                 {lookup.loading && (
-                  <p role="status">Loading customer balances…</p>
+                  <p role="status">
+                    <T k="Loading customer balances…" />
+                  </p>
                 )}
                 {lookup.error && (
                   <p role="alert" className="text-red-800">
@@ -492,7 +551,7 @@ export function DeliveryForm({
                       variant="outline"
                       onClick={() => void lookup.selectCustomer(customer)}
                     >
-                      Retry customer lookup
+                      <T k="Retry customer lookup" />
                     </Button>
                   </p>
                 )}
@@ -506,7 +565,8 @@ export function DeliveryForm({
             )}
             {walk && (
               <label className="grid gap-2 text-sm font-semibold">
-                Walk-in phone (optional)
+                {" "}
+                <T k="Walk-in phone (optional)" />{" "}
                 <Input
                   value={phone}
                   maxLength={40}
@@ -524,22 +584,33 @@ export function DeliveryForm({
                 <Card key={p.id} className="space-y-5 p-4">
                   <h3 className="font-semibold">{p.name}</h3>
                   <p className="text-sm">
-                    Unit price:{" "}
-                    {npr(
-                      (context?.prices ?? f?.prices)?.find(
-                        (r) =>
-                          r.customer_id === (walk ? null : customer) &&
-                          r.product_id === p.id &&
-                          r.active,
-                      )?.price ?? p.default_price,
-                    )}{" "}
-                    / {p.unit}
+                    <T
+                      k="Unit price: {0} / {1}"
+                      values={[
+                        <Value
+                          key="v0"
+                          value={npr(
+                            (context?.prices ?? f?.prices)?.find(
+                              (r) =>
+                                r.customer_id === (walk ? null : customer) &&
+                                r.product_id === p.id &&
+                                r.active,
+                            )?.price ?? p.default_price,
+                          )}
+                        />,
+                        <Message key="v1" value={p.unit} />,
+                      ]}
+                    />
                   </p>
                   {p.kind === "FULL_JAR" ? (
                     <>
                       <p className="text-sm">
-                        Vehicle: <strong>{available("FULL_JAR")} full</strong> ·{" "}
-                        {available("EMPTY_JAR")} empty
+                        {" "}
+                        <T k="Vehicle:" />{" "}
+                        <strong>
+                          <T k="{0} full" values={[available("FULL_JAR")]} />
+                        </strong>{" "}
+                        · {available("EMPTY_JAR")} <T k="empty" />{" "}
                       </p>
                       <Counter
                         label="Full jars delivered"
@@ -554,58 +625,93 @@ export function DeliveryForm({
                       />
                       {selected && !walk && (
                         <p className="text-xs text-muted-foreground">
-                          Customer holds{" "}
-                          {custody.find(
-                            (c) =>
-                              c.customer_id === customer &&
-                              c.product_id === p.id,
-                          )?.quantity ?? 0}{" "}
-                          jars before this visit.
+                          <T
+                            k="Customer holds {0} jars before this visit."
+                            values={[
+                              <Value
+                                key="v0"
+                                value={
+                                  custody.find(
+                                    (c) =>
+                                      c.customer_id === customer &&
+                                      c.product_id === p.id,
+                                  )?.quantity ?? 0
+                                }
+                              />,
+                            ]}
+                          />
                         </p>
                       )}
                       {selected && !walk && (
                         <div className="rounded-lg bg-muted p-3 text-sm">
                           <p>
-                            Previous Pending Jars:{" "}
-                            {custody.find(
-                              (c) =>
-                                c.customer_id === customer &&
-                                c.product_id === p.id,
-                            )?.quantity ?? 0}
+                            <T
+                              k="Previous Pending Jars: {0}"
+                              values={[
+                                <Value
+                                  key="v0"
+                                  value={
+                                    custody.find(
+                                      (c) =>
+                                        c.customer_id === customer &&
+                                        c.product_id === p.id,
+                                    )?.quantity ?? 0
+                                  }
+                                />,
+                              ]}
+                            />
                           </p>
                           <p>
-                            New Delivered Jars: {q.full_jars} · Empty Jars
-                            Collected: {q.empty_jars}
+                            <T
+                              k="New Delivered Jars: {0} · Empty Jars Collected: {1}"
+                              values={[
+                                <Value key="v0" value={q.full_jars} />,
+                                <Value key="v1" value={q.empty_jars} />,
+                              ]}
+                            />
                           </p>
                           <p className="font-semibold">
-                            Updated Pending Balance:{" "}
-                            {(custody.find(
-                              (c) =>
-                                c.customer_id === customer &&
-                                c.product_id === p.id,
-                            )?.quantity ?? 0) +
-                              q.full_jars -
-                              q.empty_jars}
+                            <T
+                              k="Updated Pending Balance: {0}"
+                              values={[
+                                <Value
+                                  key="v0"
+                                  value={
+                                    (custody.find(
+                                      (c) =>
+                                        c.customer_id === customer &&
+                                        c.product_id === p.id,
+                                    )?.quantity ?? 0) +
+                                    q.full_jars -
+                                    q.empty_jars
+                                  }
+                                />,
+                              ]}
+                            />
                           </p>
                           {context?.pending_jars?.filter(
                             (r) => r.product_id === p.id,
                           ).length ? (
                             <p>
-                              Oldest Pending Date:{" "}
-                              {new Intl.DateTimeFormat("en-NP", {
-                                timeZone: "Asia/Kathmandu",
-                                dateStyle: "medium",
-                              }).format(
-                                new Date(
-                                  context.pending_jars
-                                    .filter((r) => r.product_id === p.id)
-                                    .map((r) => r.original_date)
-                                    .sort()[0]!,
-                                ),
-                              )}
+                              <T
+                                k="Oldest Pending Date: {0}"
+                                values={[
+                                  <DateValue
+                                    key="v0"
+                                    value={
+                                      context.pending_jars
+                                        .filter((r) => r.product_id === p.id)
+                                        .map((r) => r.original_date)
+                                        .sort()[0]!
+                                    }
+                                  />,
+                                ]}
+                              />
                             </p>
                           ) : (
-                            <p>No earlier pending jars.</p>
+                            <p>
+                              <T k="No earlier pending jars." />
+                            </p>
                           )}
                         </div>
                       )}
@@ -613,8 +719,14 @@ export function DeliveryForm({
                   ) : (
                     <>
                       <p className="text-sm">
-                        Vehicle:{" "}
-                        <strong>{available("BOTTLE_CARTON")} cartons</strong>
+                        {" "}
+                        <T k="Vehicle:" />{" "}
+                        <strong>
+                          <T
+                            k="{0} cartons"
+                            values={[available("BOTTLE_CARTON")]}
+                          />
+                        </strong>
                       </p>
                       <Counter
                         label="Cartons delivered"
@@ -629,11 +741,22 @@ export function DeliveryForm({
             })}
             {f?.available ? (
               <div className="space-y-5">
-                <p className="text-xl font-bold">Payable: {npr(payable)}</p>
+                <p className="text-xl font-bold">
+                  <T
+                    k="Payable: {0}"
+                    values={[<Value key="v0" value={npr(payable)} />]}
+                  />
+                </p>
                 <p className="text-sm">
-                  Amount collected: {npr(sum(payments.map((p) => p.amount)))}{" "}
-                  (Fonepay stays pending). Physical quantities are independent
-                  of payment amounts.
+                  <T
+                    k="Amount collected: {0} (Fonepay stays pending). Physical quantities are independent of payment amounts."
+                    values={[
+                      <Value
+                        key="v0"
+                        value={npr(sum(payments.map((p) => p.amount)))}
+                      />,
+                    ]}
+                  />
                 </p>
                 <PaymentButtons
                   value={payment}
@@ -660,25 +783,42 @@ export function DeliveryForm({
                   />
                 )}
                 <p>
-                  Remaining outstanding after cash:{" "}
-                  {npr(
-                    decimal(
-                      cents(payable) -
-                        payments
-                          .filter((p) => p.method === "CASH")
-                          .reduce(
-                            (s, p) => s + cents(p.current_amount ?? "0"),
-                            0n,
+                  <T
+                    k="Remaining outstanding after cash: {0}"
+                    values={[
+                      <Value
+                        key="v0"
+                        value={npr(
+                          decimal(
+                            cents(payable) -
+                              payments
+                                .filter((p) => p.method === "CASH")
+                                .reduce(
+                                  (s, p) => s + cents(p.current_amount ?? "0"),
+                                  0n,
+                                ),
                           ),
-                    ),
-                  )}
+                        )}
+                      />,
+                    ]}
+                  />
                 </p>
                 {!walk && selected && (
                   <>
                     <p>
-                      Previous outstanding:{" "}
-                      {npr(sum(credit.map((i) => i.outstanding)))} - Available:{" "}
-                      {npr(sum(credit.map((i) => i.available)))}
+                      <T
+                        k="Previous outstanding: {0} - Available: {1}"
+                        values={[
+                          <Value
+                            key="v0"
+                            value={npr(sum(credit.map((i) => i.outstanding)))}
+                          />,
+                          <Value
+                            key="v1"
+                            value={npr(sum(credit.map((i) => i.available)))}
+                          />,
+                        ]}
+                      />
                     </p>
                     <AmountInput
                       label="Previous credit received (NPR)"
@@ -701,7 +841,8 @@ export function DeliveryForm({
                   </>
                 )}
                 <label className="grid gap-2 text-sm font-semibold">
-                  Transaction reference (unverified)
+                  {" "}
+                  <T k="Transaction reference (unverified)" />{" "}
                   <Input
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
@@ -709,10 +850,7 @@ export function DeliveryForm({
                   />
                 </label>
                 <p className="text-sm text-muted-foreground">
-                  Blank cash or Fonepay amount covers the full invoice. Previous
-                  credit and deposits use the selected method; unpaid or partial
-                  uses cash. Fonepay does not reduce credit until admin
-                  reconciliation.
+                  <T k="Blank cash or Fonepay amount covers the full invoice. Previous credit and deposits use the selected method; unpaid or partial uses cash. Fonepay does not reduce credit until admin reconciliation." />
                 </p>
                 {financeProblem && (
                   <p role="alert" className="text-red-700">
@@ -724,22 +862,32 @@ export function DeliveryForm({
               <>
                 {" "}
                 <label className="grid gap-2 text-sm font-semibold">
-                  Payment instruction
-                  <select
+                  {" "}
+                  <T k="Payment instruction" />{" "}
+                  <LocalizedSelect
                     value={payment}
                     onChange={(e) => setPayment(e.target.value)}
                     className="min-h-14 rounded-lg border border-input bg-background px-3"
                   >
-                    <option value="CASH">Cash</option>
-                    <option value="FONEPAY">Fonepay</option>
-                    <option value="UNPAID">Monthly credit / unpaid</option>
-                    <option value="PARTIAL">Partial payment</option>
-                  </select>
+                    <option value="CASH">
+                      <T k="Cash" />
+                    </option>
+                    <option value="FONEPAY">
+                      <T k="Fonepay" />
+                    </option>
+                    <option value="UNPAID">
+                      <T k="Monthly credit / unpaid" />
+                    </option>
+                    <option value="PARTIAL">
+                      <T k="Partial payment" />
+                    </option>
+                  </LocalizedSelect>
                 </label>
                 {payment !== "UNPAID" && (
                   <label className="grid gap-2 text-sm font-semibold">
-                    Reported amount (NPR)
-                    {payment !== "PARTIAL" && " — optional"}
+                    {" "}
+                    <T k="Reported amount (NPR)" />{" "}
+                    <Message value={payment !== "PARTIAL" && " — optional"} />
                     <Input
                       inputMode="decimal"
                       value={amount}
@@ -751,7 +899,8 @@ export function DeliveryForm({
                   </label>
                 )}
                 <label className="grid gap-2 text-sm font-semibold">
-                  Reference (optional)
+                  {" "}
+                  <T k="Reference (optional)" />{" "}
                   <Input
                     value={reference}
                     maxLength={200}
@@ -761,7 +910,8 @@ export function DeliveryForm({
               </>
             )}
             <label className="grid gap-2 text-sm font-semibold">
-              Visit notes
+              {" "}
+              <T k="Visit notes" />{" "}
               <Input
                 value={notes}
                 maxLength={2000}
@@ -769,29 +919,33 @@ export function DeliveryForm({
               />
             </label>
             <p className="text-lg font-bold">
-              Indicative delivery value: NPR {total}
+              <T
+                k="Indicative delivery value: NPR {0}"
+                values={[<Value key="total" value={total} />]}
+              />
             </p>
             <p className="text-sm text-muted-foreground">
-              {f?.available
-                ? "Server confirms approved prices and exact tax at saving. Deposits are separate from sales."
-                : "Server snapshots current default prices. Finance migration is required for settlement."}
+              <Message
+                value={
+                  f?.available
+                    ? "Server confirms approved prices and exact tax at saving. Deposits are separate from sales."
+                    : "Server snapshots current default prices. Finance migration is required for settlement."
+                }
+              />
             </p>
             {walkProblem && (
               <p role="alert" className="text-sm text-red-700">
-                Walk-in jars need an equal empty exchange. Register the customer
-                for jar custody or credit.
+                <T k="Walk-in jars need an equal empty exchange. Register the customer for jar custody or credit." />
               </p>
             )}
             {custodyProblem && (
               <p role="alert" className="text-sm text-red-700">
-                Empty collection exceeds the customer&apos;s tracked jars. Ask
-                admin to verify legacy custody first.
+                <T k="Empty collection exceeds the customer's tracked jars. Ask admin to verify legacy custody first." />
               </p>
             )}
             {stockProblem && (
               <p role="alert" className="text-sm text-red-700">
-                This draft exceeds the remaining vehicle stock. Correct the
-                quantities before reviewing the delivery.
+                <T k="This draft exceeds the remaining vehicle stock. Correct the quantities before reviewing the delivery." />
               </p>
             )}
             <Button
@@ -800,43 +954,75 @@ export function DeliveryForm({
               disabled={!eligible}
               onClick={() => setReview(true)}
             >
-              Review delivery
+              <T k="Review delivery" />
             </Button>
           </>
         ) : (
           <div className="space-y-4 rounded-lg bg-muted p-5">
-            <h3 className="text-lg font-semibold">Confirm delivery</h3>
+            <h3 className="text-lg font-semibold">
+              <T k="Confirm delivery" />
+            </h3>
             <p>{walk ? walkName : selected?.name}</p>
             {items.map((i) => (
               <p key={i.product_id}>
-                {products.find((p) => p.id === i.product_id)?.name}:{" "}
-                {i.full_jars} full delivered · {i.empty_jars} empty collected ·{" "}
-                {i.cartons} cartons delivered
+                <T
+                  k="{0}: {1} full delivered · {2} empty collected · {3} cartons delivered"
+                  values={[
+                    products.find((p) => p.id === i.product_id)?.name,
+                    <Value key="v1" value={i.full_jars} />,
+                    <Value key="v2" value={i.empty_jars} />,
+                    <Value key="v3" value={i.cartons} />,
+                  ]}
+                />
               </p>
             ))}
             <p>
-              NPR {payable} · {payment} · {amount || "No amount reported"}
+              <T
+                k="NPR {0} · {1} · {2}"
+                values={[
+                  <Value key="payable" value={payable} />,
+                  <Message key="method" value={payment} />,
+                  amount ? (
+                    <Value key="amount" value={amount} />
+                  ) : (
+                    <T key="no-amount" k="No amount reported" />
+                  ),
+                ]}
+              />
             </p>
             {f?.available &&
               payments.map((p, index) => (
                 <p key={index}>
-                  {p.method}: NPR {p.amount} - current invoice{" "}
-                  {p.current_amount}, prior credit{" "}
-                  {sum(p.allocations.map((a) => a.amount))}, deposit{" "}
-                  {p.deposit_amount}
+                  <T
+                    k="{0}: NPR {1} - current invoice {2}, prior credit {3}, deposit {4}"
+                    values={[
+                      <Message key="v0" value={p.method} />,
+                      <Value key="amount" value={p.amount} />,
+                      <Value key="current" value={p.current_amount} />,
+                      <Value
+                        key="prior"
+                        value={sum(p.allocations.map((a) => a.amount))}
+                      />,
+                      <Value key="deposit" value={p.deposit_amount} />,
+                    ]}
+                  />
                 </p>
               ))}
             <p className="text-sm">
-              {f?.available
-                ? "Invoices, cash receipts and credit are posted atomically. Fonepay stays pending."
-                : "This saves an immutable visit. Financial settlement remains pending."}
+              <Message
+                value={
+                  f?.available
+                    ? "Invoices, cash receipts and credit are posted atomically. Fonepay stays pending."
+                    : "This saves an immutable visit. Financial settlement remains pending."
+                }
+              />
             </p>
             <Button
               type="button"
               variant="outline"
               onClick={() => setReview(false)}
             >
-              Correct quantities
+              <T k="Correct quantities" />
             </Button>
           </div>
         )}
@@ -856,6 +1042,7 @@ export function ReturnForm({
   admin: boolean;
 }) {
   const expected = vehicleCounts(w, trip);
+  const { locale, t } = useLocale();
   const [values, setValues] = useState<Record<string, number>>({});
   const actual: Count[] = expected.map((c) => ({
     ...c,
@@ -878,9 +1065,13 @@ export function ReturnForm({
     >
       <input type="hidden" name="counts" value={JSON.stringify(actual)} />
       <p className="text-sm text-muted-foreground">
-        {admin
-          ? "Verify actual physical returns. Unsold full jars and collected empties stay separate."
-          : "Count the stock on your vehicle. Submission does not transfer stock to the warehouse."}
+        <Message
+          value={
+            admin
+              ? "Verify actual physical returns. Unsold full jars and collected empties stay separate."
+              : "Count the stock on your vehicle. Submission does not transfer stock to the warehouse."
+          }
+        />
       </p>
       {expected.map((c) => {
         const key = `${c.product_id}:${c.stock_kind}`;
@@ -896,11 +1087,24 @@ export function ReturnForm({
               {w.products.find((p) => p.id === c.product_id)?.name}
             </p>
             <p className="text-sm">
-              Expected: {c.quantity}
-              {admin && ` · Driver declared: ${declared ?? "Not declared"}`}
+              <T
+                k="Expected: {0} {1}"
+                values={[
+                  <Value key="v0" value={c.quantity} />,
+                  admin && (
+                    <T
+                      key="declared"
+                      k=" · Driver declared: {0}"
+                      values={[declared ?? <T k="Not declared" />]}
+                    />
+                  ),
+                ]}
+              />
             </p>
             <Counter
-              label={`${stockLabels[c.stock_kind]} ${admin ? "verified" : "counted"}`}
+              label={tr(locale, admin ? "{0} verified" : "{0} counted", [
+                t(stockLabels[c.stock_kind]),
+              ])}
               value={values[key] ?? c.quantity}
               onChange={(n) => setValues({ ...values, [key]: n })}
             />
@@ -921,13 +1125,12 @@ export function ReturnForm({
                 type="checkbox"
                 name="accept_variance"
                 className="mt-1 size-5"
-              />
-              Explicitly approve the recorded variance and close. Leave
-              unchecked to flag DISCREPANCY without moving warehouse stock.
+              />{" "}
+              <T k="Explicitly approve the recorded variance and close. Leave unchecked to flag DISCREPANCY without moving warehouse stock." />{" "}
             </label>
           )}
           <p className="text-xs text-muted-foreground">
-            Physical closure does not settle payments or close the business day.
+            <T k="Physical closure does not settle payments or close the business day." />
           </p>
         </>
       )}

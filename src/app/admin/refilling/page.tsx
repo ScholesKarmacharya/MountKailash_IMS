@@ -1,37 +1,52 @@
+import { BsDateRange } from "@/components/bs-date-picker";
+import { Button } from "@/components/ui/button";
+import { T, Message, Value, DateValue } from "@/components/localization";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { getDayHistory, getDayReport } from "@/services/business-days";
 import { getInventory } from "@/services/inventory";
 import { ProcessingForm } from "@/components/day-forms";
 import { Card } from "@/components/ui/card";
-export default async function Refilling() {
+export default async function Refilling({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
+  const q = await searchParams;
   const [history, inventory] = await Promise.all([
     getDayHistory(),
     getInventory(),
   ]);
   const day = history.days.find((d) => d.status !== "CLOSED");
   const detail = day ? await getDayReport(day.id) : null;
+  const filtered = q.from || q.to ? await getDayHistory(q.from, q.to) : null;
+  const reports = filtered
+    ? await Promise.all(filtered.days.map((d) => getDayReport(d.id)))
+    : [detail];
+  const processing = reports.flatMap((d) => d?.report.processing ?? []);
   return (
     <div className="space-y-7">
       <div>
-        <h1 className="text-3xl font-bold">Refilling and damaged jars</h1>
+        <h1 className="text-3xl font-bold">
+          <T k="Refilling and damaged jars" />
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          Record completed refills and inspection rejections as distinct,
-          audited stock workflows.
+          <T k="Record completed refills and inspection rejections as distinct, audited stock workflows." />
         </p>
       </div>
       {!history.available ? (
         <Card>
           <p role="status">
-            Sprint 4 migrations are required before processing can load.
+            <T k="Sprint 4 migrations are required before processing can load." />
           </p>
         </Card>
       ) : day?.status !== "OPEN" ? (
         <Card>
           <p>
-            An OPEN business day is required.{" "}
+            {" "}
+            <T k="An OPEN business day is required." />{" "}
             <Link className="text-primary underline" href="/admin/daily-close">
-              Review business day
+              <T k="Review business day" />
             </Link>
           </p>
         </Card>
@@ -40,9 +55,13 @@ export default async function Refilling() {
           {(["REFILL", "DAMAGE"] as const).map((operation) => (
             <Card key={operation}>
               <h2 className="mb-4 text-xl font-semibold">
-                {operation === "REFILL"
-                  ? "Completed refill batch"
-                  : "Damaged jar inspection"}
+                <Message
+                  value={
+                    operation === "REFILL"
+                      ? "Completed refill batch"
+                      : "Damaged jar inspection"
+                  }
+                />
               </h2>
               <ProcessingForm
                 day={day.id}
@@ -54,27 +73,38 @@ export default async function Refilling() {
           ))}
         </div>
       )}
-      {detail && (
+      <form className="space-y-3">
+        <BsDateRange from={q.from} to={q.to} />
+        <Button type="submit">
+          <T k="Filter history" />
+        </Button>
+      </form>
+      {(detail || filtered) && (
         <Card>
           <h2 className="mb-4 text-xl font-semibold">
-            Current-day processing history
+            <T k="Processing history" />
           </h2>
-          {!detail.report.processing.length ? (
-            <p>No processing recorded for this day.</p>
+          {!processing.length ? (
+            <p>
+              <T k="No processing matches these dates." />
+            </p>
           ) : (
-            detail.report.processing.map((p) => (
+            processing.map((p) => (
               <p key={p.id} className="border-b border-border py-3 text-sm">
-                {p.operation} · {p.quantity} · {p.product_name} · {p.actor_name}{" "}
-                · {p.reason}
+                <Message value={p.operation} /> · <Value value={p.quantity} /> ·{" "}
+                {p.product_name} · {p.actor_name} · {p.reason} ·{" "}
+                <DateValue value={p.created_at} time />
               </p>
             ))
           )}
-          <Link
-            className="mt-4 inline-block text-primary underline"
-            href={`/admin/reports/${day!.id}`}
-          >
-            View stock and audit report
-          </Link>
+          {day && (
+            <Link
+              className="mt-4 inline-block text-primary underline"
+              href={`/admin/reports/${day!.id}`}
+            >
+              <T k="View stock and audit report" />
+            </Link>
+          )}
         </Card>
       )}
     </div>

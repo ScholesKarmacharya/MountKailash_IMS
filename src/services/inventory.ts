@@ -2,15 +2,16 @@ import "server-only";
 import { requirePermission } from "./auth";
 import { readInventory, inventoryRpc } from "@/data-access/inventory";
 import { readActiveBusinessDay } from "@/data-access/business-days";
+import type { DateRange } from "@/domain/localization/calendar";
 import {
   parseAdjustment,
   parseProduct,
   uuid,
 } from "@/domain/inventory/validation";
-export async function getInventory(page = 0) {
+export async function getInventory(page = 0, range?: DateRange) {
   await requirePermission("admin:read");
   const [inventory, businessDay] = await Promise.all([
-    readInventory(page),
+    range ? readInventory(page, range) : readInventory(page),
     readActiveBusinessDay(),
   ]);
   return { ...inventory, businessDay };

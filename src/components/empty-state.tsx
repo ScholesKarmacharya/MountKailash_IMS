@@ -1,3 +1,4 @@
+import { Message } from "@/components/localization";
 import { CircleDashed } from "lucide-react";
 export function EmptyState({
   title,
@@ -12,8 +13,12 @@ export function EmptyState({
         className="size-9 text-muted-foreground"
         aria-hidden="true"
       />
-      <h2 className="font-semibold">{title}</h2>
-      <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+      <h2 className="font-semibold">
+        <Message value={title} />
+      </h2>
+      <p className="max-w-md text-sm text-muted-foreground">
+        <Message value={description} />
+      </p>
     </div>
   );
 }

@@ -1,7 +1,9 @@
+import { BsDateRange } from "@/components/bs-date-picker";
+import { T, Message, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { getDayHistory } from "@/services/business-days";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+
 import { Button } from "@/components/ui/button";
 import { npr, sum } from "@/domain/finance/money";
 import { dateFilter } from "@/domain/business-days/commands";
@@ -35,34 +37,29 @@ export default async function History({
   return (
     <div className="space-y-7">
       <div>
-        <h1 className="text-3xl font-bold">Daily history</h1>
+        <h1 className="text-3xl font-bold">
+          <T k="Daily history" />
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          Archived closings and current sessions. Filter by Nepal business-date
-          labels, including days that crossed midnight.
+          <T k="Archived closings and current sessions. Filter by Nepal business-date labels, including days that crossed midnight." />
         </p>
       </div>
       <Card>
         <p className="text-sm">
-          Date filters apply to archived business-day reports below. Current
-          pending jars are shown separately.
+          <T k="Date filters apply to archived business-day reports below. Current pending jars are shown separately." />
         </p>
         <form className="flex flex-wrap items-end gap-4">
-          <label className="grid gap-2 text-sm font-medium">
-            From date
-            <Input name="from" type="date" defaultValue={from ?? ""} />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            To date
-            <Input name="to" type="date" defaultValue={to ?? ""} />
-          </label>
-          <Button type="submit">Filter history</Button>
+          <BsDateRange from={from ?? ""} to={to ?? ""} />
+          <Button type="submit">
+            <T k="Filter history" />
+          </Button>
           <Link className="text-primary underline" href="/admin/reports">
-            Clear filters
+            <T k="Clear filters" />
           </Link>
         </form>
         {error && (
           <p role="alert" className="mt-4 text-red-800">
-            {error}
+            <Message value={error} />
           </p>
         )}
       </Card>
@@ -75,8 +72,7 @@ export default async function History({
           />
           <Card>
             <p role="status">
-              Sprint 4 migrations are required before historical reports can
-              load.
+              <T k="Sprint 4 migrations are required before historical reports can load." />
             </p>
           </Card>
         </>
@@ -103,8 +99,12 @@ export default async function History({
               ],
             ].map(([label, value]) => (
               <Card key={label}>
-                <h2 className="text-sm text-muted-foreground">{label}</h2>
-                <p className="mt-3 text-xl font-bold">{npr(value!)}</p>
+                <h2 className="text-sm text-muted-foreground">
+                  <Message value={label} />
+                </h2>
+                <p className="mt-3 text-xl font-bold">
+                  <Value value={npr(value!)} />
+                </p>
               </Card>
             ))}
           </div>
@@ -114,19 +114,21 @@ export default async function History({
                 className="text-primary underline"
                 href={`/api/business-days/export?${query}&format=csv`}
               >
-                Export selected days to Excel-compatible CSV
+                <T k="Export selected days to Excel-compatible CSV" />
               </Link>
               <Link
                 className="text-primary underline"
                 href={`/api/business-days/export?${query}&format=pdf`}
               >
-                Export selected days to PDF
+                <T k="Export selected days to PDF" />
               </Link>
             </div>
           )}
           <Card>
             {!history.days.length ? (
-              <p>No business days match this date range.</p>
+              <p>
+                <T k="No business days match this date range." />
+              </p>
             ) : (
               <ul className="divide-y divide-border">
                 {history.days.map((d) => (
@@ -139,25 +141,49 @@ export default async function History({
                         href={`/admin/reports/${d.id}`}
                         className="text-lg font-semibold text-primary underline"
                       >
-                        {d.date_label}
+                        <DateValue value={d.date_label} />
                       </Link>
                       <p className="mt-1 text-sm">
-                        {d.status.replaceAll("_", " ")} · {d.totals.trips} trips
-                        ·{" "}
-                        {d.archived
-                          ? "Closing archive v1"
-                          : d.status === "CLOSED"
-                            ? "Legacy reconstructed report"
-                            : "Live preview"}
+                        <T
+                          k="{0} · {1} trips · {2}"
+                          values={[
+                            <Message
+                              key="v0"
+                              value={d.status.replaceAll("_", " ")}
+                            />,
+                            <Value key="v1" value={d.totals.trips} />,
+                            <Message
+                              key="v2"
+                              value={
+                                d.archived
+                                  ? "Closing archive v1"
+                                  : d.status === "CLOSED"
+                                    ? "Legacy reconstructed report"
+                                    : "Live preview"
+                              }
+                            />,
+                          ]}
+                        />
                       </p>
                       <p className="mt-1 text-sm">
-                        Sales {npr(d.totals.sales)} · collections{" "}
-                        {npr(d.totals.collections)} · prior-credit recovery{" "}
-                        {npr(d.totals.old_credit_recovered)}
+                        <T
+                          k="Sales {0} · collections {1} · prior-credit recovery {2}"
+                          values={[
+                            <Value key="v0" value={npr(d.totals.sales)} />,
+                            <Value
+                              key="v1"
+                              value={npr(d.totals.collections)}
+                            />,
+                            <Value
+                              key="v2"
+                              value={npr(d.totals.old_credit_recovered)}
+                            />,
+                          ]}
+                        />
                       </p>
                       {d.closed_by_name && (
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Closed by {d.closed_by_name}
+                          <T k="Closed by {0}" values={[d.closed_by_name]} />
                         </p>
                       )}
                     </div>
@@ -165,7 +191,7 @@ export default async function History({
                       className="text-primary underline"
                       href={`/admin/reports/${d.id}`}
                     >
-                      View daily report
+                      <T k="View daily report" />
                     </Link>
                   </li>
                 ))}
@@ -173,7 +199,7 @@ export default async function History({
             )}
           </Card>
           <Link href="/admin/daily-close" className="text-primary underline">
-            Review current business day
+            <T k="Review current business day" />
           </Link>
         </>
       )}

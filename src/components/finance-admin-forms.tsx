@@ -1,3 +1,4 @@
+import { T, Value } from "@/components/localization";
 import { randomUUID } from "node:crypto";
 import { OperationForm, Field, Select } from "./operation-form";
 import { Card } from "./ui/card";
@@ -45,10 +46,14 @@ export function CompanyForm({ company: c }: { company: Company }) {
         value={c.tax_mode}
       >
         <option value="UNCONFIGURED">
-          Unconfigured - registration requirements pending
+          <T k="Unconfigured - registration requirements pending" />
         </option>
-        <option value="NO_TAX">Confirmed no tax</option>
-        <option value="EXPLICIT">Confirmed explicit tax rate</option>
+        <option value="NO_TAX">
+          <T k="Confirmed no tax" />
+        </option>
+        <option value="EXPLICIT">
+          <T k="Confirmed explicit tax rate" />
+        </option>
       </Select>
       <Field
         name="tax_label"
@@ -74,7 +79,11 @@ export function PaymentReview({
   day: string | null;
 }) {
   if (!day)
-    return <p>Open a business day before reconciliation or reversal.</p>;
+    return (
+      <p>
+        <T k="Open a business day before reconciliation or reversal." />
+      </p>
+    );
   return (
     <OperationForm
       operation={p.status === "PENDING" ? "finance:VERIFY" : "finance:REVERSE"}
@@ -95,9 +104,11 @@ export function PaymentReview({
       {p.status === "PENDING" && (
         <>
           <Select name="decision" label="Reconciliation decision">
-            <option value="REJECT">Reject - payment not received</option>
+            <option value="REJECT">
+              <T k="Reject - payment not received" />
+            </option>
             <option value="CONFIRM">
-              Confirm - independently matched settlement
+              <T k="Confirm - independently matched settlement" />
             </option>
           </Select>
           <Field
@@ -126,7 +137,9 @@ export function CustomerBillingForms({
   return (
     <div className="space-y-5">
       <Card>
-        <h2 className="mb-4 font-semibold">Credit and deposit arrangement</h2>
+        <h2 className="mb-4 font-semibold">
+          <T k="Credit and deposit arrangement" />
+        </h2>
         <OperationForm
           operation="finance:BILLING"
           requestKey={randomUUID()}
@@ -139,8 +152,12 @@ export function CustomerBillingForms({
             label="Account type"
             value={b?.account_type ?? "STANDARD"}
           >
-            <option value="STANDARD">Standard</option>
-            <option value="MONTHLY_CREDIT">Monthly credit</option>
+            <option value="STANDARD">
+              <T k="Standard" />
+            </option>
+            <option value="MONTHLY_CREDIT">
+              <T k="Monthly credit" />
+            </option>
           </Select>
           <Field
             name="due_days"
@@ -152,21 +169,23 @@ export function CustomerBillingForms({
             label="Deposit arrangement"
             value={b?.deposit_mode ?? "NONE"}
           >
-            <option value="NONE">No deposit</option>
+            <option value="NONE">
+              <T k="No deposit" />
+            </option>
             <option value="MANUAL">
-              Explicit manual deposit receipts and refunds
+              <T k="Explicit manual deposit receipts and refunds" />
             </option>
           </Select>
           <Reason />
           <p className="text-sm text-muted-foreground">
-            Monthly credit balances carry forward. Due days start from the
-            invoice&apos;s Nepal business date. No automatic deposit rate,
-            refund, credit limit or jar/debt offset is assumed.
+            <T k="Monthly credit balances carry forward. Due days start from the invoice's Nepal business date. No automatic deposit rate, refund, credit limit or jar/debt offset is assumed." />
           </p>
         </OperationForm>
       </Card>
       <Card>
-        <h2 className="mb-4 font-semibold">Approved customer prices</h2>
+        <h2 className="mb-4 font-semibold">
+          <T k="Approved customer prices" />
+        </h2>
         {w.products.map((p) => {
           const price = f.prices.find(
             (r) => r.customer_id === id && r.product_id === p.id,
@@ -175,9 +194,14 @@ export function CustomerBillingForms({
             <details key={p.id} className="mb-4 rounded-lg border p-4">
               <summary className="cursor-pointer font-semibold">
                 {p.name} ·{" "}
-                {price?.active
-                  ? `NPR ${price.price}`
-                  : `Default NPR ${p.default_price}`}
+                {price?.active ? (
+                  <Value value={`NPR ${price.price}`} />
+                ) : (
+                  <T
+                    k="Default NPR {0}"
+                    values={[<Value key="price" value={p.default_price} />]}
+                  />
+                )}
               </summary>
               <div className="mt-4">
                 <OperationForm
@@ -199,9 +223,11 @@ export function CustomerBillingForms({
                     label="Use this price"
                     value={String(price?.active ?? true)}
                   >
-                    <option value="true">Active negotiated price</option>
+                    <option value="true">
+                      <T k="Active negotiated price" />
+                    </option>
                     <option value="false">
-                      Inactive - use product default
+                      <T k="Inactive - use product default" />
                     </option>
                   </Select>
                   <Reason />
@@ -213,7 +239,9 @@ export function CustomerBillingForms({
       </Card>
       {day && (
         <Card>
-          <h2 className="mb-4 font-semibold">Explicit deposit refund</h2>
+          <h2 className="mb-4 font-semibold">
+            <T k="Explicit deposit refund" />
+          </h2>
           <OperationForm
             operation="finance:REFUND"
             requestKey={randomUUID()}

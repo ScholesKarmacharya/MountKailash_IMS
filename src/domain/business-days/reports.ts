@@ -1,6 +1,9 @@
+import { digits } from "@/domain/localization/locale";
+import { tr, money } from "@/domain/localization/format";
+import type { Locale } from "@/domain/localization/locale";
+import { formatBusinessDate } from "@/domain/localization/calendar";
 import type { DayReport, DayTotals } from "./types";
-import { sum, npr } from "@/domain/finance/money";
-import { formatNepalTime } from "./time";
+import { sum } from "@/domain/finance/money";
 import { pendingDays } from "@/domain/operations/pending-age";
 import { stockLabels } from "@/domain/inventory/validation";
 import type { ReceiptDocument } from "@/domain/finance/documents";
@@ -91,91 +94,111 @@ export type ReportRow = {
   amount?: string;
   details?: string;
 };
-export function reportRows(r: DayReport): ReportRow[] {
+export function reportRows(r: DayReport, locale: Locale = "en"): ReportRow[] {
   const rows: ReportRow[] = [
     {
-      section: "Company snapshot",
+      section: tr(locale, "Company snapshot"),
       id: r.day.id,
       label: r.company.name,
       details: [
         r.company.address,
         r.company.phone,
         r.company.registration,
-        `Tax ${r.company.tax_mode}; rate ${r.company.tax_rate}`,
+        tr(locale, "Tax {0}; rate {1}", [
+          tr(locale, r.company.tax_mode ?? "UNCONFIGURED"),
+          r.company.tax_rate == null
+            ? tr(locale, "Unconfigured")
+            : digits(r.company.tax_rate, locale),
+        ]),
       ]
         .filter(Boolean)
         .join("; "),
     },
     {
-      section: "Day",
+      section: tr(locale, "Day"),
       id: r.day.id,
-      label: r.day.date_label,
-      details: `${r.day.status}; ${r.source}; timezone Asia/Kathmandu; version 1`,
+      label: formatBusinessDate(r.day.date_label, locale),
+      details: tr(locale, "{0}; {1}; timezone Asia/Kathmandu; version 1", [
+        tr(locale, r.day.status),
+        tr(locale, r.source),
+      ]),
     },
     {
-      section: "Day",
+      section: tr(locale, "Day"),
       id: r.day.opened_by,
-      label: "Opened",
-      details: `${formatNepalTime(r.day.opened_at)}; ${r.day.opened_by_name}; UTC ${r.day.opened_at}`,
+      label: tr(locale, "Opened"),
+      details: tr(locale, "{0}; {1}; UTC {2}", [
+        formatBusinessDate(r.day.opened_at, locale, true),
+        r.day.opened_by_name,
+        r.day.opened_at,
+      ]),
     },
     {
-      section: "Day",
+      section: tr(locale, "Day"),
       id: r.day.closed_by ?? "",
-      label: "Closed",
+      label: tr(locale, "Closed"),
       details: r.day.closed_at
-        ? `${formatNepalTime(r.day.closed_at)}; ${r.day.closed_by_name}; UTC ${r.day.closed_at}`
-        : "Not closed; live preview",
+        ? tr(locale, "{0}; {1}; UTC {2}", [
+            formatBusinessDate(r.day.closed_at, locale, true),
+            r.day.closed_by_name,
+            r.day.closed_at,
+          ])
+        : tr(locale, "Not closed; live preview"),
     },
   ];
   for (const [key, label] of Object.entries(amountLabels))
     rows.push({
-      section: "Money (NPR)",
+      section: tr(locale, "Money (NPR)"),
       id: key,
-      label,
+      label: tr(locale, label),
       amount: r.totals[key as keyof typeof amountLabels],
     });
   for (const [key, label] of Object.entries({
-    trips: "Total trips",
-    completed_trips: "Completed trips",
-    pending_trips: "Pending trips",
-    full_jars: "Full jars delivered",
-    empty_jars: "Empty jars collected",
-    cartons: "Cartons sold",
-    refilled: "Jars refilled",
-    damaged: "Jars moved to damaged",
+    trips: tr(locale, "Total trips"),
+    completed_trips: tr(locale, "Completed trips"),
+    pending_trips: tr(locale, "Pending trips"),
+    full_jars: tr(locale, "Full jars delivered"),
+    empty_jars: tr(locale, "Empty jars collected"),
+    cartons: tr(locale, "Cartons sold"),
+    refilled: tr(locale, "Jars refilled"),
+    damaged: tr(locale, "Jars moved to damaged"),
   }))
     rows.push({
-      section: "Counts",
+      section: tr(locale, "Counts"),
       id: key,
       label,
       quantity: r.totals[key as keyof typeof r.totals] as number,
     });
   if (r.reconciliation) {
     rows.push({
-      section: "Reconciliation",
+      section: tr(locale, "Reconciliation"),
       id: r.reconciliation.checked_by,
-      label: "Net cash handed over",
+      label: tr(locale, "Net cash handed over"),
       amount: r.reconciliation.cash_counted,
       details: r.reconciliation.notes,
     });
     rows.push({
-      section: "Reconciliation",
+      section: tr(locale, "Reconciliation"),
       id: r.reconciliation.checked_by,
-      label: "Cash discrepancy",
+      label: tr(locale, "Cash discrepancy"),
       amount: r.reconciliation.cash_difference,
-      details: `Cash, Fonepay, physical stock and carry-forward balances checked at ${r.reconciliation.checked_at}`,
+      details: tr(
+        locale,
+        "Cash, Fonepay, physical stock and carry-forward balances checked at {0}",
+        [formatBusinessDate(r.reconciliation.checked_at, locale, true)],
+      ),
     });
   }
   for (const s of r.stock) {
-    const label = `${s.location_name} / ${s.name} / ${stockLabels[s.stock_kind]}`;
+    const label = `${s.location_name} / ${s.name} / ${tr(locale, stockLabels[s.stock_kind])}`;
     rows.push({
-      section: "Opening stock",
+      section: tr(locale, "Opening stock"),
       id: s.product_id,
       label,
       quantity: s.opening,
     });
     rows.push({
-      section: "Closing stock",
+      section: tr(locale, "Closing stock"),
       id: s.product_id,
       label,
       quantity: s.closing,
@@ -184,14 +207,18 @@ export function reportRows(r: DayReport): ReportRow[] {
   for (const dimension of ["driver", "vehicle"] as const)
     for (const g of groupedTrips(r, dimension)) {
       rows.push({
-        section: `${dimension} item sales`,
+        section: tr(locale, "{0} item sales", [tr(locale, dimension)]),
         id: g.id,
         label: g.name,
         amount: g.sales,
-        details: `${g.trips} trips; ${g.full_jars} full / ${g.empty_jars} empties / ${g.cartons} cartons; excludes invoice-level corrections`,
+        details: tr(
+          locale,
+          "{0} trips; {1} full / {2} empties / {3} cartons; excludes invoice-level corrections",
+          [g.trips, g.full_jars, g.empty_jars, g.cartons],
+        ),
       });
       rows.push({
-        section: `${dimension} collections`,
+        section: tr(locale, "{0} collections", [tr(locale, dimension)]),
         id: g.id,
         label: g.name,
         amount: g.collections,
@@ -199,87 +226,149 @@ export function reportRows(r: DayReport): ReportRow[] {
     }
   for (const p of r.products)
     rows.push({
-      section: "Product item sales",
+      section: tr(locale, "Product item sales"),
       id: p.product_id,
       label: p.name,
       amount: p.sales,
-      details: `${p.full_jars} full / ${p.empty_jars} empties / ${p.cartons} cartons; ${p.unit}; excludes invoice-level corrections`,
+      details: tr(
+        locale,
+        "{0} full / {1} empties / {2} cartons; {3}; excludes invoice-level corrections",
+        [p.full_jars, p.empty_jars, p.cartons, p.unit],
+      ),
     });
   for (const t of r.trips) {
     rows.push({
-      section: "Trip",
+      section: tr(locale, "Trip"),
       id: t.id,
-      label: `Trip #${t.trip_number}`,
+      label: tr(locale, "Trip #{0}", [t.trip_number]),
       amount: t.sales,
-      details: `${t.driver_name}; ${t.plate_number}; ${t.status}; ${t.full_jars} full / ${t.empty_jars} empties / ${t.cartons} cartons; ${t.close_reason}`,
+      details: tr(
+        locale,
+        "{0}; {1}; {2}; {3} full / {4} empties / {5} cartons; {6}",
+        [
+          t.driver_name,
+          t.plate_number,
+          tr(locale, t.status),
+          t.full_jars,
+          t.empty_jars,
+          t.cartons,
+          t.close_reason,
+        ],
+      ),
     });
     for (const c of t.checks)
       for (const i of c.items)
         rows.push({
-          section: "Trip reconciliation",
+          section: tr(locale, "Trip reconciliation"),
           id: c.id,
-          label: `Trip #${t.trip_number} / ${i.stock_kind}`,
+          label: tr(locale, "Trip #{0} / {1}", [
+            t.trip_number,
+            tr(locale, i.stock_kind),
+          ]),
           quantity: i.actual,
-          details: `Product ${i.product_id}; expected ${i.expected}; declared ${i.declared}; actual ${i.actual}; ${c.outcome}; actor ${c.actor_user_id}; ${c.reason}`,
+          details: tr(
+            locale,
+            "Product {0}; expected {1}; declared {2}; actual {3}; {4}; actor {5}; {6}",
+            [
+              i.product_id,
+              i.expected,
+              i.declared,
+              i.actual,
+              tr(locale, c.outcome),
+              c.actor_user_id,
+              c.reason,
+            ],
+          ),
         });
   }
   for (const c of r.customers)
     rows.push({
-      section: "Customer visit",
+      section: tr(locale, "Customer visit"),
       id: c.id,
       label: c.name,
       amount: c.sales,
-      details: `Trip #${c.trip_number}; invoice ${c.invoice_number ?? "not posted"}; ${c.full_jars} full / ${c.empty_jars} empties / ${c.cartons} cartons; tax ${c.tax}; ${c.created_at}`,
+      details: tr(
+        locale,
+        "Trip #{0}; invoice {1}; {2} full / {3} empties / {4} cartons; tax {5}; {6}",
+        [
+          c.trip_number,
+          c.invoice_number ?? tr(locale, "not posted"),
+          c.full_jars,
+          c.empty_jars,
+          c.cartons,
+          money(c.tax, locale),
+          formatBusinessDate(c.created_at, locale, true),
+        ],
+      ),
     });
   for (const p of r.payments) {
     rows.push({
-      section: "Receipt",
+      section: tr(locale, "Receipt"),
       id: p.id,
-      label: `MK-P-${p.number} / ${p.customer_snapshot.name}`,
+      label: tr(locale, "MK-P-{0} / {1}", [p.number, p.customer_snapshot.name]),
       amount: p.amount,
-      details: `${p.method}; ${p.status}; ${p.reference}; deposit ${p.deposit_amount}; ${p.driver_name}; ${p.plate_number}; ${p.created_at}`,
+      details: tr(locale, "{0}; {1}; {2}; deposit {3}; {4}; {5}; {6}", [
+        tr(locale, p.method),
+        tr(locale, p.status),
+        p.reference,
+        p.deposit_amount,
+        p.driver_name,
+        p.plate_number,
+        formatBusinessDate(p.created_at, locale, true),
+      ]),
     });
     for (const a of p.allocations)
       rows.push({
-        section: "Receipt allocation",
+        section: tr(locale, "Receipt allocation"),
         id: p.id,
-        label: `Invoice MK-${a.number}`,
+        label: tr(locale, "Invoice MK-{0}", [a.number]),
         amount: a.amount,
-        details: `Invoice business date ${a.date_label}; invoice ${a.invoice_id}`,
+        details: tr(locale, "Invoice business date {0}; invoice {1}", [
+          formatBusinessDate(a.date_label, locale),
+          a.invoice_id,
+        ]),
       });
   }
   for (const j of r.journal)
     rows.push({
-      section: "Finance journal",
+      section: tr(locale, "Finance journal"),
       id: j.id,
-      label: `${j.kind} / ${j.account}`,
+      label: `${tr(locale, j.kind)} / ${tr(locale, j.account)}`,
       amount: j.amount,
-      details: `Source ${j.source_id}; ${j.created_at}`,
+      details: tr(locale, "Source {0}; {1}", [
+        j.source_id,
+        formatBusinessDate(j.created_at, locale, true),
+      ]),
     });
   for (const p of r.processing)
     rows.push({
-      section: "Warehouse processing",
+      section: tr(locale, "Warehouse processing"),
       id: p.id,
-      label: `${p.operation} / ${p.product_name} / ${p.stock_kind}`,
+      label: `${tr(locale, p.operation)} / ${p.product_name} / ${tr(locale, p.stock_kind)}`,
       quantity: p.quantity,
-      details: `${p.actor_name}; ${p.created_at}; ${p.reason}`,
+      details: `${p.actor_name}; ${formatBusinessDate(p.created_at, locale, true)}; ${p.reason}`,
     });
   for (const c of r.custody)
     rows.push({
-      section: "Customer jar carry-forward",
+      section: tr(locale, "Customer jar carry-forward"),
       id: c.customer_id,
       label: `${c.name} / ${c.product_name}`,
       quantity: c.quantity,
     });
   for (const p of r.pending_jars ?? [])
     rows.push({
-      section: "Pending jars by original date",
+      section: tr(locale, "Pending jars by original date"),
       id: p.entry_id,
-      label: `${p.customer_name} · ${p.product_name} · ${formatNepalTime(p.original_date)} · ${p.source}`,
+      label: `${p.customer_name} · ${p.product_name} · ${formatBusinessDate(p.original_date, locale, true)} · ${tr(locale, p.source)}`,
       quantity: p.pending,
       details: [
-        `${pendingDays(p.original_date, r.day.closed_at ? new Date(r.day.closed_at) : new Date())} days pending`,
-        p.trip_number != null && `Round #${p.trip_number}`,
+        tr(locale, "{0} days pending", [
+          pendingDays(
+            p.original_date,
+            r.day.closed_at ? new Date(r.day.closed_at) : new Date(),
+          ),
+        ]),
+        p.trip_number != null && tr(locale, "Round #{0}", [p.trip_number]),
         p.driver_name,
       ]
         .filter(Boolean)
@@ -287,25 +376,25 @@ export function reportRows(r: DayReport): ReportRow[] {
     });
   for (const c of r.credit)
     rows.push({
-      section: "Customer credit carry-forward",
+      section: tr(locale, "Customer credit carry-forward"),
       id: c.customer_id,
       label: c.name,
       amount: c.outstanding,
     });
   for (const c of r.deposit_balances)
     rows.push({
-      section: "Customer deposit carry-forward",
+      section: tr(locale, "Customer deposit carry-forward"),
       id: c.customer_id,
       label: c.name,
       amount: c.liability,
     });
   for (const [section, records] of [
-    ["Movement", r.movements],
-    ["Stock adjustment", r.adjustments],
-    ["Invoice correction", r.invoice_adjustments],
-    ["Discrepancy", r.discrepancies],
-    ["Deposit", r.deposits],
-    ["Verification event", r.events],
+    [tr(locale, "Movement"), r.movements],
+    [tr(locale, "Stock adjustment"), r.adjustments],
+    [tr(locale, "Invoice correction"), r.invoice_adjustments],
+    [tr(locale, "Discrepancy"), r.discrepancies],
+    [tr(locale, "Deposit"), r.deposits],
+    [tr(locale, "Verification event"), r.events],
   ] as const)
     for (const record of records)
       rows.push({
@@ -321,13 +410,16 @@ function csvText(value: string) {
   const safe = /^[\s]*[=+\-@]|^[\t\r\n]/.test(value) ? `'${value}` : value;
   return `"${safe.replaceAll('"', '""')}"`;
 }
-export function dailyCsv(report: DayReport) {
-  const header = "Section,Record ID,Label,Quantity,Amount NPR,Details";
+export function dailyCsv(report: DayReport, locale: Locale = "en") {
+  const header =
+    ["Section", "Record ID", "Label", "Quantity", "Amount NPR", "Details"]
+      .map((k) => tr(locale, k))
+      .join(",") + ",CanonicalBusinessDate";
   return (
     "\ufeff" +
     [
       header,
-      ...reportRows(report).map((r) =>
+      ...reportRows(report, locale).map((r) =>
         [
           csvText(r.section),
           csvText(r.id),
@@ -335,19 +427,31 @@ export function dailyCsv(report: DayReport) {
           r.quantity ?? "",
           r.amount ?? "",
           csvText(r.details ?? ""),
+          csvText(report.day.date_label),
         ].join(","),
       ),
     ].join("\r\n") +
     "\r\n"
   );
 }
-export function dailyDocument(report: DayReport): ReceiptDocument {
+export function dailyDocument(
+  report: DayReport,
+  locale: Locale = "en",
+): ReceiptDocument {
   return {
-    title: `Business day ${report.day.date_label} / ${report.source === "ARCHIVED" ? "Closing archive v1" : "Unfinalized report"}`,
+    title: tr(locale, "Business day {0} / {1}", [
+      formatBusinessDate(report.day.date_label, locale),
+      tr(
+        locale,
+        report.source === "ARCHIVED"
+          ? "Closing archive v1"
+          : "Unfinalized report",
+      ),
+    ]),
     company: report.company,
-    lines: reportRows(report).map(
+    lines: reportRows(report, locale).map(
       (r) =>
-        `${r.section}: ${r.label}${r.quantity === undefined ? "" : ` | ${r.quantity}`}${r.amount === undefined ? "" : ` | ${npr(r.amount)}`}${r.details ? ` | ${r.details}` : ""}${r.id ? ` [${r.id}]` : ""}`,
+        `${r.section}: ${r.label}${r.quantity === undefined ? "" : ` | ${digits(r.quantity, locale)}`}${r.amount === undefined ? "" : ` | ${money(r.amount, locale)}`}${r.details ? ` | ${r.details}` : ""}${r.id ? ` [${r.id}]` : ""}`,
     ),
   };
 }

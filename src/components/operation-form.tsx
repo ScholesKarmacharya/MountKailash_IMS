@@ -1,9 +1,14 @@
 "use client";
+import { LocalizedSelect } from "@/components/localization";
+
+import { T, Message } from "@/components/localization";
+
 import { useActionState, useEffect, useState, useId } from "react";
 import Link from "next/link";
 import { operationAction } from "@/app/operations-actions";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { useLocale } from "./localization";
 export function Field({
   label,
   name,
@@ -19,7 +24,7 @@ export function Field({
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium">
-      {label}
+      <Message value={label} />
       <Input
         name={name}
         defaultValue={value}
@@ -45,8 +50,10 @@ export function Select({
   const id = useId();
   return (
     <div className="grid gap-2 text-sm font-medium">
-      <label htmlFor={id}>{label}</label>
-      <select
+      <label htmlFor={id}>
+        <Message value={label} />
+      </label>
+      <LocalizedSelect
         id={id}
         name={name}
         defaultValue={value}
@@ -54,7 +61,7 @@ export function Select({
         className="min-h-12 w-full rounded-lg border border-input bg-background px-3"
       >
         {children}
-      </select>
+      </LocalizedSelect>
     </div>
   );
 }
@@ -81,6 +88,7 @@ export function OperationForm({
   resultHref?: string;
   showSubmit?: boolean;
 }) {
+  const { t } = useLocale();
   const [state, action, pending] = useActionState(
     async (previous: Parameters<typeof operationAction>[0], form: FormData) => {
       window.dispatchEvent(new Event("operation-saving"));
@@ -114,7 +122,7 @@ export function OperationForm({
       onChange={() => setDirty(true)}
       onClick={() => setDirty(true)}
       onSubmit={(e) => {
-        if (!showSubmit || !window.confirm(confirm)) e.preventDefault();
+        if (!showSubmit || !window.confirm(t(confirm))) e.preventDefault();
       }}
     >
       <input type="hidden" name="operation" value={operation} />
@@ -130,7 +138,7 @@ export function OperationForm({
             className="min-h-12 w-full sm:w-auto"
             disabled={pending}
           >
-            {pending ? "Saving…" : label}
+            <Message value={pending ? "Saving…" : label} />
           </Button>
         )}
       </fieldset>
@@ -139,7 +147,7 @@ export function OperationForm({
           role="alert"
           className="rounded-lg bg-red-50 p-4 text-sm text-red-800"
         >
-          {state.error}
+          <Message value={state.error} />
         </p>
       )}
       {state?.success && (
@@ -147,13 +155,15 @@ export function OperationForm({
           role="status"
           className="space-y-3 rounded-lg bg-teal-50 p-4 text-sm text-teal-900"
         >
-          <p>Record saved.</p>
+          <p>
+            <T k="Record saved." />
+          </p>
           {resultHref && state.id ? (
             <Link
               className="font-semibold underline"
               href={`${resultHref}/${state.id}`}
             >
-              Open saved trip
+              <T k="Open saved trip" />
             </Link>
           ) : (
             <Button
@@ -163,7 +173,7 @@ export function OperationForm({
                 window.location.reload();
               }}
             >
-              Continue with updated data
+              <T k="Continue with updated data" />
             </Button>
           )}
         </div>
@@ -184,7 +194,7 @@ export function Counter({
 }) {
   return (
     <label className="grid gap-2 text-sm font-semibold">
-      {label}
+      <Message value={label} />
       <div className="grid grid-cols-[52px_1fr_52px] gap-2">
         <Button
           type="button"

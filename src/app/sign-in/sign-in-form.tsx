@@ -1,4 +1,6 @@
 "use client";
+import { T, Message } from "@/components/localization";
+
 import { useActionState } from "react";
 import { signIn } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,7 @@ export function SignInForm({ configured }: { configured: boolean }) {
     <form action={action} className="space-y-5" aria-busy={pending}>
       <div className="space-y-2">
         <label htmlFor="email" className="text-sm font-semibold">
-          Email address
+          <T k="Email address" />
         </label>
         <Input
           id="email"
@@ -23,7 +25,7 @@ export function SignInForm({ configured }: { configured: boolean }) {
       </div>
       <div className="space-y-2">
         <label htmlFor="password" className="text-sm font-semibold">
-          Password
+          <T k="Password" />
         </label>
         <Input
           id="password"
@@ -40,7 +42,7 @@ export function SignInForm({ configured }: { configured: boolean }) {
           role="alert"
           className="rounded-lg bg-red-50 p-3 text-sm text-red-800"
         >
-          {state.error}
+          <Message value={state.error} />
         </p>
       )}
       <Button
@@ -48,10 +50,10 @@ export function SignInForm({ configured }: { configured: boolean }) {
         type="submit"
         disabled={!configured || pending}
       >
-        {pending ? "Signing in…" : "Sign in"}
+        <Message value={pending ? "Signing in…" : "Sign in"} />
       </Button>
       <p className="text-center text-xs text-muted-foreground">
-        Accounts are provisioned by your administrator.
+        <T k="Accounts are provisioned by your administrator." />
       </p>
     </form>
   );

@@ -1,4 +1,8 @@
 "use client";
+import { LocalizedSelect, LocalizedTextarea } from "@/components/localization";
+
+import { T, Message, useLocale } from "@/components/localization";
+
 import { useActionState, useEffect, useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -20,7 +24,7 @@ function Field({
 }) {
   return (
     <label className="grid gap-2 text-sm font-semibold">
-      {label}
+      <Message value={label} />
       {children}
     </label>
   );
@@ -33,7 +37,7 @@ function Feedback({ state }: { state: SaveState }) {
           role="alert"
           className="rounded-lg bg-red-50 p-3 text-sm text-red-800"
         >
-          {state.error}
+          <Message value={state.error} />
         </p>
       )}
       {state?.success && (
@@ -41,13 +45,15 @@ function Feedback({ state }: { state: SaveState }) {
           role="status"
           className="space-y-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900"
         >
-          <p>{state.success}</p>
+          <p>
+            <Message value={state.success} />
+          </p>
           <Button
             type="button"
             variant="outline"
             onClick={() => window.location.reload()}
           >
-            Start another entry
+            <T k="Start another entry" />
           </Button>
         </div>
       )}
@@ -113,16 +119,28 @@ export function ProductForm({
             <>
               <input type="hidden" name="kind" value={product.kind} />
               <p className="py-3 font-normal">
-                {product.kind === "FULL_JAR"
-                  ? "20L returnable water jar"
-                  : "Bottled-water carton"}
+                <Message
+                  value={
+                    product.kind === "FULL_JAR"
+                      ? "20L returnable water jar"
+                      : "Bottled-water carton"
+                  }
+                />
               </p>
             </>
           ) : (
-            <select name="kind" className={selectClass} defaultValue="FULL_JAR">
-              <option value="FULL_JAR">20L returnable water jar</option>
-              <option value="BOTTLE_CARTON">Bottled-water carton</option>
-            </select>
+            <LocalizedSelect
+              name="kind"
+              className={selectClass}
+              defaultValue="FULL_JAR"
+            >
+              <option value="FULL_JAR">
+                <T k="20L returnable water jar" />
+              </option>
+              <option value="BOTTLE_CARTON">
+                <T k="Bottled-water carton" />
+              </option>
+            </LocalizedSelect>
           )}
         </Field>
         <Field label="Unit">
@@ -144,14 +162,18 @@ export function ProductForm({
           />
         </Field>
         <Field label="Status">
-          <select
+          <LocalizedSelect
             name="active"
             className={selectClass}
             defaultValue={String(product?.is_active ?? true)}
           >
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
+            <option value="true">
+              <T k="Active" />
+            </option>
+            <option value="false">
+              <T k="Inactive" />
+            </option>
+          </LocalizedSelect>
         </Field>
         <div className="sm:col-span-2">
           <Field label="Reason for catalog change">
@@ -161,12 +183,16 @@ export function ProductForm({
       </fieldset>
       {dirty && (
         <p className="text-sm text-amber-900">
-          Unsaved changes. Save before leaving this page.
+          <T k="Unsaved changes. Save before leaving this page." />
         </p>
       )}
       <Feedback state={state} />
       <Button type="submit" disabled={pending || Boolean(state?.success)}>
-        {pending ? "Saving…" : product ? "Save product" : "Create product"}
+        <Message
+          value={
+            pending ? "Saving…" : product ? "Save product" : "Create product"
+          }
+        />
       </Button>
     </form>
   );
@@ -180,6 +206,7 @@ export function AdjustmentForm({
   dayId: string;
   requestKey: string;
 }) {
+  const { t } = useLocale();
   const [state, action, pending] = useActionState(adjustStockAction, null);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const product = products.find((p) => p.id === productId);
@@ -191,7 +218,9 @@ export function AdjustmentForm({
       onSubmit={(event) => {
         if (
           !window.confirm(
-            "Post this stock correction? It will create a permanent history entry. Check the quantity, direction and reason.",
+            t(
+              "Post this stock correction? It will create a permanent history entry. Check the quantity, direction and reason.",
+            ),
           )
         )
           event.preventDefault();
@@ -206,7 +235,7 @@ export function AdjustmentForm({
         className="grid gap-4 sm:grid-cols-2"
       >
         <Field label="Product">
-          <select
+          <LocalizedSelect
             name="product"
             className={selectClass}
             value={productId}
@@ -214,28 +243,36 @@ export function AdjustmentForm({
           >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({p.sku}){!p.is_active && " · Inactive"}
+                {p.name} ({p.sku}){!p.is_active && <T k=" · Inactive" />}
               </option>
             ))}
-          </select>
+          </LocalizedSelect>
         </Field>
         <Field label="Stock state">
-          <select key={product?.kind} name="kind" className={selectClass}>
+          <LocalizedSelect
+            key={product?.kind}
+            name="kind"
+            className={selectClass}
+          >
             {(product?.kind === "FULL_JAR"
               ? (["FULL_JAR", "EMPTY_JAR"] as const)
               : (["BOTTLE_CARTON"] as const)
             ).map((kind) => (
               <option key={kind} value={kind}>
-                {stockLabels[kind]}
+                <Message value={stockLabels[kind]} />
               </option>
             ))}
-          </select>
+          </LocalizedSelect>
         </Field>
         <Field label="Direction">
-          <select name="direction" className={selectClass}>
-            <option value="increase">Increase stock</option>
-            <option value="decrease">Decrease stock</option>
-          </select>
+          <LocalizedSelect name="direction" className={selectClass}>
+            <option value="increase">
+              <T k="Increase stock" />
+            </option>
+            <option value="decrease">
+              <T k="Decrease stock" />
+            </option>
+          </LocalizedSelect>
         </Field>
         <Field label="Quantity">
           <Input
@@ -255,28 +292,31 @@ export function AdjustmentForm({
         </div>
         <div className="sm:col-span-2">
           <Field label="Supporting notes (optional)">
-            <textarea name="notes" maxLength={2000} className={selectClass} />
+            <LocalizedTextarea
+              name="notes"
+              maxLength={2000}
+              className={selectClass}
+            />
           </Field>
         </div>
       </fieldset>
       <p className="text-sm text-muted-foreground">
-        Manual corrections only. Loading, deliveries, returns and refilling will
-        use their own workflows. Inactive products keep their stock and remain
-        available for corrections.
+        <T k="Manual corrections only. Loading, deliveries, returns and refilling will use their own workflows. Inactive products keep their stock and remain available for corrections." />
       </p>
       {dirty && (
         <p className="text-sm text-amber-900">
-          Unsaved adjustment. Save before leaving this page.
+          <T k="Unsaved adjustment. Save before leaving this page." />
         </p>
       )}
       <Feedback state={state} />
       <Button type="submit" disabled={pending || Boolean(state?.success)}>
-        {pending ? "Posting…" : "Post adjustment"}
+        <Message value={pending ? "Posting…" : "Post adjustment"} />
       </Button>
     </form>
   );
 }
 export function OpenDayForm({ requestKey }: { requestKey: string }) {
+  const { t } = useLocale();
   const [state, action, pending] = useActionState(openDayAction, null);
   return (
     <form
@@ -285,7 +325,9 @@ export function OpenDayForm({ requestKey }: { requestKey: string }) {
       onSubmit={(event) => {
         if (
           !window.confirm(
-            "Open a business day for warehouse operations? Its date uses Nepal time and existing balances carry forward.",
+            t(
+              "Open a business day for warehouse operations? Its date uses Nepal time and existing balances carry forward.",
+            ),
           )
         )
           event.preventDefault();
@@ -294,7 +336,7 @@ export function OpenDayForm({ requestKey }: { requestKey: string }) {
       <input name="key" type="hidden" value={requestKey} />
       <Feedback state={state} />
       <Button disabled={pending || Boolean(state?.success)} type="submit">
-        {pending ? "Opening…" : "Open business day"}
+        <Message value={pending ? "Opening…" : "Open business day"} />
       </Button>
     </form>
   );

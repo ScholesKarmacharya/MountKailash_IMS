@@ -1,3 +1,4 @@
+import { T } from "@/components/localization";
 import { getOperations } from "@/services/operations";
 import { VehicleForm } from "@/components/master-forms";
 import { Directory } from "@/components/directory";
@@ -29,7 +30,9 @@ export default async function Page() {
             }))}
           />
           <Card>
-            <h2 className="mb-5 text-lg font-semibold">Add vehicle</h2>
+            <h2 className="mb-5 text-lg font-semibold">
+              <T k="Add vehicle" />
+            </h2>
             <VehicleForm />
           </Card>
         </>

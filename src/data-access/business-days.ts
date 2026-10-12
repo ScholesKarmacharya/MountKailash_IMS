@@ -17,3 +17,14 @@ export async function readActiveBusinessDay(): Promise<BusinessDay | null> {
     throw new Error("Business day could not be loaded. Please try again.");
   return data as BusinessDay | null;
 }
+export async function readBusinessDate(id: string): Promise<string> {
+  const client = await createClient();
+  const { data, error } = await client
+    .from("business_days")
+    .select("date_label")
+    .eq("id", id)
+    .single();
+  if (error || !data)
+    throw new Error("Business day could not be loaded. Please try again.");
+  return data.date_label;
+}

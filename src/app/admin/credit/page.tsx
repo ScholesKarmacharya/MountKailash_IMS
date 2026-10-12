@@ -1,3 +1,4 @@
+import { T, Message, Value } from "@/components/localization";
 import { creditAging } from "@/domain/finance/aging";
 import Link from "next/link";
 import { getFinance } from "@/services/finance";
@@ -6,22 +7,29 @@ import { FinanceRequired } from "@/components/finance-overview";
 import { npr, sum } from "@/domain/finance/money";
 import { nepalDateLabel as nepalDate } from "@/domain/business-days/time";
 import { Card } from "@/components/ui/card";
+import { CreditStatement } from "@/components/credit-statement";
 export default async function Page() {
   const [f, w] = await Promise.all([getFinance(true), getOperations(true)]);
   if (!f.available) return <FinanceRequired />;
   const today = nepalDate(new Date());
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Customer credit</h1>
+      <h1 className="text-3xl font-bold">
+        <T k="Customer credit" />
+      </h1>
+      <CreditStatement finance={f} customers={w.customers} />
       <p>
-        Balances carry across business days. Aging uses the configured invoice
-        due date and Nepal calendar date.
+        <T k="Balances carry across business days. Aging uses the configured invoice due date and Nepal calendar date." />
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         {creditAging(f.credit, today).map((b) => (
           <Card key={b.label}>
-            <p className="text-sm">{b.label}</p>
-            <p className="mt-3 text-xl font-bold">{npr(b.amount)}</p>
+            <p className="text-sm">
+              <Message value={b.label} />
+            </p>
+            <p className="mt-3 text-xl font-bold">
+              <Value value={npr(b.amount)} />
+            </p>
           </Card>
         ))}
       </div>
@@ -38,7 +46,7 @@ export default async function Page() {
                   "Account",
                 ].map((h) => (
                   <th key={h} className="p-3">
-                    {h}
+                    <Message value={h} />
                   </th>
                 ))}
               </tr>
@@ -55,41 +63,56 @@ export default async function Page() {
                       >
                         {c.name}
                       </Link>
-                      {!c.is_active && " (inactive)"}
+                      {!c.is_active && <T k=" (inactive)" />}
                     </td>
                     <td className="p-3">
-                      {npr(sum(invoices.map((i) => i.outstanding)))}
+                      <Value
+                        value={npr(sum(invoices.map((i) => i.outstanding)))}
+                      />
                     </td>
                     <td className="p-3">
-                      {npr(
-                        sum(
-                          invoices
-                            .filter((i) => i.due_date && i.due_date < today)
-                            .map((i) => i.outstanding),
-                        ),
-                      )}
-                      {invoices.some((i) => !i.due_date) &&
-                        " · some due dates unconfigured"}
-                    </td>
-                    <td className="p-3">
-                      {npr(
-                        sum(
-                          f.deposits
-                            .filter((d) => d.customer_id === c.id)
-                            .map((d) => d.amount),
-                        ),
+                      <Value
+                        value={npr(
+                          sum(
+                            invoices
+                              .filter((i) => i.due_date && i.due_date < today)
+                              .map((i) => i.outstanding),
+                          ),
+                        )}
+                      />
+                      {invoices.some((i) => !i.due_date) && (
+                        <T k=" · some due dates unconfigured" />
                       )}
                     </td>
                     <td className="p-3">
-                      {f.billing.find((b) => b.customer_id === c.id)
-                        ?.account_type ?? "STANDARD"}
+                      <Value
+                        value={npr(
+                          sum(
+                            f.deposits
+                              .filter((d) => d.customer_id === c.id)
+                              .map((d) => d.amount),
+                          ),
+                        )}
+                      />
+                    </td>
+                    <td className="p-3">
+                      <Message
+                        value={
+                          f.billing.find((b) => b.customer_id === c.id)
+                            ?.account_type ?? "STANDARD"
+                        }
+                      />
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          {w.customers.length === 0 && <p>No customers registered.</p>}
+          {w.customers.length === 0 && (
+            <p>
+              <T k="No customers registered." />
+            </p>
+          )}
         </div>
       </Card>
     </div>

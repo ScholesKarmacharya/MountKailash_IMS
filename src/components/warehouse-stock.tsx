@@ -1,3 +1,4 @@
+import { Message, Value, T, LocalizedSection } from "@/components/localization";
 import { Card } from "./ui/card";
 import {
   stockKinds,
@@ -14,20 +15,29 @@ export function WarehouseStock({
 }) {
   const totals = stockTotals(balances);
   return (
-    <section aria-label="Warehouse stock" className="grid gap-4 sm:grid-cols-3">
+    <LocalizedSection
+      aria-label="Warehouse stock"
+      className="grid gap-4 sm:grid-cols-3"
+    >
       {stockKinds.map((kind) => (
         <Card key={kind}>
-          <h2 className="text-sm font-semibold">{stockLabels[kind]}</h2>
+          <h2 className="text-sm font-semibold">
+            <Message value={stockLabels[kind]} />
+          </h2>
           <p className="my-4 text-3xl font-bold">
-            {available ? totals[kind].toLocaleString("en-NP") : "Unavailable"}
+            {available ? <Value value={totals[kind]} /> : <T k="Unavailable" />}
           </p>
           <p className="text-xs text-muted-foreground">
-            {available
-              ? "Current warehouse quantity · carries across business days"
-              : "Apply the reviewed Sprint 1 migration to enable stock."}
+            <Message
+              value={
+                available
+                  ? "Current warehouse quantity · carries across business days"
+                  : "Apply the reviewed Sprint 1 migration to enable stock."
+              }
+            />
           </p>
         </Card>
       ))}
-    </section>
+    </LocalizedSection>
   );
 }

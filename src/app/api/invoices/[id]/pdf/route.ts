@@ -1,3 +1,5 @@
+import { tr } from "@/domain/localization/format";
+import { getLocale } from "@/lib/i18n/server";
 import { requirePermission } from "@/services/auth";
 import { readFinance } from "@/data-access/finance";
 import { receiptPdf } from "@/services/pdf";
@@ -6,16 +8,17 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  await requirePermission("payment:record");
+  const profile = await requirePermission("payment:record");
+  const locale = await getLocale(profile);
   const { id } = await params;
   const f = await readFinance(),
     invoice = f.invoices.find((i) => i.id === id);
   if (!invoice)
-    return new Response("Invoice not found", {
+    return new Response(tr(locale, "Invoice not found"), {
       status: 404,
       headers: { "Cache-Control": "private, no-store" },
     });
-  const bytes = await receiptPdf(invoiceDocument(invoice, f));
+  const bytes = await receiptPdf(invoiceDocument(invoice, f, locale));
   return new Response(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",

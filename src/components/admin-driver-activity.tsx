@@ -1,3 +1,4 @@
+import { T, Message, Value, LocalizedSection } from "@/components/localization";
 import Link from "next/link";
 import type { Workspace } from "@/domain/operations/types";
 import type { FinanceWorkspace } from "@/domain/finance/types";
@@ -28,11 +29,13 @@ export async function AdminDriverActivity({
     trips.map((t) => getOperations(true, t.id)),
   );
   return (
-    <section aria-label="Driver activity" className="space-y-4">
-      <h2 className="text-xl font-bold">Driver activity this business day</h2>
+    <LocalizedSection aria-label="Driver activity" className="space-y-4">
+      <h2 className="text-xl font-bold">
+        <T k="Driver activity this business day" />
+      </h2>
       {!trips.length && (
         <Card>
-          No driver loads or deliveries recorded for this business day.
+          <T k="No driver loads or deliveries recorded for this business day." />
         </Card>
       )}
       <div className="grid gap-4 xl:grid-cols-2">
@@ -58,10 +61,19 @@ export async function AdminDriverActivity({
                   href={`/admin/trips/${t.id}`}
                   className="font-semibold text-primary underline"
                 >
-                  {t.driver_name} · Round #{t.trip_number}
+                  <T
+                    k="{0} · Round #{1}"
+                    values={[t.driver_name, t.trip_number]}
+                  />
                 </Link>
                 <p className="mt-2 text-sm">
-                  Assigned Vehicle: {t.plate_number} · {roundLabel(t.status)}
+                  <T
+                    k="Assigned Vehicle: {0} · {1}"
+                    values={[
+                      t.plate_number,
+                      <Message key="v1" value={roundLabel(t.status)} />,
+                    ]}
+                  />
                 </p>
               </div>
               <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -102,26 +114,32 @@ export async function AdminDriverActivity({
                   ],
                 ].map(([label, value]) => (
                   <div key={label}>
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="mt-1 font-semibold">{value}</dd>
+                    <dt className="text-muted-foreground">
+                      <Message value={label} />
+                    </dt>
+                    <dd className="mt-1 font-semibold">
+                      {value === "Unavailable" ? (
+                        <T k="Unavailable" />
+                      ) : (
+                        <Value value={value} />
+                      )}
+                    </dd>
                   </div>
                 ))}
               </dl>
               <p className="text-xs text-muted-foreground">
-                New-customer count is per driver/day. Pending jars are current
-                balances for customers visited this round and may also appear in
-                another round.
+                <T k="New-customer count is per driver/day. Pending jars are current balances for customers visited this round and may also appear in another round." />
               </p>
               <Link
                 href={`/admin/trips/${t.id}#add-delivery`}
                 className="inline-block py-2 text-primary underline"
               >
-                Inspect or perform authorized operations
+                <T k="Inspect or perform authorized operations" />
               </Link>
             </Card>
           );
         })}
       </div>
-    </section>
+    </LocalizedSection>
   );
 }

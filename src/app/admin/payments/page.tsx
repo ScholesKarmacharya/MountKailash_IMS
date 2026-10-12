@@ -1,3 +1,8 @@
+import { LocalizedSelect } from "@/components/localization";
+import { BsDateRange } from "@/components/bs-date-picker";
+import { inDateRange } from "@/domain/localization/calendar";
+import { getDayHistory } from "@/services/business-days";
+import { T, Message, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { getFinance } from "@/services/finance";
 import { getOperations } from "@/services/operations";
@@ -18,9 +23,10 @@ export default async function Page({
     searchParams,
   ]);
   if (!f.available) return <FinanceRequired />;
+  const history = await getDayHistory();
   const day = q.day ?? w.days.find((d) => d.status === "OPEN")?.id ?? null;
   const dateOf = (id: string) =>
-    w.days.find((d) => d.id === id)?.date_label ?? "";
+    history.days.find((d) => d.id === id)?.date_label ?? "";
   const payments = f.payments
     .filter((p) => {
       const t = w.trips.find((t) => t.id === p.trip_id),
@@ -36,48 +42,38 @@ export default async function Page({
       );
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const invoices = f.invoices.filter((i) =>
+    inDateRange(i.date_label, q.from, q.to, false),
+  );
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Payments</h1>
+      <h1 className="text-3xl font-bold">
+        <T k="Payments" />
+      </h1>
       <p className="text-sm text-muted-foreground">
-        Overview uses the selected business day. Collections include old credit
-        and deposits; deposits remain outside sales. Cash is operator recorded.
-        Fonepay confirmation is explicit admin reconciliation, with no automatic
-        provider connection.
+        <T k="Overview uses the selected business day. Collections include old credit and deposits; deposits remain outside sales. Cash is operator recorded. Fonepay confirmation is explicit admin reconciliation, with no automatic provider connection." />
       </p>
       <form className="flex flex-wrap items-end gap-3">
         <Filter
           name="day"
           label="Overview business day"
           value={day ?? ""}
-          options={w.days.map((d) => [d.id, `${d.date_label} (${d.status})`])}
+          options={history.days.map((d) => [
+            d.id,
+            `${d.date_label} (${d.status})`,
+          ])}
         />
         <button className="min-h-12 rounded-lg bg-primary px-4 text-white">
-          Update overview
+          <T k="Update overview" />
         </button>
       </form>
       <FinanceOverview finance={f} day={day} />
       <Card>
-        <h2 className="mb-4 font-semibold">Payment history filters</h2>
+        <h2 className="mb-4 font-semibold">
+          <T k="Payment history filters" />
+        </h2>
         <form className="grid gap-4 sm:grid-cols-3">
-          <label className="grid gap-2 text-sm">
-            Business date from
-            <input
-              className="min-h-12 rounded-lg border px-3"
-              type="date"
-              name="from"
-              defaultValue={q.from}
-            />
-          </label>
-          <label className="grid gap-2 text-sm">
-            Business date to
-            <input
-              className="min-h-12 rounded-lg border px-3"
-              type="date"
-              name="to"
-              defaultValue={q.to}
-            />
-          </label>
+          <BsDateRange from={q.from} to={q.to} />
           <Filter
             name="customer"
             label="Customer"
@@ -112,17 +108,21 @@ export default async function Page({
           />
           <input type="hidden" name="day" value={day ?? ""} />
           <button className="min-h-12 rounded-lg bg-primary px-4 text-white">
-            Filter history
+            <T k="Filter history" />
           </button>
           <Link href="/admin/payments" className="p-3 text-primary underline">
-            Clear filters
+            <T k="Clear filters" />
           </Link>
         </form>
       </Card>
       <Card>
-        <h2 className="mb-4 font-semibold">Receipts</h2>
+        <h2 className="mb-4 font-semibold">
+          <T k="Receipts" />
+        </h2>
         {payments.length === 0 ? (
-          <p>No payments match these filters.</p>
+          <p>
+            <T k="No payments match these filters." />
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -138,7 +138,7 @@ export default async function Page({
                     "Deposit",
                   ].map((h) => (
                     <th key={h} className="p-3">
-                      {h}
+                      <Message value={h} />
                     </th>
                   ))}
                 </tr>
@@ -151,24 +151,36 @@ export default async function Page({
                         className="text-primary underline"
                         href={"/admin/payments/" + p.id}
                       >
-                        R-{p.number.padStart(8, "0")}
+                        <T k="R-{0}" values={[p.number.padStart(8, "0")]} />
                       </Link>
                     </td>
                     <td className="p-3">
-                      {w.customers.find((c) => c.id === p.customer_id)?.name ??
-                        "Walk-in"}
+                      {w.customers.find((c) => c.id === p.customer_id)
+                        ?.name ?? <T k="Walk-in" />}
                     </td>
-                    <td className="p-3">{dateOf(p.business_day_id)}</td>
-                    <td className="p-3">{p.method}</td>
                     <td className="p-3">
-                      {p.status === "CONFIRMED"
-                        ? p.method === "CASH"
-                          ? "Cash recorded"
-                          : "Admin reconciled"
-                        : p.status}
+                      <DateValue value={dateOf(p.business_day_id)} />
                     </td>
-                    <td className="p-3">{npr(p.amount)}</td>
-                    <td className="p-3">{npr(p.deposit_amount)}</td>
+                    <td className="p-3">
+                      <Message value={p.method} />
+                    </td>
+                    <td className="p-3">
+                      <Message
+                        value={
+                          p.status === "CONFIRMED"
+                            ? p.method === "CASH"
+                              ? "Cash recorded"
+                              : "Admin reconciled"
+                            : p.status
+                        }
+                      />
+                    </td>
+                    <td className="p-3">
+                      <Value value={npr(p.amount)} />
+                    </td>
+                    <td className="p-3">
+                      <Value value={npr(p.deposit_amount)} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -177,19 +189,30 @@ export default async function Page({
         )}
       </Card>
       <Card>
-        <h2 className="mb-4 font-semibold">Invoices</h2>
-        {f.invoices.length === 0 ? (
-          <p>No invoices recorded.</p>
+        <h2 className="mb-4 font-semibold">
+          <T k="Invoices" />
+        </h2>
+        {invoices.length === 0 ? (
+          <p>
+            <T k="No invoices recorded." />
+          </p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {f.invoices.map((i) => (
+            {invoices.map((i) => (
               <Link
                 key={i.id}
                 className="rounded-lg border p-4 text-primary underline"
                 href={"/admin/invoices/" + i.id}
               >
-                MK-{i.number.padStart(8, "0")} · {i.customer.name} ·{" "}
-                {npr(i.total)} · outstanding {npr(i.outstanding)}
+                <T
+                  k="MK-{0} · {1} · {2} · outstanding {3}"
+                  values={[
+                    i.number.padStart(8, "0"),
+                    i.customer.name,
+                    <Value key="v2" value={npr(i.total)} />,
+                    <Value key="v3" value={npr(i.outstanding)} />,
+                  ]}
+                />
               </Link>
             ))}
           </div>
@@ -198,7 +221,7 @@ export default async function Page({
       <Card>
         <details>
           <summary className="cursor-pointer font-semibold">
-            Immutable finance audit journal
+            <T k="Immutable finance audit journal" />
           </summary>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -213,7 +236,7 @@ export default async function Page({
                     "Posting ID",
                   ].map((h) => (
                     <th key={h} className="p-2">
-                      {h}
+                      <Message value={h} />
                     </th>
                   ))}
                 </tr>
@@ -221,17 +244,29 @@ export default async function Page({
               <tbody>
                 {f.journal.map((j) => (
                   <tr key={j.id} className="border-t">
-                    <td className="p-2">{dateOf(j.business_day_id)}</td>
-                    <td className="p-2">{j.kind}</td>
-                    <td className="p-2">{j.account}</td>
-                    <td className="p-2">{npr(j.amount)}</td>
+                    <td className="p-2">
+                      <DateValue value={dateOf(j.business_day_id)} />
+                    </td>
+                    <td className="p-2">
+                      <Message value={j.kind} />
+                    </td>
+                    <td className="p-2">
+                      <Message value={j.account} />
+                    </td>
+                    <td className="p-2">
+                      <Value value={npr(j.amount)} />
+                    </td>
                     <td className="p-2">{j.source_id}</td>
                     <td className="p-2">{j.posting_id}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {f.journal.length === 0 && <p>No finance postings recorded.</p>}
+            {f.journal.length === 0 && (
+              <p>
+                <T k="No finance postings recorded." />
+              </p>
+            )}
           </div>
         </details>
       </Card>
@@ -251,20 +286,33 @@ function Filter({
 }) {
   return (
     <div className="grid gap-2 text-sm">
-      <label htmlFor={"finance-filter-" + name}>{label}</label>
-      <select
+      <label htmlFor={"finance-filter-" + name}>
+        <Message value={label} />
+      </label>
+      <LocalizedSelect
         id={"finance-filter-" + name}
         className="min-h-12 rounded-lg border bg-background px-3"
         name={name}
         defaultValue={value ?? ""}
       >
-        <option value="">All</option>
+        <option value="">
+          <T k="All" />
+        </option>
         {options.map(([v, l]) => (
           <option key={v} value={v}>
-            {l}
+            {name === "day" ? (
+              <>
+                <DateValue value={l?.slice(0, 10)} /> (
+                <Message value={l?.slice(12, -1)} />)
+              </>
+            ) : ["method", "status", "trip"].includes(name) ? (
+              <Message value={l} />
+            ) : (
+              l
+            )}
           </option>
         ))}
-      </select>
+      </LocalizedSelect>
     </div>
   );
 }

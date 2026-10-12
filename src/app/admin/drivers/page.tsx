@@ -1,3 +1,4 @@
+import { T } from "@/components/localization";
 import { getOperations } from "@/services/operations";
 import { DriverForm } from "@/components/master-forms";
 import { Directory } from "@/components/directory";
@@ -25,16 +26,16 @@ export default async function Page() {
               id: r.id,
               name: r.name,
               detail: "Authorized delivery account",
+              displayDetail: <T k="Authorized delivery account" />,
               active: r.is_active,
             }))}
           />
           <Card>
-            <h2 className="mb-5 text-lg font-semibold">Add driver</h2>
+            <h2 className="mb-5 text-lg font-semibold">
+              <T k="Add driver" />
+            </h2>
             <p className="mb-5 text-sm text-muted-foreground">
-              Create the account in Supabase Dashboard → Authentication → Users
-              using a deliverable email and a unique initial password. Give the
-              credentials to the driver securely, then copy the existing user
-              UUID here. Passwords are managed in Supabase Auth.
+              <T k="Create the account in Supabase Dashboard → Authentication → Users using a deliverable email and a unique initial password. Give the credentials to the driver securely, then copy the existing user UUID here. Passwords are managed in Supabase Auth." />
             </p>
             <DriverForm />
           </Card>

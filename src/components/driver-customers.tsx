@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/localization";
+
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -30,7 +32,8 @@ export function DriverCustomers({
     <div className="space-y-4">
       {!editor && <OperationalRefresh />}
       <label className="grid gap-2 text-sm font-semibold">
-        Search active customers
+        {" "}
+        <T k="Search active customers" />{" "}
         <Input
           type="search"
           value={search}
@@ -39,19 +42,16 @@ export function DriverCustomers({
       </label>
       {!w.customer_details && (
         <p role="status" className="rounded-lg bg-amber-50 p-4 text-sm">
-          Migration 014 is required for customer lookup while waiting for
-          loading and extended contact details. Current permitted contacts
-          remain available.
+          <T k="Migration 014 is required for customer lookup while waiting for loading and extended contact details. Current permitted contacts remain available." />
         </p>
       )}
       {trip ? (
         <Button className="min-h-14 w-full" onClick={() => setEditor("new")}>
-          Add New Customer
+          <T k="Add New Customer" />
         </Button>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Customer lookup is available while waiting. Start an assigned loaded
-          round on an open business day to register or edit a customer.
+          <T k="Customer lookup is available while waiting. Start an assigned loaded round on an open business day to register or edit a customer." />
         </p>
       )}
       {editor && trip && (
@@ -67,7 +67,11 @@ export function DriverCustomers({
           }}
         />
       )}
-      {!customers.length && <Card>No matching active customers.</Card>}
+      {!customers.length && (
+        <Card>
+          <T k="No matching active customers." />
+        </Card>
+      )}
       <ul className="space-y-3">
         {customers.map((c) => (
           <li key={c.id}>
@@ -77,10 +81,14 @@ export function DriverCustomers({
                 {c.shop_name && ` · ${c.shop_name}`}
               </h2>
               {c.contact_person && (
-                <p className="text-sm">Contact: {c.contact_person}</p>
+                <p className="text-sm">
+                  <T k="Contact: {0}" values={[c.contact_person]} />
+                </p>
               )}
               {c.customer_type && (
-                <p className="text-sm">Customer type: {c.customer_type}</p>
+                <p className="text-sm">
+                  <T k="Customer type: {0}" values={[c.customer_type]} />
+                </p>
               )}
               {c.phone && (
                 <a
@@ -99,7 +107,7 @@ export function DriverCustomers({
                   href={`/driver/pending-jars?customer=${c.id}`}
                   className="inline-block min-h-12 py-3 font-semibold text-primary underline"
                 >
-                  Pending jars
+                  <T k="Pending jars" />
                 </Link>
                 {trip && (
                   <>
@@ -107,10 +115,10 @@ export function DriverCustomers({
                       href={`/driver/delivery?customer=${c.id}`}
                       className="inline-block min-h-12 py-3 font-semibold text-primary underline"
                     >
-                      New Delivery
+                      <T k="New Delivery" />
                     </Link>
                     <Button variant="outline" onClick={() => setEditor(c)}>
-                      Edit contact
+                      <T k="Edit contact" />
                     </Button>
                   </>
                 )}

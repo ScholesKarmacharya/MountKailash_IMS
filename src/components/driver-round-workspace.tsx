@@ -1,3 +1,4 @@
+import { T, Message } from "@/components/localization";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { getDriverWorkspace } from "@/services/driver-workspace";
@@ -30,14 +31,23 @@ export async function DriverRoundWorkspace({
         href="/driver/home"
         className="inline-block py-2 text-primary underline"
       >
-        Back to My Stock
+        <T k="Back to My Stock" />
       </Link>
       <OperationsHeading
         title={returning ? "Return to Warehouse" : "New Delivery"}
         description={
-          trip
-            ? `Round #${trip.trip_number} · ${trip.plate_number} · ${roundLabel(trip.status)}`
-            : "Waiting for a confirmed warehouse load."
+          trip ? (
+            <T
+              k="Round #{0} · {1} · {2}"
+              values={[
+                trip.trip_number,
+                trip.plate_number,
+                <Message key="status" value={roundLabel(trip.status)} />,
+              ]}
+            />
+          ) : (
+            "Waiting for a confirmed warehouse load."
+          )
         }
       />
       {!w.available ? (
@@ -45,7 +55,9 @@ export async function DriverRoundWorkspace({
       ) : !trip ? (
         <>
           <OperationalRefresh />
-          <Card>No active delivery stock. Waiting for warehouse loading.</Card>
+          <Card>
+            <T k="No active delivery stock. Waiting for warehouse loading." />
+          </Card>
         </>
       ) : (
         <>
@@ -73,7 +85,7 @@ export async function DriverRoundWorkspace({
               {!returning && finance.available && (
                 <details className="rounded-xl border border-border bg-card p-4">
                   <summary className="min-h-12 cursor-pointer font-semibold">
-                    Collect previous credit without a new delivery
+                    <T k="Collect previous credit without a new delivery" />
                   </summary>
                   <div className="mt-4">
                     <CollectCreditForm
@@ -91,15 +103,19 @@ export async function DriverRoundWorkspace({
               <OperationalRefresh />
               <Card className="space-y-4">
                 <p>
-                  {trip.status === "DRAFT"
-                    ? "No active delivery stock. Waiting for warehouse loading."
-                    : trip.status === "LOADED"
-                      ? "Your stock is ready. Start delivering before saving a delivery."
-                      : "Returned / Awaiting Confirmation. Your declaration is saved; admin must verify physical returns before another load."}
+                  <Message
+                    value={
+                      trip.status === "DRAFT"
+                        ? "No active delivery stock. Waiting for warehouse loading."
+                        : trip.status === "LOADED"
+                          ? "Your stock is ready. Start delivering before saving a delivery."
+                          : "Returned / Awaiting Confirmation. Your declaration is saved; admin must verify physical returns before another load."
+                    }
+                  />
                 </p>
                 {!dayOpen && (
                   <p role="alert">
-                    This business day is locked for review or closed.
+                    <T k="This business day is locked for review or closed." />
                   </p>
                 )}
                 {trip.status === "LOADED" && dayOpen && (
@@ -115,7 +131,7 @@ export async function DriverRoundWorkspace({
                   href={`/driver/trips/${trip.id}`}
                   className="inline-block py-3 text-primary underline"
                 >
-                  View saved round and return counts
+                  <T k="View saved round and return counts" />
                 </Link>
               </Card>
             </>

@@ -1,6 +1,7 @@
+import { T, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { getCustomerDeliveries } from "@/services/operations";
-import { formatNepalTime } from "@/domain/business-days/time";
+
 import { Card } from "./ui/card";
 export async function CustomerReport({ id }: { id: string }) {
   const visits = await getCustomerDeliveries(id);
@@ -32,41 +33,64 @@ export async function CustomerReport({ id }: { id: string }) {
   }
   return (
     <Card>
-      <h2 className="mb-4 font-semibold">Customer delivery history</h2>
+      <h2 className="mb-4 font-semibold">
+        <T k="Customer delivery history" />
+      </h2>
       {visits.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No delivery visits recorded for this customer.
+          <T k="No delivery visits recorded for this customer." />
         </p>
       ) : (
         <>
-          <h3 className="text-sm font-semibold">Grouped by trip</h3>
+          <h3 className="text-sm font-semibold">
+            <T k="Grouped by trip" />
+          </h3>
           {Array.from(trips.entries()).map(([trip, t]) => (
             <div key={trip} className="border-b border-border py-4">
               <Link
                 className="font-semibold text-primary underline"
                 href={`/admin/trips/${trip}`}
               >
-                Trip #{t.number} · {t.date}
+                <T
+                  k="Trip #{0} · {1}"
+                  values={[t.number, <DateValue key="date" value={t.date} />]}
+                />
               </Link>
               <p className="mt-2 text-sm">
-                {t.visits} visits · {t.full} full delivered · {t.empty} empty
-                collected · {t.cartons} cartons
+                <T
+                  k="{0} visits · {1} full delivered · {2} empty collected · {3} cartons"
+                  values={[
+                    <Value key="v0" value={t.visits} />,
+                    t.full,
+                    t.empty,
+                    <Value key="v3" value={t.cartons} />,
+                  ]}
+                />
               </p>
             </div>
           ))}
-          <h3 className="mt-5 text-sm font-semibold">Separate visits</h3>
+          <h3 className="mt-5 text-sm font-semibold">
+            <T k="Separate visits" />
+          </h3>
           {visits.map((v) => (
             <p key={v.id} className="py-3 text-sm">
-              {formatNepalTime(v.created_at)} · Trip #{v.trip_number} ·{" "}
-              {v.full_jars} full / {v.empty_jars} empty / {v.cartons} cartons ·
-              NPR {v.value_snapshot}
+              <T
+                k="{0} · Trip #{1} · {2} full / {3} empty / {4} cartons · NPR {5}"
+                values={[
+                  <DateValue key="v0" value={v.created_at} time />,
+                  v.trip_number,
+                  <Value key="v2" value={v.full_jars} />,
+                  <Value key="v3" value={v.empty_jars} />,
+                  <Value key="v4" value={v.cartons} />,
+                  v.value_snapshot,
+                ]}
+              />
             </p>
           ))}
         </>
       )}
       <p className="mt-4 text-xs text-muted-foreground">
-        Delivery values are price snapshots. Financial settlement, credit and
-        deposits remain pending Sprint 3.
+        <T k="Delivery values preserve original prices. Payments, credit and deposits are shown in the separate financial ledgers." />
       </p>
     </Card>
   );

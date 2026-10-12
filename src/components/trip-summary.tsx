@@ -1,3 +1,4 @@
+import { T, Message, DateValue, Value } from "@/components/localization";
 import { getFinance } from "@/services/finance";
 import { npr, sum } from "@/domain/finance/money";
 import { CollectCreditForm } from "./finance-payment";
@@ -11,7 +12,7 @@ import {
   vehicleCounts,
 } from "@/domain/operations/types";
 import { stockLabels } from "@/domain/inventory/validation";
-import { formatNepalTime } from "@/domain/business-days/time";
+
 import { Card } from "./ui/card";
 import { roundLabel } from "@/domain/operations/driver-workspace";
 import { DriverStock } from "./driver-stock";
@@ -28,7 +29,7 @@ export function TripList({ trips, admin }: { trips: Trip[]; admin: boolean }) {
     <div className="space-y-3">
       {trips.length === 0 && (
         <p className="rounded-xl border border-border bg-card p-6 text-muted-foreground">
-          No assigned trips.
+          <T k="No assigned trips." />
         </p>
       )}
       {trips.map((t) => (
@@ -43,12 +44,16 @@ export function TripList({ trips, admin }: { trips: Trip[]; admin: boolean }) {
               base={admin ? "/admin/trips" : "/driver/trips"}
             />
             <p className="mt-2 text-sm text-muted-foreground">
-              {t.date_label} · {t.plate_number}
+              <DateValue value={t.date_label} /> · {t.plate_number}
               {admin && ` · ${t.driver_name}`}
             </p>
           </div>
           <span className="rounded-full bg-muted px-3 py-2 text-xs font-semibold">
-            {admin ? t.status.replaceAll("_", " ") : roundLabel(t.status)}
+            <Message
+              value={
+                admin ? t.status.replaceAll("_", " ") : roundLabel(t.status)
+              }
+            />
           </span>
         </Card>
       ))}
@@ -68,12 +73,14 @@ export function StockCards({
       {(["FULL_JAR", "EMPTY_JAR", "BOTTLE_CARTON"] as const).map((kind) => (
         <Card key={kind} className="p-3 sm:p-5">
           <p className="text-xs font-semibold text-muted-foreground">
-            {stockLabels[kind]}
+            <Message value={stockLabels[kind]} />
           </p>
           <p className="mt-3 text-3xl font-bold">
-            {counts
-              .filter((c) => c.stock_kind === kind)
-              .reduce((sum, c) => sum + c.quantity, 0)}
+            <Value
+              value={counts
+                .filter((c) => c.stock_kind === kind)
+                .reduce((sum, c) => sum + c.quantity, 0)}
+            />
           </p>
         </Card>
       ))}
@@ -92,12 +99,14 @@ export function LoadedStock({
       {(["FULL_JAR", "EMPTY_JAR", "BOTTLE_CARTON"] as const).map((kind) => (
         <Card key={kind} className="p-3 sm:p-5">
           <p className="text-xs font-semibold text-muted-foreground">
-            {stockLabels[kind]}
+            <Message value={stockLabels[kind]} />
           </p>
           <p className="mt-3 text-3xl font-bold">
-            {w.loads
-              .filter((l) => l.trip_id === trip.id && l.stock_kind === kind)
-              .reduce((s, l) => s + l.quantity, 0)}
+            <Value
+              value={w.loads
+                .filter((l) => l.trip_id === trip.id && l.stock_kind === kind)
+                .reduce((s, l) => s + l.quantity, 0)}
+            />
           </p>
         </Card>
       ))}
@@ -157,33 +166,52 @@ export async function TripDetail({
         className="text-primary underline"
         href={admin ? "/admin/trips" : "/driver/home"}
       >
-        Back to {admin ? "trips" : "my day"}
+        <T
+          k="Back to {0}"
+          values={[<Message key="v0" value={admin ? "trips" : "my day"} />]}
+        />
       </Link>
       <OperationsHeading
         title={`Trip #${trip.trip_number}`}
-        description={`${trip.plate_number} · ${trip.driver_name} · Business day ${trip.date_label}`}
+        description={
+          <T
+            k="{0} · {1} · Business day {2}"
+            values={[
+              trip.plate_number,
+              trip.driver_name,
+              <DateValue key="date" value={trip.date_label} />,
+            ]}
+          />
+        }
       />
       <p className="inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white">
-        {admin ? trip.status.replaceAll("_", " ") : roundLabel(trip.status)}
+        <Message
+          value={
+            admin ? trip.status.replaceAll("_", " ") : roundLabel(trip.status)
+          }
+        />
       </p>
       {trip.notes && <p className="text-sm">{trip.notes}</p>}
       {w.loads.length > 0 && <DriverStock workspace={w} trip={trip} />}
       {w.loads.length > 0 && (
         <>
-          <h2 className="font-semibold">Loaded Stock</h2>
+          <h2 className="font-semibold">
+            <T k="Loaded Stock" />
+          </h2>
           <LoadedStock workspace={w} trip={trip} />
         </>
       )}
       {operational && w.loads.length > 0 && (
         <>
-          <h2 className="font-semibold">Remaining vehicle stock</h2>
+          <h2 className="font-semibold">
+            <T k="Remaining vehicle stock" />
+          </h2>
           <StockCards workspace={w} trip={trip} />
         </>
       )}
       {!dayOpen && operational && (
         <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm">
-          The assigned business day is no longer OPEN. Operations are locked for
-          admin review.
+          <T k="The assigned business day is no longer OPEN. Operations are locked for admin review." />
         </p>
       )}
       {f.available && (
@@ -229,15 +257,21 @@ export async function TripDetail({
             ],
           ].map(([label, value]) => (
             <Card key={label}>
-              <h2 className="text-sm text-muted-foreground">{label}</h2>
-              <p className="mt-3 font-bold">{npr(value!)}</p>
+              <h2 className="text-sm text-muted-foreground">
+                <Message value={label} />
+              </h2>
+              <p className="mt-3 font-bold">
+                <Value value={npr(value!)} />
+              </p>
             </Card>
           ))}
         </div>
       )}
       {f.available && f.payments.some((p) => p.trip_id === trip.id) && (
         <Card>
-          <h2 className="mb-4 font-semibold">Trip receipts</h2>
+          <h2 className="mb-4 font-semibold">
+            <T k="Trip receipts" />
+          </h2>
           {f.payments
             .filter((p) => p.trip_id === trip.id)
             .map((p) => (
@@ -246,16 +280,19 @@ export async function TripDetail({
                   className="text-primary underline"
                   href={(admin ? "/admin" : "/driver") + "/payments/" + p.id}
                 >
-                  Receipt R-{p.number.padStart(8, "0")}
+                  <T k="Receipt R-{0}" values={[p.number.padStart(8, "0")]} />
                 </Link>{" "}
-                - {p.method} - {p.status} - NPR {p.amount}
+                - <Message value={p.method} /> - <Message value={p.status} />{" "}
+                <T k="- NPR" /> <Value value={p.amount} />
               </p>
             ))}
         </Card>
       )}
       {dayOpen && admin && trip.status === "DRAFT" && (
         <Card>
-          <h2 className="mb-5 text-lg font-semibold">Load vehicle</h2>
+          <h2 className="mb-5 text-lg font-semibold">
+            <T k="Load vehicle" />
+          </h2>
           <LoadTripForm workspace={w} trip={trip} requestKey={randomUUID()} />
         </Card>
       )}
@@ -273,7 +310,9 @@ export async function TripDetail({
       {dayOpen && trip.status === "ACTIVE" && (
         <>
           <Card id="add-delivery">
-            <h2 className="mb-5 text-xl font-bold">New Delivery</h2>
+            <h2 className="mb-5 text-xl font-bold">
+              <T k="New Delivery" />
+            </h2>
             <DeliveryForm
               finance={f}
               workspace={w}
@@ -283,7 +322,7 @@ export async function TripDetail({
             {f.available && (
               <div className="mt-8 border-t pt-6">
                 <h3 className="mb-4 font-semibold">
-                  Collect credit without a new sale
+                  <T k="Collect credit without a new sale" />
                 </h3>
                 <CollectCreditForm
                   finance={f}
@@ -295,7 +334,9 @@ export async function TripDetail({
             )}
           </Card>
           <Card id="submit-trip">
-            <h2 className="mb-5 text-lg font-semibold">End trip</h2>
+            <h2 className="mb-5 text-lg font-semibold">
+              <T k="End trip" />
+            </h2>
             <ReturnForm
               workspace={w}
               trip={trip}
@@ -309,7 +350,9 @@ export async function TripDetail({
         admin &&
         ["SUBMITTED", "UNDER_REVIEW", "DISCREPANCY"].includes(trip.status) && (
           <Card>
-            <h2 className="mb-5 text-xl font-bold">Verify physical returns</h2>
+            <h2 className="mb-5 text-xl font-bold">
+              <T k="Verify physical returns" />
+            </h2>
             {trip.status !== "UNDER_REVIEW" && (
               <div className="mb-7">
                 <OperationForm
@@ -338,28 +381,32 @@ export async function TripDetail({
       {!admin &&
         ["SUBMITTED", "UNDER_REVIEW", "DISCREPANCY"].includes(trip.status) && (
           <Card>
-            <p className="font-semibold">Awaiting warehouse verification</p>
+            <p className="font-semibold">
+              <T k="Awaiting warehouse verification" />
+            </p>
             <p className="mt-3 text-sm text-muted-foreground">
-              Your declared returns are saved. Admin will check physical stock
-              and resolve any discrepancies.
+              <T k="Your declared returns are saved. Admin will check physical stock and resolve any discrepancies." />
             </p>
           </Card>
         )}
       {trip.status === "CLOSED" && (
         <Card>
-          <h2 className="font-semibold">Physical trip closed</h2>
+          <h2 className="font-semibold">
+            <T k="Physical trip closed" />
+          </h2>
           <p className="mt-3 text-sm">{trip.close_reason}</p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Physical reconciliation remains independent of financial settlement.
-            Historical visits and return checks are preserved.
+            <T k="Physical reconciliation remains independent of financial settlement. Historical visits and return checks are preserved." />
           </p>
         </Card>
       )}
       <Card>
-        <h2 className="mb-5 text-lg font-semibold">Customer totals</h2>
+        <h2 className="mb-5 text-lg font-semibold">
+          <T k="Customer totals" />
+        </h2>
         {groups.size === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No delivery visits recorded.
+            <T k="No delivery visits recorded." />
           </p>
         ) : (
           Array.from(groups.entries()).map(([key, g]) => (
@@ -368,21 +415,36 @@ export async function TripDetail({
               key={key}
             >
               <p className="font-semibold">
-                {g.name} · {g.visits} visit{g.visits === 1 ? "" : "s"}
+                <T
+                  k="{0} · {1} visit{2}"
+                  values={[
+                    g.name,
+                    <Value key="v1" value={g.visits} />,
+                    <Value key="v2" value={g.visits === 1 ? "" : "s"} />,
+                  ]}
+                />
               </p>
               <p className="mt-2 text-sm">
-                {g.full} full delivered · {g.empty} empty collected ·{" "}
-                {g.cartons} cartons delivered
+                <T
+                  k="{0} full delivered · {1} empty collected · {2} cartons delivered"
+                  values={[
+                    g.full,
+                    g.empty,
+                    <Value key="v2" value={g.cartons} />,
+                  ]}
+                />
               </p>
             </div>
           ))
         )}
       </Card>
       <Card>
-        <h2 className="mb-5 text-lg font-semibold">Separate visit history</h2>
+        <h2 className="mb-5 text-lg font-semibold">
+          <T k="Separate visit history" />
+        </h2>
         {w.visits.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Every saved visit will appear here.
+            <T k="Every saved visit will appear here." />
           </p>
         )}
         {w.visits.map((v) => {
@@ -397,31 +459,52 @@ export async function TripDetail({
                   v.walk_in_name}
               </p>
               <p className="text-xs text-muted-foreground">
-                {formatNepalTime(v.created_at)} · {v.id}
+                <DateValue value={v.created_at} time /> · {v.id}
               </p>
               {w.items
                 .filter((i) => i.visit_id === v.id)
                 .map((i) => (
                   <p className="text-sm" key={i.product_id}>
-                    {w.products.find((p) => p.id === i.product_id)?.name}:{" "}
-                    {i.full_jars} full · {i.empty_jars} empty · {i.cartons}{" "}
-                    cartons · Unit price NPR {i.unit_price_snapshot}
+                    <T
+                      k="{0}: {1} full · {2} empty · {3} cartons · Unit price NPR {4}"
+                      values={[
+                        w.products.find((p) => p.id === i.product_id)?.name,
+                        <Value key="v1" value={i.full_jars} />,
+                        <Value key="v2" value={i.empty_jars} />,
+                        <Value key="v3" value={i.cartons} />,
+                        <Value key="price" value={i.unit_price_snapshot} />,
+                      ]}
+                    />
                   </p>
                 ))}
               <p className="text-sm">
-                Delivery value NPR {v.value_snapshot} · {payment?.selection} ·
-                Reported {payment?.reported_amount ?? "not specified"}
+                <T
+                  k="Delivery value NPR {0} · {1} · Reported {2}"
+                  values={[
+                    <Value key="value" value={v.value_snapshot} />,
+                    <Message key="method" value={payment?.selection} />,
+                    payment?.reported_amount ? (
+                      <Value key="reported" value={payment.reported_amount} />
+                    ) : (
+                      <T key="unspecified" k="not specified" />
+                    ),
+                  ]}
+                />
               </p>
               <p className="text-xs text-amber-800">
-                {f.available
-                  ? f.sales.some((s) => s.visit_id === v.id)
-                    ? "Invoice recorded; Fonepay requires reconciliation"
-                    : w.items
-                          .filter((i) => i.visit_id === v.id)
-                          .every((i) => i.full_jars + i.cartons === 0)
-                      ? "Empty-return visit; no new sale or invoice"
-                      : "Legacy visit: finance has not been posted"
-                  : "Finance migration required; legacy payment intent"}
+                <Message
+                  value={
+                    f.available
+                      ? f.sales.some((s) => s.visit_id === v.id)
+                        ? "Invoice recorded; Fonepay requires reconciliation"
+                        : w.items
+                              .filter((i) => i.visit_id === v.id)
+                              .every((i) => i.full_jars + i.cartons === 0)
+                          ? "Empty-return visit; no new sale or invoice"
+                          : "Legacy visit: finance has not been posted"
+                      : "Finance migration required; legacy payment intent"
+                  }
+                />
               </p>
               {f.invoices
                 .filter((i) =>
@@ -435,12 +518,19 @@ export async function TripDetail({
                     className="text-primary underline"
                     href={(admin ? "/admin" : "/driver") + "/invoices/" + i.id}
                   >
-                    Invoice MK-{i.number.padStart(8, "0")} - outstanding NPR{" "}
-                    {i.outstanding}
+                    <T
+                      k="Invoice MK-{0} - outstanding NPR {1}"
+                      values={[
+                        i.number.padStart(8, "0"),
+                        <Value key="v1" value={i.outstanding} />,
+                      ]}
+                    />
                   </Link>
                 ))}
               {payment?.reference && (
-                <p className="text-xs">Reference: {payment.reference}</p>
+                <p className="text-xs">
+                  <T k="Reference: {0}" values={[payment.reference]} />
+                </p>
               )}
               {v.notes && <p className="text-sm">{v.notes}</p>}
             </article>
@@ -449,11 +539,14 @@ export async function TripDetail({
       </Card>
       {w.declarations.length > 0 && (
         <Card>
-          <h2 className="mb-3 font-semibold">Driver return declaration</h2>
+          <h2 className="mb-3 font-semibold">
+            <T k="Driver return declaration" />
+          </h2>
           {w.declarations.map((c) => (
             <p key={`${c.product_id}:${c.stock_kind}`} className="py-2 text-sm">
               {w.products.find((p) => p.id === c.product_id)?.name} ·{" "}
-              {stockLabels[c.stock_kind]}: {c.quantity}
+              <Message value={stockLabels[c.stock_kind]} />:{" "}
+              <Value value={c.quantity} />
             </p>
           ))}
         </Card>
@@ -461,7 +554,8 @@ export async function TripDetail({
       {w.checks.map((check) => (
         <Card key={check.id}>
           <h2 className="font-semibold">
-            {check.outcome} · {formatNepalTime(check.created_at)}
+            <Message value={check.outcome} /> ·{" "}
+            <DateValue value={check.created_at} time />
           </h2>
           <p className="my-3 text-sm">{check.reason}</p>
           {w.check_items
@@ -471,9 +565,16 @@ export async function TripDetail({
                 className="py-2 text-sm"
                 key={`${i.product_id}:${i.stock_kind}`}
               >
-                {w.products.find((p) => p.id === i.product_id)?.name} ·{" "}
-                {stockLabels[i.stock_kind]}: expected {i.expected}, declared{" "}
-                {i.declared}, verified {i.actual}
+                <T
+                  k="{0} · {1}: expected {2}, declared {3}, verified {4}"
+                  values={[
+                    w.products.find((p) => p.id === i.product_id)?.name,
+                    <Message key="v1" value={stockLabels[i.stock_kind]} />,
+                    <Value key="v2" value={i.expected} />,
+                    <Value key="v3" value={i.declared} />,
+                    <Value key="v4" value={i.actual} />,
+                  ]}
+                />
               </p>
             ))}
           {w.discrepancies
@@ -483,18 +584,28 @@ export async function TripDetail({
                 className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
                 key={d.id}
               >
-                Variance {d.actual - d.expected} ·{" "}
-                {d.approved_by ? "Approved" : "Pending resolution"} ·{" "}
-                {d.resolution}
+                <T
+                  k="Variance {0} · {1} · {2}"
+                  values={[
+                    <Value key="v0" value={d.actual - d.expected} />,
+                    <Message
+                      key="v1"
+                      value={d.approved_by ? "Approved" : "Pending resolution"}
+                    />,
+                    d.resolution,
+                  ]}
+                />
               </p>
             ))}
         </Card>
       ))}
       <Card>
-        <h2 className="mb-4 font-semibold">Immutable inventory journal</h2>
+        <h2 className="mb-4 font-semibold">
+          <T k="Immutable inventory journal" />
+        </h2>
         {w.movements.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No posted stock movements.
+            <T k="No posted stock movements." />
           </p>
         )}
         {w.movements.map((m) => (
@@ -503,21 +614,32 @@ export async function TripDetail({
             className="border-b border-border py-3 text-sm last:border-0"
           >
             <p>
-              {m.movement_type.replaceAll("_", " ")} ·{" "}
+              <Message value={m.movement_type.replaceAll("_", " ")} /> ·{" "}
               {w.products.find((p) => p.id === m.product_id)?.name} ·{" "}
-              {stockLabels[m.stock_kind]} · {m.quantity}
+              <Message value={stockLabels[m.stock_kind]} /> ·{" "}
+              <Value value={m.quantity} />
             </p>
             <p className="mt-1 break-words text-xs text-muted-foreground">
-              {formatNepalTime(m.created_at)} · Actor {m.actor_user_id} · Day{" "}
-              {trip.date_label}
-              {m.visit_id && ` · Visit ${m.visit_id}`}
+              <T
+                k="{0} · Actor {1} · Day {2} {3}"
+                values={[
+                  <DateValue key="v0" value={m.created_at} time />,
+                  m.actor_user_id,
+                  <DateValue key="v2" value={trip.date_label} />,
+                  m.visit_id && (
+                    <T key="visit" k=" · Visit {0}" values={[m.visit_id]} />
+                  ),
+                ]}
+              />
             </p>
           </div>
         ))}
       </Card>
       {dayOpen && admin && trip.status === "DRAFT" && (
         <Card>
-          <h2 className="mb-4 font-semibold">Cancel draft</h2>
+          <h2 className="mb-4 font-semibold">
+            <T k="Cancel draft" />
+          </h2>
           <OperationForm
             operation="cancel"
             trip={id}
@@ -536,10 +658,14 @@ export async function TripDetail({
       {!admin && trip.status === "ACTIVE" && (
         <div className="sticky bottom-3 grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 shadow-lg">
           <Button asChild className="min-h-14">
-            <a href="#add-delivery">New Delivery</a>
+            <a href="#add-delivery">
+              <T k="New Delivery" />
+            </a>
           </Button>
           <Button asChild variant="outline" className="min-h-14">
-            <a href="#submit-trip">End trip</a>
+            <a href="#submit-trip">
+              <T k="End trip" />
+            </a>
           </Button>
         </div>
       )}

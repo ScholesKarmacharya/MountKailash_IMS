@@ -1,3 +1,4 @@
+import { T, Message, DateValue } from "@/components/localization";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { getDriverWorkspace } from "@/services/driver-workspace";
@@ -39,32 +40,38 @@ export default async function DriverHome() {
           {!loaded && (
             <Card>
               <h2 className="font-semibold">
-                No active delivery stock. Waiting for warehouse loading.
+                <T k="No active delivery stock. Waiting for warehouse loading." />
               </h2>
               <p className="mt-3 text-sm text-muted-foreground">
-                Confirmed loads appear here automatically. You can look up
-                customers and view your previous rounds while waiting.
+                <T k="Confirmed loads appear here automatically. You can look up customers and view your previous rounds while waiting." />
               </p>
             </Card>
           )}
           {trip && (
             <Card className="space-y-4 border-l-4 border-l-primary">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-semibold">My Active Trip</h2>
+                <h2 className="font-semibold">
+                  <T k="My Active Trip" />
+                </h2>
                 <span className="rounded-full bg-muted px-3 py-2 text-xs font-semibold">
-                  {roundLabel(trip.status)}
+                  <Message value={roundLabel(trip.status)} />
                 </span>
               </div>
               <p className="text-xl font-bold">
-                Assigned Vehicle: {trip.plate_number}
+                <T k="Assigned Vehicle: {0}" values={[trip.plate_number]} />
               </p>
               <p className="text-sm text-muted-foreground">
-                Round #{trip.trip_number} · business day {trip.date_label}
+                <T
+                  k="Round #{0} · business day {1}"
+                  values={[
+                    trip.trip_number,
+                    <DateValue key="v1" value={trip.date_label} />,
+                  ]}
+                />
               </p>
               {!dayOpen && (
                 <p role="alert">
-                  This business day is under review or closed. Delivery posting
-                  is locked.
+                  <T k="This business day is under review or closed. Delivery posting is locked." />
                 </p>
               )}
               {trip.status === "LOADED" && dayOpen && (
@@ -80,49 +87,63 @@ export default async function DriverHome() {
                 trip.status,
               ) && (
                 <p>
-                  Your return declaration is saved. Warehouse stock changes
-                  after admin physical verification.
+                  <T k="Your return declaration is saved. Warehouse stock changes after admin physical verification." />
                 </p>
               )}
               <Link
                 className="inline-block py-2 text-sm font-semibold text-primary underline"
                 href={"/driver/trips/" + trip.id}
               >
-                View round and return history
+                <T k="View round and return history" />
               </Link>
             </Card>
           )}
           {trip && loaded && <DriverStock workspace={w} trip={trip} />}
           {delivering && (
             <Button asChild className="min-h-16 w-full text-lg">
-              <Link href="/driver/delivery">New Delivery</Link>
+              <Link href="/driver/delivery">
+                <T k="New Delivery" />
+              </Link>
             </Button>
           )}
           <div className="grid grid-cols-2 gap-3">
             <Button asChild variant="outline" className="min-h-14">
-              <Link href="/driver/customers">Add / Find Customer</Link>
+              <Link href="/driver/customers">
+                <T k="Add / Find Customer" />
+              </Link>
             </Button>
             <Button asChild variant="outline" className="min-h-14">
-              <Link href="/driver/pending-jars">Pending Jars</Link>
+              <Link href="/driver/pending-jars">
+                <T k="Pending Jars" />
+              </Link>
             </Button>
             <Button asChild variant="outline" className="min-h-14">
-              <Link href="/driver/sales">Sales History</Link>
+              <Link href="/driver/sales">
+                <T k="Sales History" />
+              </Link>
             </Button>
             <Button asChild variant="outline" className="min-h-14">
-              <Link href="/driver/return">Return to Warehouse</Link>
+              <Link href="/driver/return">
+                <T k="Return to Warehouse" />
+              </Link>
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            {day
-              ? "Today's totals belong to business day " +
-                day.date_label +
-                ", across your rounds. The day can extend past midnight."
-              : "No assigned open business day. New daily counters begin with the next assigned day."}
+            {day ? (
+              <T
+                k="Today's totals belong to business day {0}, across your rounds. The day can extend past midnight."
+                values={[<DateValue key="day" value={day.date_label} />]}
+              />
+            ) : (
+              <T k="No assigned open business day. New daily counters begin with the next assigned day." />
+            )}
           </p>
           <DriverMoney finance={finance} day={day?.id ?? "no-open-day"} />
           {trip && loaded && <DriverMoney finance={finance} trip={trip.id} />}
           <section>
-            <h2 className="mb-4 font-semibold">Recent trips</h2>
+            <h2 className="mb-4 font-semibold">
+              <T k="Recent trips" />
+            </h2>
             <TripList
               trips={overview.trips.filter((t) => t.status === "CLOSED")}
               admin={false}

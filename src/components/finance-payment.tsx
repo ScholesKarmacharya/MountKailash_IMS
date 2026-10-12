@@ -1,4 +1,8 @@
 "use client";
+import { LocalizedSelect } from "@/components/localization";
+
+import { T, Message, Value } from "@/components/localization";
+
 import { useState, useId } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -20,7 +24,7 @@ export function AmountInput({
 }) {
   return (
     <label className="grid gap-2 text-sm font-semibold">
-      {label}
+      <Message value={label} />
       <Input
         inputMode="decimal"
         value={value}
@@ -42,7 +46,9 @@ export function PaymentButtons({
 }) {
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-semibold">Payment method</legend>
+      <legend className="text-sm font-semibold">
+        <T k="Payment method" />
+      </legend>
       <div className="grid grid-cols-2 gap-3">
         {[
           ["CASH", "Cash"],
@@ -58,7 +64,7 @@ export function PaymentButtons({
             className="min-h-16 whitespace-normal"
             onClick={() => onChange(v!)}
           >
-            {label}
+            <Message value={label} />
           </Button>
         ))}
       </div>
@@ -110,8 +116,10 @@ export function CollectCreditForm({
       confirm={`Record ${amount} NPR ${method} against existing invoices? Fonepay remains pending until reconciled.`}
     >
       <div className="grid gap-2 text-sm font-semibold">
-        <label htmlFor={customerInput}>Collection customer</label>
-        <select
+        <label htmlFor={customerInput}>
+          <T k="Collection customer" />
+        </label>
+        <LocalizedSelect
           id={customerInput}
           value={customer}
           onChange={(e) => {
@@ -120,7 +128,9 @@ export function CollectCreditForm({
           }}
           className="min-h-12 rounded-lg border px-3"
         >
-          <option value="">Choose customer</option>
+          <option value="">
+            <T k="Choose customer" />
+          </option>
           {w.customers
             .filter((c) =>
               w.driver_workflow
@@ -134,9 +144,13 @@ export function CollectCreditForm({
                 {c.name}
               </option>
             ))}
-        </select>
+        </LocalizedSelect>
       </div>
-      {lookup.loading && <p role="status">Loading customer balances…</p>}
+      {lookup.loading && (
+        <p role="status">
+          <T k="Loading customer balances…" />
+        </p>
+      )}
       {lookup.error && (
         <p role="alert" className="text-red-800">
           {lookup.error}{" "}
@@ -145,7 +159,7 @@ export function CollectCreditForm({
             variant="outline"
             onClick={() => void lookup.selectCustomer(customer)}
           >
-            Retry customer lookup
+            <T k="Retry customer lookup" />
           </Button>
         </p>
       )}
@@ -162,8 +176,16 @@ export function CollectCreditForm({
         })}
       />
       <p>
-        Outstanding: {npr(sum(credit.map((i) => i.outstanding)))} · Available to
-        collect: {npr(sum(credit.map((i) => i.available)))}
+        <T
+          k="Outstanding: {0} · Available to collect: {1}"
+          values={[
+            <Value
+              key="v0"
+              value={npr(sum(credit.map((i) => i.outstanding)))}
+            />,
+            <Value key="v1" value={npr(sum(credit.map((i) => i.available)))} />,
+          ]}
+        />
       </p>
       <AmountInput
         label="Credit amount received (NPR)"
@@ -172,26 +194,31 @@ export function CollectCreditForm({
         required
       />
       <div className="grid gap-2 text-sm font-semibold">
-        <label htmlFor={methodInput}>Receipt method</label>
-        <select
+        <label htmlFor={methodInput}>
+          <T k="Receipt method" />
+        </label>
+        <LocalizedSelect
           id={methodInput}
           value={method}
           onChange={(e) => setMethod(e.target.value)}
           className="min-h-12 w-full rounded-lg border px-3"
         >
-          <option value="CASH">Cash</option>
-          <option value="FONEPAY">Fonepay pending</option>
-        </select>
+          <option value="CASH">
+            <T k="Cash" />
+          </option>
+          <option value="FONEPAY">
+            <T k="Fonepay pending" />
+          </option>
+        </LocalizedSelect>
       </div>
       <AmountReference value={reference} onChange={setReference} />
       {error && (
         <p role="alert" className="text-red-700">
-          {error}
+          <Message value={error} />
         </p>
       )}
       <p className="text-sm text-muted-foreground">
-        Applied to available invoices oldest first. Collections do not create
-        new sales.
+        <T k="Applied to available invoices oldest first. Collections do not create new sales." />
       </p>
     </OperationForm>
   );
@@ -205,7 +232,8 @@ export function AmountReference({
 }) {
   return (
     <label className="grid gap-2 text-sm font-semibold">
-      Transaction reference (unverified)
+      {" "}
+      <T k="Transaction reference (unverified)" />{" "}
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -260,7 +288,12 @@ export function InvoicePaymentForm({
           allocations: customer ? [{ invoice_id: invoice, amount }] : [],
         })}
       />
-      <p>Available to collect: {npr(available)}</p>
+      <p>
+        <T
+          k="Available to collect: {0}"
+          values={[<Value key="v0" value={npr(available)} />]}
+        />
+      </p>
       <AmountInput
         label="Invoice amount received (NPR)"
         value={amount}
@@ -276,14 +309,16 @@ export function InvoicePaymentForm({
             variant={method === m ? "default" : "outline"}
             onClick={() => setMethod(m)}
           >
-            {m === "CASH" ? "Cash receipt" : "Fonepay pending"}
+            <Message
+              value={m === "CASH" ? "Cash receipt" : "Fonepay pending"}
+            />
           </Button>
         ))}
       </div>
       <AmountReference value={reference} onChange={setReference} />
       {error && (
         <p role="alert" className="text-red-700">
-          {error}
+          <Message value={error} />
         </p>
       )}
     </OperationForm>

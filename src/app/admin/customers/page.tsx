@@ -1,3 +1,4 @@
+import { T } from "@/components/localization";
 import { getOperations } from "@/services/operations";
 import { CustomerForm } from "@/components/master-forms";
 import { Directory } from "@/components/directory";
@@ -24,6 +25,16 @@ export default async function Page() {
             rows={w.customers.map((r) => ({
               id: r.id,
               name: r.name,
+              displayDetail: (
+                <>
+                  {[r.shop_name, r.phone, r.address]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {r.created_by_name && (
+                    <T k=" · Added by {0}" values={[r.created_by_name]} />
+                  )}
+                </>
+              ),
               detail: [
                 r.shop_name,
                 r.phone,
@@ -36,7 +47,9 @@ export default async function Page() {
             }))}
           />
           <Card>
-            <h2 className="mb-5 text-lg font-semibold">Add customer</h2>
+            <h2 className="mb-5 text-lg font-semibold">
+              <T k="Add customer" />
+            </h2>
             <CustomerForm />
           </Card>
         </>

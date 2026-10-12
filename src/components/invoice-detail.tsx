@@ -1,3 +1,4 @@
+import { T } from "@/components/localization";
 import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -9,6 +10,7 @@ import { FinanceRequired } from "./finance-overview";
 import { PrintButton } from "./print-button";
 import { OperationForm, Field, Select } from "./operation-form";
 import { InvoicePaymentForm } from "./finance-payment";
+import { LocalizedDocument } from "./localized-document";
 export async function InvoiceDetail({
   id,
   admin,
@@ -22,31 +24,26 @@ export async function InvoiceDetail({
   if (!i) notFound();
   const document = invoiceDocument(i, f),
     day = w.days.find((d) => d.status === "OPEN");
+  const documents = { en: document, ne: invoiceDocument(i, f, "ne") };
   const sale = f.sales.find((s) => s.id === i.sale_id)!,
     trip = w.trips.find((t) => t.id === sale.trip_id);
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">{document.title}</h1>
+      <LocalizedDocument documents={documents} heading />
       <Card>
         <h2 className="text-xl font-bold">{document.company.name}</h2>
         <p>{document.company.address}</p>
         <p>
           {document.company.phone} {document.company.registration}
         </p>
-        <div className="mt-5 space-y-3">
-          {document.lines.map((line, index) => (
-            <p key={index} className="break-words text-sm">
-              {line}
-            </p>
-          ))}
-        </div>
+        <LocalizedDocument documents={documents} />
         <div className="mt-6 flex gap-4 print:hidden">
           <PrintButton />
           <Link
             className="text-primary underline"
             href={"/api/invoices/" + i.id + "/pdf"}
           >
-            Download PDF
+            <T k="Download PDF" />
           </Link>
         </div>
       </Card>
@@ -54,7 +51,9 @@ export async function InvoiceDetail({
         day?.id === trip.business_day_id &&
         i.available !== "0.00" && (
           <Card className="print:hidden">
-            <h2 className="mb-4 font-semibold">Additional invoice receipt</h2>
+            <h2 className="mb-4 font-semibold">
+              <T k="Additional invoice receipt" />
+            </h2>
             <InvoicePaymentForm
               invoice={i.id}
               customer={sale.customer_id}
@@ -66,7 +65,9 @@ export async function InvoiceDetail({
         )}
       {admin && day && (
         <Card className="print:hidden">
-          <h2 className="mb-4 font-semibold">Audited correction</h2>
+          <h2 className="mb-4 font-semibold">
+            <T k="Audited correction" />
+          </h2>
           <OperationForm
             operation="finance:ADJUST"
             requestKey={randomUUID()}
@@ -76,8 +77,12 @@ export async function InvoiceDetail({
             <input type="hidden" name="invoice" value={i.id} />
             <input type="hidden" name="day" value={day.id} />
             <Select name="direction" label="Adjustment type">
-              <option value="CREDIT">Credit - reduce unpaid invoice</option>
-              <option value="DEBIT">Debit - increase invoice</option>
+              <option value="CREDIT">
+                <T k="Credit - reduce unpaid invoice" />
+              </option>
+              <option value="DEBIT">
+                <T k="Debit - increase invoice" />
+              </option>
             </Select>
             <Field
               name="subtotal_amount"

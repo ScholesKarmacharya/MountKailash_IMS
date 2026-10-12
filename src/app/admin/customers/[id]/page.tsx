@@ -1,3 +1,4 @@
+import { T } from "@/components/localization";
 import { getFinance } from "@/services/finance";
 import { FinanceRequired } from "@/components/finance-overview";
 import { CustomerBillingForms } from "@/components/finance-admin-forms";
@@ -28,7 +29,7 @@ export default async function Page({
   return (
     <div className="space-y-6">
       <Link className="text-primary underline" href="/admin/customers">
-        Back to customers
+        <T k="Back to customers" />
       </Link>
       <OperationsHeading
         title="Edit customer"
@@ -40,9 +41,24 @@ export default async function Page({
           record.customer_type ||
           record.delivery_notes) && (
           <div className="mt-4 space-y-2 border-t pt-4 text-sm">
-            <p>Contact person: {record.contact_person || "Not recorded"}</p>
-            <p>Customer type: {record.customer_type || "Not recorded"}</p>
-            <p>Delivery notes: {record.delivery_notes || "None recorded"}</p>
+            <p>
+              <T
+                k="Contact person: {0}"
+                values={[record.contact_person || "Not recorded"]}
+              />
+            </p>
+            <p>
+              <T
+                k="Customer type: {0}"
+                values={[record.customer_type || "Not recorded"]}
+              />
+            </p>
+            <p>
+              <T
+                k="Delivery notes: {0}"
+                values={[record.delivery_notes || "None recorded"]}
+              />
+            </p>
           </div>
         )}
       </Card>

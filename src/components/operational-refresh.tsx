@@ -1,4 +1,6 @@
 "use client";
+import { T, Message } from "@/components/localization";
+
 import { useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
@@ -37,7 +39,7 @@ export function OperationalRefresh() {
   return (
     <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
       <p>
-        Checks confirmed database updates every 10 seconds and when you return.
+        <T k="Checks confirmed database updates every 10 seconds and when you return." />
       </p>
       <Button
         type="button"
@@ -45,7 +47,7 @@ export function OperationalRefresh() {
         disabled={pending}
         onClick={() => startTransition(() => router.refresh())}
       >
-        {pending ? "Updating…" : "Refresh"}
+        <Message value={pending ? "Updating…" : "Refresh"} />
       </Button>
     </div>
   );

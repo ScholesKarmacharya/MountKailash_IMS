@@ -1,4 +1,6 @@
 "use client";
+import { T, Message, DateValue, Value } from "@/components/localization";
+
 import { useActionState, useRef, useState } from "react";
 import {
   deliveryCustomerAction,
@@ -7,7 +9,7 @@ import {
 import type { Customer, Workspace } from "@/domain/operations/types";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
 import { npr } from "@/domain/finance/money";
-import { formatNepalTime } from "@/domain/business-days/time";
+
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card } from "./ui/card";
@@ -71,11 +73,12 @@ export function DeliveryCustomerForm({
   return (
     <Card id="customer-editor" className="space-y-4 border-primary">
       <h3 className="text-lg font-bold">
-        {customer ? "Edit customer contact" : "Add New Customer"}
+        <Message
+          value={customer ? "Edit customer contact" : "Add New Customer"}
+        />
       </h3>
       <p className="text-sm text-muted-foreground">
-        Save contact details and continue this delivery. Prices, credit,
-        deposits and jar balances are managed separately.
+        <T k="Save contact details and continue this delivery. Prices, credit, deposits and jar balances are managed separately." />
       </p>
       <form action={action} className="space-y-4">
         <input
@@ -97,7 +100,7 @@ export function DeliveryCustomerForm({
             ] as const
           ).map(([field, label]) => (
             <label key={field} className="grid gap-2 text-sm font-semibold">
-              {label}
+              <Message value={label} />
               <Input
                 name={field}
                 value={contacts[field]}
@@ -123,7 +126,7 @@ export function DeliveryCustomerForm({
               ] as const
             ).map(([field, label, max]) => (
               <label key={field} className="grid gap-2 text-sm font-semibold">
-                {label}
+                <Message value={label} />
                 <Input
                   name={field}
                   value={contacts[field]}
@@ -136,8 +139,7 @@ export function DeliveryCustomerForm({
             ))}
           {detailsEnabled && (
             <p className="text-xs text-muted-foreground">
-              Customer type is a descriptive label. Monthly credit, prices and
-              deposits remain under existing billing arrangements.
+              <T k="Customer type is a descriptive label. Monthly credit, prices and deposits remain under existing billing arrangements." />
             </p>
           )}
           {(duplicate || state?.error?.includes("matching customer")) && (
@@ -148,18 +150,21 @@ export function DeliveryCustomerForm({
                 checked={duplicate}
                 onChange={(e) => setDuplicate(e.target.checked)}
                 className="size-5"
-              />
-              I checked the directory; this is a separate customer with matching
-              details.
+              />{" "}
+              <T k="I checked the directory; this is a separate customer with matching details." />{" "}
             </label>
           )}
           <div className="flex flex-wrap gap-3">
             <Button className="min-h-14" type="submit">
-              {pending
-                ? "Saving…"
-                : customer
-                  ? "Save contact details"
-                  : "Save and select customer"}
+              <Message
+                value={
+                  pending
+                    ? "Saving…"
+                    : customer
+                      ? "Save contact details"
+                      : "Save and select customer"
+                }
+              />
             </Button>
             <Button
               className="min-h-14"
@@ -167,7 +172,7 @@ export function DeliveryCustomerForm({
               type="button"
               onClick={onCancel}
             >
-              Cancel contact changes
+              <T k="Cancel contact changes" />
             </Button>
           </div>
         </fieldset>
@@ -176,7 +181,7 @@ export function DeliveryCustomerForm({
             role="alert"
             className="rounded-lg bg-red-50 p-4 text-sm text-red-800"
           >
-            {state.error}
+            <Message value={state.error} />
           </p>
         )}
       </form>
@@ -194,7 +199,7 @@ export function DeliveryCustomerHistory({
   return (
     <details className="rounded-lg border border-border p-4 text-sm">
       <summary className="min-h-11 cursor-pointer font-semibold">
-        Customer credit and jar history
+        <T k="Customer credit and jar history" />
       </summary>
       <div className="mt-4 space-y-4">
         <PendingJars
@@ -206,44 +211,69 @@ export function DeliveryCustomerHistory({
         {context.jar_allocations && context.jar_allocations.length > 0 && (
           <details>
             <summary className="min-h-11 cursor-pointer font-semibold">
-              FIFO empty-return allocations
+              <T k="FIFO empty-return allocations" />
             </summary>
             {context.jar_allocations.map((a) => (
               <p
                 className="py-2"
                 key={`${a.return_entry_id}:${a.delivery_entry_id}`}
               >
-                {a.quantity} jars · {a.source} ·{" "}
-                {formatNepalTime(a.returned_at)} against original date{" "}
-                {formatNepalTime(a.original_date)}
+                <T
+                  k="{0} jars · {1} · {2} against original date {3}"
+                  values={[
+                    <Value key="v0" value={a.quantity} />,
+                    <Message key="v1" value={a.source} />,
+                    <DateValue key="v2" value={a.returned_at} time />,
+                    <DateValue key="v3" value={a.original_date} time />,
+                  ]}
+                />
               </p>
             ))}
           </details>
         )}
         <div>
-          <h4 className="font-semibold">Recent credit entries</h4>
-          {!context.credit_history.length && <p>No credit history recorded.</p>}
+          <h4 className="font-semibold">
+            <T k="Recent credit entries" />
+          </h4>
+          {!context.credit_history.length && (
+            <p>
+              <T k="No credit history recorded." />
+            </p>
+          )}
           {context.credit_history.map((e) => (
             <p key={e.id} className="py-2">
-              {e.kind.replaceAll("_", " ")} · {npr(e.amount)} ·{" "}
-              {formatNepalTime(e.created_at)}
+              <Message value={e.kind.replaceAll("_", " ")} /> ·{" "}
+              <Value value={npr(e.amount)} /> ·{" "}
+              <DateValue value={e.created_at} time />
             </p>
           ))}
         </div>
         <div>
-          <h4 className="font-semibold">Recent jar entries</h4>
-          {!context.custody_history.length && <p>No jar history recorded.</p>}
+          <h4 className="font-semibold">
+            <T k="Recent jar entries" />
+          </h4>
+          {!context.custody_history.length && (
+            <p>
+              <T k="No jar history recorded." />
+            </p>
+          )}
           {context.custody_history.map((e) => (
             <p key={e.id} className="py-2">
-              {products.find((p) => p.id === e.product_id)?.name} ·{" "}
-              {e.delta > 0 ? "+" : ""}
-              {e.delta} jars · balance {e.resulting_balance} ·{" "}
-              {formatNepalTime(e.created_at)}
+              <T
+                k="{0} · {1} {2} jars · balance {3} · {4}"
+                values={[
+                  products.find((p) => p.id === e.product_id)?.name,
+                  e.delta > 0 ? "+" : "",
+                  e.delta,
+                  e.resulting_balance,
+                  <DateValue key="v4" value={e.created_at} time />,
+                ]}
+              />
             </p>
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Latest 50 entries per ledger. Posted transactions remain immutable.
+          <T k="Latest 50 entries per ledger. Posted transactions remain immutable." />
         </p>
       </div>
     </details>

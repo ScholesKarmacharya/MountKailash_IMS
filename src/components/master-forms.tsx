@@ -1,3 +1,4 @@
+import { T, Value } from "@/components/localization";
 import { randomUUID } from "node:crypto";
 import type {
   Customer,
@@ -10,8 +11,12 @@ import { Card } from "./ui/card";
 function Status({ active = true }: { active?: boolean }) {
   return (
     <Select name="active" label="Status" value={String(active)}>
-      <option value="true">Active</option>
-      <option value="false">Inactive</option>
+      <option value="true">
+        <T k="Active" />
+      </option>
+      <option value="false">
+        <T k="Inactive" />
+      </option>
     </Select>
   );
 }
@@ -136,18 +141,20 @@ export function CustodyForm({
   const day = workspace.days.find((d) => d.status === "OPEN");
   return (
     <Card>
-      <h2 className="mb-3 font-semibold">Customer jar custody</h2>
+      <h2 className="mb-3 font-semibold">
+        <T k="Customer jar custody" />
+      </h2>
       <p className="mb-5 text-sm text-muted-foreground">
-        Physical jars held by this customer, separate from warehouse stock and
-        financial deposits. Record verified legacy holdings here before
-        collecting those empties.
+        <T k="Physical jars held by this customer, separate from warehouse stock and financial deposits. Record verified legacy holdings here before collecting those empties." />
       </p>
       {workspace.custody
         .filter((c) => c.customer_id === customer.id)
         .map((c) => (
           <p key={c.product_id}>
             {workspace.products.find((p) => p.id === c.product_id)?.name}:{" "}
-            <strong>{c.quantity}</strong>
+            <strong>
+              <Value value={c.quantity} />
+            </strong>
           </p>
         ))}
       {day ? (
@@ -159,7 +166,9 @@ export function CustodyForm({
           <input type="hidden" name="customer" value={customer.id} />
           <input type="hidden" name="day" value={day.id} />
           <Select name="product" label="Jar product">
-            <option value="">Choose product</option>
+            <option value="">
+              <T k="Choose product" />
+            </option>
             {workspace.products
               .filter((p) => p.kind === "FULL_JAR")
               .map((p) => (
@@ -183,7 +192,7 @@ export function CustodyForm({
         </OperationForm>
       ) : (
         <p className="mt-3 text-sm">
-          Open a business day to post custody corrections.
+          <T k="Open a business day to post custody corrections." />
         </p>
       )}
       <div className="mt-5 space-y-2">
@@ -192,8 +201,15 @@ export function CustodyForm({
           .slice(0, 30)
           .map((e) => (
             <p className="text-sm" key={e.id}>
-              {e.delta > 0 ? "+" : ""}
-              {e.delta} · Balance {e.resulting_balance} · {e.reason}
+              <T
+                k="{0} {1} · Balance {2} · {3}"
+                values={[
+                  e.delta > 0 ? "+" : "",
+                  e.delta,
+                  e.resulting_balance,
+                  e.reason,
+                ]}
+              />
             </p>
           ))}
       </div>

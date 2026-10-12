@@ -1,4 +1,6 @@
 "use client";
+import { T, Message } from "@/components/localization";
+
 import { useState } from "react";
 import Link from "next/link";
 import { Input } from "./ui/input";
@@ -7,7 +9,13 @@ export function Directory({
   href,
   label,
 }: {
-  rows: { id: string; name: string; detail: string; active: boolean }[];
+  rows: {
+    id: string;
+    name: string;
+    detail: string;
+    displayDetail?: React.ReactNode;
+    active: boolean;
+  }[];
   href: string;
   label: string;
 }) {
@@ -18,7 +26,8 @@ export function Directory({
   return (
     <div className="space-y-4">
       <label className="grid gap-2 text-sm font-medium">
-        Search {label}
+        {" "}
+        <T k="Search" /> <Message value={label} />
         <Input
           type="search"
           value={search}
@@ -26,7 +35,12 @@ export function Directory({
         />
       </label>
       {filtered.length === 0 && (
-        <p className="py-5 text-muted-foreground">No matching {label}.</p>
+        <p className="py-5 text-muted-foreground">
+          <T
+            k="No matching {0}."
+            values={[<Message key="v0" value={label} />]}
+          />
+        </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         {filtered.map((r) => (
@@ -37,10 +51,15 @@ export function Directory({
           >
             <p className="font-semibold">{r.name}</p>
             <p className="mt-2 break-words text-sm text-muted-foreground">
-              {r.detail}
+              {r.displayDetail ?? r.detail}
             </p>
             <p className="mt-2 text-xs">
-              {r.active ? "Active" : "Inactive"} · View / edit
+              <T
+                k="{0} · View / edit"
+                values={[
+                  <Message key="v0" value={r.active ? "Active" : "Inactive"} />,
+                ]}
+              />
             </p>
           </Link>
         ))}

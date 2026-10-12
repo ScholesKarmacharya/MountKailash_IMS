@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Message } from "./localization";
 export function OperationFeedback() {
   const [message, setMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -26,7 +27,7 @@ export function OperationFeedback() {
       role="status"
       className="fixed right-4 top-4 z-50 max-w-[calc(100vw-2rem)] rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm font-semibold text-teal-900 shadow-lg"
     >
-      {message}
+      <Message value={message} />
     </div>
   ) : null;
 }

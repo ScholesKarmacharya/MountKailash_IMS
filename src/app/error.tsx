@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/localization";
+
 import { Button } from "@/components/ui/button";
 export default function ErrorBoundary({
   reset,
@@ -8,11 +10,15 @@ export default function ErrorBoundary({
 }) {
   return (
     <main id="main-content" className="p-8">
-      <h1 className="text-2xl font-bold">Workspace unavailable</h1>
+      <h1 className="text-2xl font-bold">
+        <T k="Workspace unavailable" />
+      </h1>
       <p className="my-4">
-        We could not load this page. Check your connection and try again.
+        <T k="We could not load this page. Check your connection and try again." />
       </p>
-      <Button onClick={reset}>Try again</Button>
+      <Button onClick={reset}>
+        <T k="Try again" />
+      </Button>
     </main>
   );
 }

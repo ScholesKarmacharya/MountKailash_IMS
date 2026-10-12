@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Product, StockKind } from "@/domain/inventory/validation";
+import type { DateRange } from "@/domain/localization/calendar";
 export type Balance = {
   product_id: string;
   stock_kind: StockKind;
@@ -46,7 +47,10 @@ async function readAll<T>(
     if (result.data.length < 500) return rows;
   }
 }
-export async function readInventory(page = 0): Promise<InventorySnapshot> {
+export async function readInventory(
+  page = 0,
+  range?: DateRange,
+): Promise<InventorySnapshot> {
   const client = await createClient();
   const location = await client
     .from("stock_locations")
@@ -65,6 +69,17 @@ export async function readInventory(page = 0): Promise<InventorySnapshot> {
       };
     throw new Error("Warehouse could not be loaded. Please try again.");
   }
+  let adjustmentQuery = client
+    .from("stock_adjustments")
+    .select(
+      "id,delta,reason,notes,quantity_before,quantity_after,created_at,stock_movements!inner(product_id,stock_kind,actor_user_id,business_day_id,from_location_id,to_location_id,profiles!stock_movements_actor_user_id_fkey(name),business_days!stock_movements_business_day_id_fkey(date_label))",
+    )
+    .order("created_at", { ascending: false })
+    .order("id");
+  if (range)
+    adjustmentQuery = adjustmentQuery
+      .gte("created_at", range.start)
+      .lt("created_at", range.end);
   const [products, balances, adjustments] = await Promise.all([
     readAll<
       Omit<Product, "default_price"> & { default_price: string | number }
@@ -84,14 +99,7 @@ export async function readInventory(page = 0): Promise<InventorySnapshot> {
         .order("stock_kind")
         .range(offset, offset + 499),
     ),
-    client
-      .from("stock_adjustments")
-      .select(
-        "id,delta,reason,notes,quantity_before,quantity_after,created_at,stock_movements!inner(product_id,stock_kind,actor_user_id,business_day_id,from_location_id,to_location_id,profiles!stock_movements_actor_user_id_fkey(name),business_days!stock_movements_business_day_id_fkey(date_label))",
-      )
-      .order("created_at", { ascending: false })
-      .order("id")
-      .range(page * 25, page * 25 + 25),
+    adjustmentQuery.range(page * 25, page * 25 + 25),
   ]);
   if (adjustments.error)
     throw new Error("Inventory could not be loaded. Please try again.");

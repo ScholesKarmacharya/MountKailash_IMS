@@ -4,6 +4,7 @@ const config: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**/pdf": ["./assets/fonts/*.ttf"],
     "/api/business-days/**": ["./assets/fonts/*.ttf"],
+    "/api/customer-statements/**": ["./assets/fonts/*.ttf"],
   },
   ...(process.env.SPRINT2_E2E === "1"
     ? { distDir: ".next-sprint2-e2e" }

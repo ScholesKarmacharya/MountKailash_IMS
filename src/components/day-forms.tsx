@@ -1,4 +1,6 @@
 "use client";
+import { T, Message, Value } from "@/components/localization";
+
 import { useState } from "react";
 import { Field, OperationForm, Select } from "./operation-form";
 import type { Day } from "@/domain/business-days/types";
@@ -25,8 +27,7 @@ export function DayReviewForm({
     >
       <input type="hidden" name="day" value={day.id} />
       <p className="text-sm text-muted-foreground">
-        Resolve all linked blockers first. Review freezes day transactions until
-        you close or explicitly resume operations.
+        <T k="Resolve all linked blockers first. Review freezes day transactions until you close or explicitly resume operations." />
       </p>
     </OperationForm>
   );
@@ -53,11 +54,16 @@ export function DayCloseForm({
     >
       <input type="hidden" name="day" value={day.id} />
       <p className="text-sm">
-        Expected net cash: <strong>{npr(cash)}</strong>. Enter receipts less
-        reversals and cash refunds. A net refund outflow uses a negative amount.
+        {" "}
+        <T k="Expected net cash:" />{" "}
+        <strong>
+          <Value value={npr(cash)} />
+        </strong>
+        <T k=". Enter receipts less reversals and cash refunds. A net refund outflow uses a negative amount." />{" "}
       </p>
       <label className="grid gap-2 text-sm font-medium">
-        Net cash handed over (NPR)
+        {" "}
+        <T k="Net cash handed over (NPR)" />{" "}
         <Input
           name="cash_counted"
           required
@@ -69,7 +75,8 @@ export function DayCloseForm({
         />
       </label>
       <label className="grid gap-2 text-sm font-medium">
-        Reconciliation evidence / closing notes
+        {" "}
+        <T k="Reconciliation evidence / closing notes" />{" "}
         <Input
           name="notes"
           required
@@ -114,7 +121,7 @@ export function DayCloseForm({
               }))
             }
           />
-          {label}
+          <Message value={label} />
         </label>
       ))}
     </OperationForm>
@@ -168,7 +175,9 @@ export function ProcessingForm({
     >
       <input type="hidden" name="day" value={day} />
       <Select label="Jar product" name="product">
-        <option value="">Select product</option>
+        <option value="">
+          <T k="Select product" />
+        </option>
         {products
           .filter((p) => p.kind === "FULL_JAR")
           .map((p) => (
@@ -181,14 +190,22 @@ export function ProcessingForm({
         <input type="hidden" name="stock_kind" value="EMPTY_JAR" />
       ) : (
         <Select name="stock_kind" label="Damaged jar state">
-          <option value="EMPTY_JAR">Empty jars</option>
-          <option value="FULL_JAR">Full jars</option>
+          <option value="EMPTY_JAR">
+            <T k="Empty jars" />
+          </option>
+          <option value="FULL_JAR">
+            <T k="Full jars" />
+          </option>
         </Select>
       )}
       <label className="grid gap-2 text-sm font-medium">
-        {operation === "REFILL"
-          ? "Eligible empties successfully refilled"
-          : "Damaged jar quantity"}
+        <Message
+          value={
+            operation === "REFILL"
+              ? "Eligible empties successfully refilled"
+              : "Damaged jar quantity"
+          }
+        />
         <Input
           type="number"
           name="quantity"
@@ -206,9 +223,13 @@ export function ProcessingForm({
         maxLength={500}
       />
       <p className="text-sm text-muted-foreground">
-        {operation === "REFILL"
-          ? "Record completed processing only. Each eligible empty becomes one full jar; rejected jars must be recorded as damage separately."
-          : "Jars move out of available warehouse stock into the separate damaged location. They cannot be loaded or refilled."}
+        <Message
+          value={
+            operation === "REFILL"
+              ? "Record completed processing only. Each eligible empty becomes one full jar; rejected jars must be recorded as damage separately."
+              : "Jars move out of available warehouse stock into the separate damaged location. They cannot be loaded or refilled."
+          }
+        />
       </p>
     </OperationForm>
   );
@@ -233,7 +254,9 @@ export function ClosedStockCorrection({
       <input type="hidden" name="day" value={original} />
       <input type="hidden" name="posting_day" value={posting} />
       <Select name="product" label="Correction product">
-        <option value="">Select product</option>
+        <option value="">
+          <T k="Select product" />
+        </option>
         {products.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -241,12 +264,19 @@ export function ClosedStockCorrection({
         ))}
       </Select>
       <Select name="stock_kind" label="Correction stock state">
-        <option value="FULL_JAR">Full jars</option>
-        <option value="EMPTY_JAR">Empty jars</option>
-        <option value="BOTTLE_CARTON">Water cartons</option>
+        <option value="FULL_JAR">
+          <T k="Full jars" />
+        </option>
+        <option value="EMPTY_JAR">
+          <T k="Empty jars" />
+        </option>
+        <option value="BOTTLE_CARTON">
+          <T k="Water cartons" />
+        </option>
       </Select>
       <label className="grid gap-2 text-sm font-medium">
-        Signed quantity correction
+        {" "}
+        <T k="Signed quantity correction" />{" "}
         <Input
           name="delta"
           type="number"
@@ -263,8 +293,7 @@ export function ClosedStockCorrection({
         maxLength={500}
       />
       <p className="text-sm text-muted-foreground">
-        This creates a new movement on the current OPEN day and an amendment
-        link. The original closing quantities remain archived.
+        <T k="This creates a new movement on the current OPEN day and an amendment link. The original closing quantities remain archived." />
       </p>
     </OperationForm>
   );

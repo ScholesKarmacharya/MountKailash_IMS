@@ -1,3 +1,4 @@
+import { T, Message, Value } from "@/components/localization";
 import { Card } from "./ui/card";
 import { financeMetrics } from "@/domain/finance/reports";
 import { npr } from "@/domain/finance/money";
@@ -5,11 +6,11 @@ import type { FinanceWorkspace } from "@/domain/finance/types";
 export function FinanceRequired() {
   return (
     <Card>
-      <h2 className="font-semibold">Finance migration required</h2>
+      <h2 className="font-semibold">
+        <T k="Finance migration required" />
+      </h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Apply the reviewed Sprint 3 migrations before recording sales,
-        settlements, credit and deposits. Existing trip and stock records remain
-        available.
+        <T k="Apply the reviewed Sprint 3 migrations before recording sales, settlements, credit and deposits. Existing trip and stock records remain available." />
       </p>
     </Card>
   );
@@ -37,8 +38,12 @@ export function FinanceOverview({
         ["Refundable deposit liability", m.deposits],
       ].map(([label, value]) => (
         <Card key={label}>
-          <h2 className="text-sm text-muted-foreground">{label}</h2>
-          <p className="mt-3 text-xl font-bold">{npr(value!)}</p>
+          <h2 className="text-sm text-muted-foreground">
+            <Message value={label} />
+          </h2>
+          <p className="mt-3 text-xl font-bold">
+            <Value value={npr(value!)} />
+          </p>
         </Card>
       ))}
     </div>

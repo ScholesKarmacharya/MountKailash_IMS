@@ -1,3 +1,4 @@
+import { T } from "@/components/localization";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getOperations } from "@/services/operations";
@@ -20,7 +21,7 @@ export default async function Page({
   return (
     <div className="space-y-6">
       <Link className="text-primary underline" href="/admin/drivers">
-        Back to drivers
+        <T k="Back to drivers" />
       </Link>
       <OperationsHeading
         title="Edit driver"

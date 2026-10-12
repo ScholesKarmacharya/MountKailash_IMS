@@ -1,15 +1,21 @@
 "use client";
+import { Message } from "@/components/localization";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Package } from "lucide-react";
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
+import { useLocale } from "./localization";
 export function Navigation({ role }: { role: Role }) {
+  const { t } = useLocale();
   const pathname = usePathname();
   const href = role === "ADMIN" ? "/admin/dashboard" : "/driver/home";
   return (
     <nav
-      aria-label={`${role === "ADMIN" ? "Admin" : "Driver"} navigation`}
+      aria-label={t(
+        role === "ADMIN" ? "Admin navigation" : "Driver navigation",
+      )}
       className={
         role === "ADMIN"
           ? "space-y-2"
@@ -27,7 +33,7 @@ export function Navigation({ role }: { role: Role }) {
         )}
       >
         <LayoutDashboard className="size-4" aria-hidden="true" />
-        {role === "ADMIN" ? "Overview" : "My Stock"}
+        <Message value={role === "ADMIN" ? "Overview" : "My Stock"} />
       </Link>
       {role === "DRIVER" &&
         (
@@ -49,7 +55,7 @@ export function Navigation({ role }: { role: Role }) {
             )}
           >
             <Package className="size-4" aria-hidden="true" />
-            {label}
+            <Message value={label} />
           </Link>
         ))}
       {role === "ADMIN" &&
@@ -79,7 +85,7 @@ export function Navigation({ role }: { role: Role }) {
             )}
           >
             <Package className="size-4" aria-hidden="true" />
-            {label}
+            <Message value={label} />
           </Link>
         ))}
     </nav>

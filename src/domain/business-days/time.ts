@@ -1,11 +1,12 @@
 export const BUSINESS_TIME_ZONE = "Asia/Kathmandu";
+const nepalDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 export function nepalDateLabel(timestamp: Date): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(timestamp);
+  const parts = nepalDateFormatter.formatToParts(timestamp);
   const part = (type: string) => parts.find((p) => p.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
 }

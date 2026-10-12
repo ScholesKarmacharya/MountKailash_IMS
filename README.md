@@ -4,6 +4,8 @@ Application through Sprint 4 with Sprint 6 integration, driver inventory/sales w
 
 English/Nepali localization and the Bikram Sambat business calendar are implemented. EN/ने switches immediately without losing drafts; preferences belong to each Supabase Auth user (admin default English, driver default Nepali). Both languages use BS dates. See [implementation, tests, supported dates and manual acceptance](docs/BILINGUAL_BS_CALENDAR.md). No SQL migration or environment change is needed.
 
+Driver New Delivery now uses **Paid / Credit**. Paid requires the exact invoice total; Credit requires a registered customer and records no collection. Admin advanced payments and previous-credit recovery remain available. The additive validation migration `202610120015_driver_payment_ui.sql` is pending Cloud approval/application; deploy it before using the updated form. See [payment behavior, safety review and acceptance checklist](docs/DRIVER_PAYMENT_UI.md).
+
 ## Goal
 
 Track 20L full jars, collected empty jars, water-bottle cartons, multiple drivers and vehicles, repeated customer visits, trip reconciliation, refilling, customer deposits, monthly credit, payments, invoices, and manually closed business days.
@@ -109,7 +111,7 @@ See the [Sprint 2 integration audit](docs/SPRINT_2_INTEGRATION_AUDIT.md) for the
 
 ## Sprint 3 finance
 
-The current [driver inventory and simple-round workspace](docs/DRIVER_INVENTORY_WORKSPACE.md) adds dedicated mobile stock, delivery, customers, pending jars, sales history and warehouse-return pages while retaining the existing stock/finance transactions. Its forward-only migration `202610120014_driver_inventory_workspace.sql` adds ordinary contact fields, projected lookup for waiting drivers and tighter private-note access. Migration 014 was explicitly approved, applied and verified in Cloud on 2026-10-12; all six driver pages and four admin directories passed actual desktop/mobile read-only browser checks. The linked dry run reports no pending migrations. No new credentials, Docker or sample business data are needed.
+The current [driver inventory and simple-round workspace](docs/DRIVER_INVENTORY_WORKSPACE.md) adds dedicated mobile stock, delivery, customers, pending jars, sales history and warehouse-return pages while retaining the existing stock/finance transactions. Its forward-only migration `202610120014_driver_inventory_workspace.sql` adds ordinary contact fields, projected lookup for waiting drivers and tighter private-note access. Migration 014 was explicitly approved, applied and verified in Cloud on 2026-10-12; all six driver pages and four admin directories passed actual desktop/mobile read-only browser checks. The earlier dry run was current through 014; the new Paid/Credit form requires the separately reviewed 015 migration above. No new credentials, Docker or sample business data are needed.
 
 Read [Sprint 3 implementation, migration review and manual acceptance](docs/SPRINT_3_IMPLEMENTATION.md). New trip visits atomically issue sales/invoices with approved price snapshots and post cash, pending Fonepay, allocations, credit and explicit deposits. Admin Payments, Customer credit and Billing settings use real Supabase RPC data. Invoice/receipt PDFs are private, generated on demand and support English/Nepali with bundled fonts.
 

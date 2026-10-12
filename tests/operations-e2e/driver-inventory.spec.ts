@@ -47,7 +47,7 @@ async function record(
   page: Page,
   full: number,
   empty: number,
-  selection = "Monthly credit / unpaid",
+  selection = "Credit",
   cartons = 0,
 ) {
   await page
@@ -59,16 +59,17 @@ async function record(
   await page
     .getByLabel("Cartons delivered", { exact: true })
     .fill(String(cartons));
-  await page.getByRole("button", { name: selection, exact: true }).click();
-  if (selection === "Partial payment")
+  if (full + cartons > 0)
+    await page.getByRole("button", { name: selection, exact: true }).click();
+  if (selection === "Paid")
     await page
-      .getByLabel("Amount received for this invoice (NPR)", { exact: true })
-      .fill("50");
+      .getByLabel("Total Amount Received (NPR)", { exact: true })
+      .fill(((full + cartons) * 150.25).toFixed(2));
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
   const entries = await page
-    .locator('input[name="operation"][value="visit"]')
+    .locator('input[name="operation"][value="driver-visit"]')
     .locator("..")
     .evaluate((form) =>
       Array.from(new FormData(form as HTMLFormElement).entries()).map(
@@ -160,7 +161,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
       delivery_notes: "Use rear entrance",
       created_by: fixtureIds.driver,
     });
-    const command = await record(page, 35, 30, "Partial payment", 1);
+    const command = await record(page, 35, 30, "Credit", 1);
     await expect
       .poll(async () => (await admin.workspace(trip)).visits.length)
       .toBe(1);
@@ -205,7 +206,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
     await card(page, "Remaining Full Jars", 45);
     await page.goto("/driver/delivery");
     await page.getByRole("button", { name: "Walk-in", exact: true }).click();
-    await record(page, 5, 5, "Cash");
+    await record(page, 5, 5, "Paid");
     await expect
       .poll(async () => (await admin.workspace(trip)).visits.length)
       .toBe(3);
@@ -308,7 +309,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
       .getByLabel("Credit amount received (NPR)", { exact: true })
       .fill("50");
     await save(page, "Collect outstanding credit");
-    await expect.poll(async () => (await finance()).payments.length).toBe(3);
+    await expect.poll(async () => (await finance()).payments.length).toBe(2);
     expect((await finance()).sales).toHaveLength(3);
     await page.goto("/driver/return");
     await save(page, "Submit warehouse returns");
@@ -326,8 +327,8 @@ test("driver inventory, simplified selling, audited returns and automatic second
       full_jars: 60,
       empty_jars: 37,
       cartons: 1,
-      cash_net: "851.25",
-      outstanding: "8314.00",
+      cash_net: "801.25",
+      outstanding: "8364.00",
     });
     const old = await admin.workspace(trip);
     expect(old.loads.find((l) => l.stock_kind === "FULL_JAR")!.quantity).toBe(
@@ -345,7 +346,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
     await save(adminPage, "Begin closing review");
     await adminPage
       .getByLabel("Net cash handed over (NPR)", { exact: true })
-      .fill("851.25");
+      .fill("801.25");
     await adminPage
       .getByLabel("Reconciliation evidence / closing notes", { exact: true })
       .fill("Disposable counted cash and journal evidence");
@@ -367,7 +368,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
       sales: "0",
       cash: "0",
       trips: 0,
-      outstanding: "8314.00",
+      outstanding: "8364.00",
     });
     expect(report.pending_jars?.reduce((n, r) => n + r.pending, 0)).toBe(23);
     expect(

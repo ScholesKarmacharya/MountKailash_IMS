@@ -1,3 +1,4 @@
+import { parseCommand } from "../../src/domain/operations/commands";
 import { expect, test, type Page } from "@playwright/test";
 import { vehicleCounts } from "../../src/domain/operations/types";
 import { fixtureClient } from "./fixture-client";
@@ -145,6 +146,9 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       page.getByLabel("Empty jars collected", { exact: true }),
     ).toHaveValue(String(empty));
     await page
+      .getByLabel("Total Amount Received (NPR)", { exact: true })
+      .fill((full * 150.25).toFixed(2));
+    await page
       .getByRole("button", { name: "Review delivery", exact: true })
       .click();
     await page
@@ -156,34 +160,24 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
     await page
       .getByRole("button", { name: "Review delivery", exact: true })
       .click();
-    const form = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="operation"][value="visit"]') });
-    const retry = {
-      p_trip: tripId,
-      p_customer: await form.locator('input[name="customer"]').inputValue(),
-      p_walk_name: "",
-      p_walk_phone: "",
-      p_items: JSON.parse(
-        await form.locator('input[name="items"]').inputValue(),
-      ),
-      p_payment: {
-        selection: "CASH",
-        reported_amount: null,
-        reference: "",
-        payments: JSON.parse(
-          await form.locator('input[name="finance_payments"]').inputValue(),
-        ),
-      },
-      p_notes: "",
-      p_key: await form.locator('input[name="key"]').inputValue(),
-    };
+    const form = page.locator("form").filter({
+      has: page.locator('input[name="operation"][value="driver-visit"]'),
+    });
+    const entries = await form.evaluate((f) =>
+      Array.from(new FormData(f as HTMLFormElement).entries()).map(([k, v]) => [
+        k,
+        String(v),
+      ]),
+    );
+    const data = new FormData();
+    for (const [k, v] of entries) data.set(k!, v!);
+    const retry = parseCommand(data);
     await save(page, "Save Delivery");
     await expect
       .poll(async () => (await admin.workspace(tripId)).visits.length)
       .toBe(++visitCount);
     const saved = await admin.workspace(tripId);
-    const visitId = await driver.rpc<string>("post_trip_visit", retry);
+    const visitId = await driver.rpc<string>(retry.rpc, retry.args);
     expect(saved.visits.map((v) => v.id)).toContain(visitId);
     const replayed = await admin.workspace(tripId);
     expect(replayed.visits).toHaveLength(saved.visits.length);

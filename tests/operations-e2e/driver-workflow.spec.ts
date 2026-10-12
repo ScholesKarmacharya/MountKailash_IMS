@@ -161,6 +161,9 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     )
     .toBe("9812345679");
   await page.getByLabel("Cartons delivered", { exact: true }).fill("1");
+  await page
+    .getByLabel("Total Amount Received (NPR)", { exact: true })
+    .fill("3155.25");
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();
@@ -178,12 +181,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page.getByRole("button", { name: /Existing shop/ }).click();
   await page.getByLabel("Full jars delivered", { exact: true }).fill("25");
   await page.getByLabel("Empty jars collected", { exact: true }).fill("15");
-  await page
-    .getByRole("button", { name: "Partial payment", exact: true })
-    .click();
-  await page
-    .getByLabel("Amount received for this invoice (NPR)", { exact: true })
-    .fill("1000");
+  await page.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();
@@ -198,6 +196,9 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page.getByRole("button", { name: "Walk-in", exact: true }).click();
   await page.getByLabel("Full jars delivered", { exact: true }).fill("10");
   await page.getByLabel("Empty jars collected", { exact: true }).fill("10");
+  await page
+    .getByLabel("Total Amount Received (NPR)", { exact: true })
+    .fill("1502.50");
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();
@@ -214,9 +215,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     .click();
   await page.getByLabel("Full jars delivered", { exact: true }).fill("15");
   await page.getByLabel("Empty jars collected", { exact: true }).fill("10");
-  await page
-    .getByRole("button", { name: "Monthly credit / unpaid", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();
@@ -264,7 +263,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   ).toBeVisible();
   await save(page, "Collect outstanding credit");
   const finance = () => admin.rpc<FinanceWorkspace>("finance_workspace", {});
-  await expect.poll(async () => (await finance()).payments.length).toBe(4);
+  await expect.poll(async () => (await finance()).payments.length).toBe(3);
   await page.reload();
   const before = await admin.workspace(trip);
   await save(page, "Submit warehouse returns");
@@ -299,7 +298,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     .toBe("CLOSED");
   const f = await finance();
   expect(f.invoices).toHaveLength(4);
-  expect(f.payments).toHaveLength(4);
+  expect(f.payments).toHaveLength(3);
   expect(
     f.journal
       .filter((j) => j.account === "SALES")
@@ -309,7 +308,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     f.journal
       .filter((j) => j.account === "CASH")
       .reduce((n, j) => n + Number(j.amount), 0),
-  ).toBe(5707.75);
+  ).toBe(4707.75);
   expect(
     (await admin.workspace(trip)).balances.every((b) => b.quantity >= 0),
   ).toBe(true);

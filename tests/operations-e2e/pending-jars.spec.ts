@@ -27,9 +27,8 @@ async function record(page: Page, full: number, empty: number) {
   await page
     .getByLabel("Empty jars collected", { exact: true })
     .fill(String(empty));
-  await page
-    .getByRole("button", { name: "Monthly credit / unpaid", exact: true })
-    .click();
+  if (full > 0)
+    await page.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();

@@ -61,6 +61,9 @@ test("Nepali driver delivery preserves drafts during language switches and downl
     .click();
   await page.getByLabel("डेलिभरी भएका भरिएका जार", { exact: true }).fill("35");
   await page.getByLabel("संकलित खाली जार", { exact: true }).fill("30");
+  await page
+    .getByLabel("प्राप्त भएको जम्मा रकम (NPR)", { exact: true })
+    .fill("५२५८.७५");
   const url = page.url();
   await language(page, "en");
   expect(page.url()).toBe(url);

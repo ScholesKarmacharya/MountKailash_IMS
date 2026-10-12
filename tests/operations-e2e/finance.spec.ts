@@ -58,9 +58,8 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
   await expect
     .poll(async () => (await finance()).billing[0]?.deposit_mode)
     .toBe("MANUAL");
-  await signout(page);
-  await login(page);
-  await page.goto("/driver/trips/" + trip);
+  // Admin retains advanced partial/Fonepay/deposit entry; drivers recover old credit separately.
+  await page.goto("/admin/trips/" + trip);
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
@@ -96,7 +95,9 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
   expect(invoice.outstanding).toBe("501.00");
   expect(invoice.available).toBe("301.00");
   expect(f.deposits[0]!.amount).toBe("300.00");
-  await page.reload();
+  await signout(page);
+  await login(page);
+  await page.goto("/driver/trips/" + trip);
   await page
     .getByLabel("Collection customer", { exact: true })
     .selectOption(customer);

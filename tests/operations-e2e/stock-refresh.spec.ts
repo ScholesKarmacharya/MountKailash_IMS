@@ -50,6 +50,9 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
       .filter({ hasText: "exceeds the remaining vehicle stock" }),
   ).toBeVisible();
   await full.fill("60");
+  await page
+    .getByLabel("Total Amount Received (NPR)", { exact: true })
+    .fill("9015.00");
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();

@@ -141,6 +141,7 @@ export type Price = {
   version: number;
 };
 export type FinanceWorkspace = {
+  delivery_items?: import("@/domain/operations/product-delivery").ProductDelivery[];
   available: boolean;
   company: Company | null;
   billing: Billing[];
@@ -159,6 +160,7 @@ export type FinanceWorkspace = {
   issued: { invoice_id: string; amount: string }[];
 };
 export const emptyFinance: FinanceWorkspace = {
+  delivery_items: [],
   available: false,
   company: null,
   billing: [],

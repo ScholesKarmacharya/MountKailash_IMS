@@ -60,3 +60,14 @@ export function invoiceTotals(i: Invoice, f: FinanceWorkspace) {
     pending: decimal(cents(i.outstanding) - cents(i.available)),
   };
 }
+export function invoicePaymentStatus(i: Invoice, f: FinanceWorkspace) {
+  const totals = invoiceTotals(i, f);
+  if (cents(i.outstanding) === 0n) return "Paid";
+  if (cents(totals.pending) > 0n) return "Pending payment";
+  if (cents(totals.collected) > 0n) return "Partially paid";
+  return "Credit";
+}
+export function invoiceDeliveries(i: Invoice, f: FinanceWorkspace) {
+  const visit = f.sales.find((s) => s.id === i.sale_id)?.visit_id;
+  return (f.delivery_items ?? []).filter((line) => line.visit_id === visit);
+}

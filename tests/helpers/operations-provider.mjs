@@ -96,6 +96,7 @@ function tokenId(req) {
 const allowedTables = new Set([
   "profiles",
   "products",
+  "visit_items",
   "stock_locations",
   "inventory_balances",
   "business_days",
@@ -231,15 +232,28 @@ async function handle(req, res) {
             filters.push(`${key} in (${placeholders.join(",")})`);
           } else throw new Error("Unsupported fixture filter");
         }
+        const ordering = (url.searchParams.get("order") ?? "")
+          .split(",")
+          .filter(Boolean)
+          .map((part) => {
+            const match =
+              /^([a-z_]+)\.(asc|desc)(?:\.nulls(first|last))?$/.exec(part);
+            if (!match) throw new Error("Invalid fixture ordering");
+            return `${table === "trips" ? "t" : table}.${match[1]} ${match[2]}${match[3] ? ` nulls ${match[3]}` : ""}`;
+          });
         result = (
           await db.query(
             (table === "trips"
               ? "select t.*,json_build_object('plate_number',v.plate_number) as vehicles,json_build_object('name',p.name) as profiles,json_build_object('date_label',d.date_label) as business_days from public.trips t join public.vehicles v on v.id=t.vehicle_id join public.profiles p on p.id=t.driver_id join public.business_days d on d.id=t.business_day_id"
               : `select * from public.${table}`) +
-              (filters.length ? " where " + filters.join(" and ") : ""),
+              (filters.length ? " where " + filters.join(" and ") : "") +
+              (ordering.length ? " order by " + ordering.join(",") : ""),
             args,
           )
         ).rows;
+        const offset = Number(url.searchParams.get("offset") ?? 0),
+          limit = Number(url.searchParams.get("limit") ?? result.length);
+        result = result.slice(offset, offset + limit);
         if (
           (req.headers.accept ?? "").includes(
             "application/vnd.pgrst.object+json",

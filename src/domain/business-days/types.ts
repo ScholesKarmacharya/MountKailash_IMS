@@ -78,6 +78,7 @@ export type DayTrip = {
   }[];
 };
 export type DayProduct = {
+  kind?: import("@/domain/inventory/validation").Product["kind"];
   product_id: string;
   name: string;
   unit: string;
@@ -87,6 +88,7 @@ export type DayProduct = {
   sales: string;
 };
 export type DayCustomer = Omit<DayProduct, "product_id" | "unit"> & {
+  items?: import("@/domain/operations/product-delivery").ProductDelivery[];
   id: string;
   trip_id: string;
   trip_number: number;

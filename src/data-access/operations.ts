@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { emptyWorkspace, type Workspace } from "@/domain/operations/types";
 import type { Command } from "@/domain/operations/commands";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
+import { readProductDeliveries } from "./product-deliveries";
 export async function readDeliveryCustomer(
   trip: string,
   customer: string,
@@ -77,6 +78,7 @@ export async function writeOperation(command: Command): Promise<string> {
   return data;
 }
 export type CustomerDelivery = {
+  items?: import("@/domain/operations/product-delivery").ProductDelivery[];
   id: string;
   trip_id: string;
   trip_number: number;
@@ -99,5 +101,13 @@ export async function readCustomerDeliveries(
     throw new Error(
       "Customer delivery history could not be loaded. Please retry.",
     );
-  return data as CustomerDelivery[];
+  const visits = data as CustomerDelivery[];
+  const items = await readProductDeliveries(
+    client,
+    visits.map((v) => v.id),
+  );
+  return visits.map((visit) => ({
+    ...visit,
+    items: items.filter((i) => i.visit_id === visit.id),
+  }));
 }

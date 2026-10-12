@@ -6,6 +6,7 @@ import {
   type Ledger,
 } from "@/domain/finance/types";
 import type { DateRange } from "@/domain/localization/calendar";
+import { readProductDeliveries } from "./product-deliveries";
 // Includes earlier entries to derive an exact opening balance, while excluding
 // the next BS month's entries in PostgreSQL. Existing administrator RLS applies.
 export async function readStatementLedger(
@@ -39,5 +40,28 @@ export async function readFinance(): Promise<FinanceWorkspace> {
       return { ...emptyFinance };
     throw new Error("Finance could not be loaded. Please retry.");
   }
-  return { ...emptyFinance, ...data, available: true } as FinanceWorkspace;
+  const workspace = {
+    ...emptyFinance,
+    ...data,
+    available: true,
+  } as FinanceWorkspace;
+  workspace.delivery_items = await readProductDeliveries(
+    client,
+    workspace.sales.map((s) => s.visit_id),
+  );
+  // Invoice names remain the original sale snapshots, even after catalogue edits.
+  const visitsBySale = new Map(
+    workspace.sales.map((sale) => [sale.id, sale.visit_id]),
+  );
+  const names = new Map(
+    workspace.items.map((item) => [
+      visitsBySale.get(item.sale_id) + ":" + item.product_id,
+      item.name,
+    ]),
+  );
+  workspace.delivery_items = workspace.delivery_items.map((line) => ({
+    ...line,
+    name: names.get(line.visit_id + ":" + line.product_id) ?? line.name,
+  }));
+  return workspace;
 }

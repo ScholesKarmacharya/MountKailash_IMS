@@ -80,11 +80,11 @@ previously issued tokens/sessions.
 
 ## Migration 016 safety review and Cloud status
 
-**`202610120016_driver_approval.sql` is pending approval and has NOT been applied
-to Cloud.** Linked history confirms 001–015 applied. The dry run lists exactly
-016, with no seeds or roles. Approval/profile operations show a migration-required
-state until application. Legacy trusted active profiles continue working during
-the transition.
+**`202610120016_driver_approval.sql` was explicitly approved, applied and verified
+in Supabase Cloud on 2026-10-13.** Immediately before application, the fresh dry
+run listed exactly 016, with no seeds or roles. The approved push applied only
+that file. Linked history now matches for 001–016 and the post-application dry
+run reports the remote database up to date, with no pending migrations.
 
 Before backfill, read-only Auth/profile inspection identified exactly one active
 DRIVER: the existing `driver@mount-kailash.example` Auth account and its stored
@@ -92,6 +92,22 @@ DRIVER: the existing `driver@mount-kailash.example` Auth account and its stored
 profile; no other driver profiles were present. Both existing admin/driver
 credentials authenticated. Business snapshots were unchanged; no credentials
 were printed and no profile/access/business writes occurred.
+
+After migration, that existing driver remains active with APPROVED status and
+the same Auth ID, name, version and role. Before/after normalized hashes of the
+operations workspace, finance workspace and existing profile fields
+(`id`, `name`, `role`, `is_active`, `version`) matched; both original profiles remain. New columns and approval status
+are the intended migration changes. Original approval dates/approvers remain
+NULL rather than being invented. No new Auth accounts or business records were
+created, and no account was suspended, deleted or renamed.
+
+Actual Cloud browser checks passed for both roles at 1280px and 393px: login,
+stored name after refresh, navigation/layout, readable profile forms, logout and
+protected-route exclusion. Admin Drivers and Driver Details load the existing
+Auth email and APPROVED status, with rendered suspension controls. Driver
+navigation to Admin Drivers redirects to its own home, and direct driver and
+anonymous `admin_driver_directory` calls both return 42501. These were read-only
+checks; no profile or status forms were submitted.
 
 Migration scope:
 
@@ -128,7 +144,7 @@ the exact dry-run list immediately before applying if provisioning has changed.
 npx.cmd --no-install supabase migration list --linked
 npx.cmd --no-install supabase db push --linked --dry-run
 node --env-file=.env.local scripts/verify-cloud-driver-approval.mjs --inspect
-# Only after explicit approval and a fresh dry run lists exactly 016:
+# Approved command executed for migration 016 (already applied):
 npx.cmd --no-install supabase db push --linked --yes
 # Existing-account read-only browser checks, with the dev server running:
 node --env-file=.env.local scripts/verify-cloud-driver-approval.mjs http://localhost:3000
@@ -168,7 +184,7 @@ Executed checks:
 | `npm.cmd run test:e2e:operations -- tests/operations-e2e/driver-approval.spec.ts` | Final four desktop/mobile approval scenarios passed after the compact header and waiting-page guard changes.                                                                                                                                                          |
 | `$env:VALIDATE_BUILD='1'; npm.cmd run build`                                      | Final production build passed in its separate output directory; existing development server preserved.                                                                                                                                                                |
 | Read-only Cloud browser script above                                              | Existing admin and driver passed at 1280px and 393px: stored profile names, refresh, navigation, no horizontal overflow, logout and protected-route exclusion. Business snapshots unchanged.                                                                          |
-| `npx.cmd --no-install supabase db push --linked --dry-run`                        | Passed; only `202610120016_driver_approval.sql` pending, no seeds/roles.                                                                                                                                                                                              |
+| `npx.cmd --no-install supabase db push --linked --dry-run`                        | Passed before application with only 016 and no seeds/roles; passed afterward with no pending migrations.                                                                                                                                                              |
 
 Two implementation issues found and fixed during acceptance: Sign Out now pauses
 automatic operational refresh while the session changes, and the waiting page
@@ -183,9 +199,11 @@ sequentially on this workstation. Development logs intermittently emit Next
 stream-cancellation warnings during rapid navigation; associated browser/data
 assertions passed. These are recorded rather than asserted to be fixed.
 
-Cloud operational write acceptance (new approval/suspension/profile edit) awaits
-migration approval and explicit permission for those writes. Read-only Cloud
-checks do not claim those mutations pass. SMTP delivery, true concurrent hosted
+Cloud operational write acceptance (new approval/suspension/profile edit) still
+requires a designated account and explicit permission for those writes. The
+migration is applied and the corresponding isolated PostgreSQL/browser tests
+passed; the read-only Cloud checks do not claim live mutations were executed.
+SMTP delivery, true concurrent hosted
 transactions and additional devices/browsers need staging/manual acceptance. No
 test business data is inserted into Cloud.
 

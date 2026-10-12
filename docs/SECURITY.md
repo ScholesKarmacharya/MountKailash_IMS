@@ -1,7 +1,7 @@
 # Security and Access Control
 
-Driver access now additionally requires APPROVED status (migration 016, pending
-Cloud approval). Pending/rejected/suspended users may read/update only their own
+Driver access now additionally requires APPROVED status (migration 016, approved
+and applied in Cloud on 2026-10-13). Pending/rejected/suspended users may read/update only their own
 safe contact profile and display-language preference. Admin alone controls
 approval and suspension; current database status governs even existing sessions.
 See [driver approval review and acceptance](DRIVER_APPROVAL.md).

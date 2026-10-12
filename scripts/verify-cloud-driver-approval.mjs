@@ -84,6 +84,29 @@ try {
   if (directory.error && !["PGRST202", "42883"].includes(directory.error.code))
     throw new Error("Approval directory check failed.");
   console.log("Cloud approval migration applied:", !directory.error);
+  if (!directory.error) {
+    stage = "approval backfill and read authorization";
+    expect(driver.profile.approval_status).toBe("APPROVED");
+    const listed = directory.data.find((p) => p.id === driver.profile.id);
+    expect(listed).toBeDefined();
+    expect(listed.approval_status).toBe("APPROVED");
+    expect(listed.is_active).toBe(true);
+    expect(listed.name).toBe(driver.profile.name);
+    expect(listed.email).toBe("driver@mount-kailash.example");
+    const forbidden = await driver.client.rpc("admin_driver_directory");
+    expect(forbidden.error?.code).toBe("42501");
+    const access = await driver.client.rpc("has_operational_access");
+    expect(access.error).toBeNull();
+    expect(access.data).toBe(true);
+    const anonymous = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const denied = await anonymous.rpc("admin_driver_directory");
+    expect(denied.error?.code).toBe("42501");
+    console.log(
+      "Approved driver access retained; driver and anonymous admin-directory reads denied.",
+    );
+  }
   const settings = await fetch(`${url}/auth/v1/settings`, {
     headers: { apikey: key },
   });
@@ -146,6 +169,62 @@ try {
               () => document.documentElement.scrollWidth <= innerWidth,
             ),
           ).toBe(true);
+          if (!directory.error) {
+            stage = `${role} ${viewport.width}px read-only profile page`;
+            await page.goto(`${base}/account/profile`);
+            await expect(
+              page.getByLabel(label("Full name"), { exact: true }),
+            ).toHaveValue(profile.name);
+            await expect(
+              page.getByRole("button", {
+                name: label("Save profile"),
+                exact: true,
+              }),
+            ).toBeVisible();
+            if (role === "ADMIN") {
+              stage = `${role} ${viewport.width}px driver directory and details`;
+              await page.goto(`${base}/admin/drivers`);
+              await expect(
+                page.getByRole("heading", {
+                  name: driver.profile.name,
+                  exact: true,
+                }),
+              ).toBeVisible();
+              await expect(
+                page.getByText("driver@mount-kailash.example", { exact: true }),
+              ).toBeVisible();
+              await page
+                .getByRole("link", {
+                  name: label("View Driver Details"),
+                  exact: true,
+                })
+                .click();
+              await expect(page).toHaveURL(
+                new RegExp(`/admin/drivers/${driver.profile.id}$`),
+              );
+              await expect(
+                page.getByRole("status").filter({ hasText: label("Approved") }),
+              ).toBeVisible();
+              await expect(
+                page.getByRole("button", {
+                  name: label("Suspend Driver"),
+                  exact: true,
+                }),
+              ).toBeVisible();
+            } else {
+              stage = `${role} ${viewport.width}px protected admin exclusion`;
+              await page.goto(`${base}/admin/drivers`);
+              await page.waitForURL((u) => u.pathname === home);
+            }
+            expect(
+              await page.evaluate(
+                () => document.documentElement.scrollWidth <= innerWidth,
+              ),
+            ).toBe(true);
+            console.log(
+              `${role} ${viewport.width}px: profile page and authorized driver-directory scope passed without saves.`,
+            );
+          }
           stage = `${role} ${viewport.width}px sign-out`;
           await page
             .getByRole("button", { name: label("Sign Out"), exact: true })

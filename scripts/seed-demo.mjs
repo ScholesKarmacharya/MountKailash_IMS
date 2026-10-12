@@ -61,15 +61,28 @@ for (const account of accounts) {
       }),
     ).user;
   // Reruns retain existing passwords; seed never silently changes credentials.
-  checked(
-    await client.from("profiles").upsert({
-      id: user.id,
-      name: account.name,
-      role: account.role,
-      is_active: true,
-    }),
+  const profile = checked(
+    await client
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle(),
   );
+  if (profile && profile.role !== account.role)
+    throw new Error(
+      "Existing demo profile has a different role. Review it manually.",
+    );
+  // Reruns preserve names, contact details, access decisions and profile versions.
+  if (!profile)
+    checked(
+      await client.from("profiles").insert({
+        id: user.id,
+        name: account.name,
+        role: account.role,
+        is_active: account.role === "ADMIN",
+      }),
+    );
 }
 console.log(
-  "Local DEMO admin and driver profiles are ready. No stock, money, trips or business days were fabricated.",
+  "Local DEMO profiles are ready. New drivers require admin approval in Drivers. Existing access decisions are preserved. No stock, money, trips or business days were fabricated.",
 );

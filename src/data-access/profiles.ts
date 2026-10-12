@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { isRole, type Profile } from "@/domain/auth/roles";
+import { isRole, isApprovalStatus, type Profile } from "@/domain/auth/roles";
 export async function readCurrentProfile(): Promise<Profile | null> {
   const client = await createClient();
   const {
@@ -10,16 +10,26 @@ export async function readCurrentProfile(): Promise<Profile | null> {
   if (error || !user) return null;
   const { data, error: profileError } = await client
     .from("profiles")
-    .select("id,name,role,is_active")
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
   if (profileError)
     throw new Error("Account access could not be checked. Please try again.");
   if (!data || !isRole(data.role)) return null;
+  if (
+    data.approval_status !== undefined &&
+    !isApprovalStatus(data.approval_status)
+  )
+    throw new Error("Account access could not be checked. Please try again.");
   return {
     id: data.id,
-    name: data.name,
+    name: typeof data.name === "string" ? data.name : "",
     role: data.role,
     is_active: data.is_active,
+    approval_status: data.approval_status,
+    phone: data.phone,
+    email: user.email,
+    version: data.version,
+    approved_at: data.approved_at,
   };
 }

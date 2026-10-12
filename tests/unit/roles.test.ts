@@ -20,6 +20,29 @@ describe("server permission policy", () => {
     for (const value of ["admin", null, {}, "OWNER"])
       expect(isRole(value)).toBe(false);
   });
+  it.each(["PENDING", "REJECTED", "SUSPENDED"] as const)(
+    "denies every operational permission for %s even with a forged active flag",
+    (status) => {
+      for (const permission of [
+        "admin:read",
+        "driver:read",
+        "trip:operate",
+        "customer:operate",
+        "payment:record",
+        "stock:adjust",
+        "day:close",
+      ] as Permission[])
+        expect(
+          can(
+            { ...driver, is_active: true, approval_status: status },
+            permission,
+          ),
+        ).toBe(false);
+      expect(
+        can({ ...driver, approval_status: "APPROVED" }, "trip:operate"),
+      ).toBe(true);
+    },
+  );
   it("redirects each role to its own home", () => {
     expect(homeFor("ADMIN")).toBe("/admin/dashboard");
     expect(homeFor("DRIVER")).toBe("/driver/home");

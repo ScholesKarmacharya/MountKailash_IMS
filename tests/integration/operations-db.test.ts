@@ -87,7 +87,7 @@ beforeAll(async () => {
     other,
   ]);
   await db.query(
-    "insert into public.profiles(id,name,role) values($1,'Admin','ADMIN'),($2,'Driver','DRIVER'),($3,'Other','DRIVER')",
+    "insert into public.profiles(id,name,role,approval_status) values($1,'Admin', 'ADMIN','APPROVED'),($2,'Driver', 'DRIVER','APPROVED'),($3,'Other', 'DRIVER','APPROVED')",
     [admin, driver, other],
   );
 }, 30000);
@@ -635,9 +635,10 @@ it("denies anonymous and disabled identities and direct sequence manipulation", 
   ).rejects.toThrow(/permission/);
   await db.exec("rollback to savepoint sequence");
   await db.exec("reset role");
-  await db.query("update public.profiles set is_active=false where id=$1", [
-    driver,
-  ]);
+  await db.query(
+    "update public.profiles set is_active=false,approval_status='SUSPENDED' where id=$1",
+    [driver],
+  );
   await who(driver);
   expect(await scalar("select count(*) from public.trips")).toBe(0);
   await rejects(

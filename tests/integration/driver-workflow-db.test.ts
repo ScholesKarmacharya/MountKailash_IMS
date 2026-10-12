@@ -110,7 +110,7 @@ beforeAll(async () => {
     other,
   ]);
   await db.query(
-    "insert into public.profiles(id,name,role) values($1,'Admin','ADMIN'),($2,'Driver','DRIVER'),($3,'Other','DRIVER')",
+    "insert into public.profiles(id,name,role,approval_status) values($1,'Admin', 'ADMIN','APPROVED'),($2,'Driver', 'DRIVER','APPROVED'),($3,'Other', 'DRIVER','APPROVED')",
     [admin, driver, other],
   );
 }, 30000);
@@ -207,9 +207,10 @@ it("permits active drivers to look up contacts and pending jars before loading, 
     /permission denied/,
   );
   await db.exec("reset role");
-  await db.query("update public.profiles set is_active=false where id=$1", [
-    other,
-  ]);
+  await db.query(
+    "update public.profiles set is_active=false,approval_status='SUSPENDED' where id=$1",
+    [other],
+  );
   await who(other);
   await rejected("pending_jar_directory", [null], /Active account/);
   await rejected("delivery_customer_directory", [], /Active account/);
@@ -896,9 +897,10 @@ it("contact/context operations require an active account, active trip and OPEN b
     /OPEN/,
   );
   await db.exec("reset role");
-  await db.query("update public.profiles set is_active=false where id=$1", [
-    driver,
-  ]);
+  await db.query(
+    "update public.profiles set is_active=false,approval_status='SUSPENDED' where id=$1",
+    [driver],
+  );
   await who(driver);
   await rejected("delivery_customer_context", [trip, existing], /authorized/);
   await db.exec("set role anon;savepoint anonymous");

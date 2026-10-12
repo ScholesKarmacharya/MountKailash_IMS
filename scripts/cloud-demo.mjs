@@ -223,7 +223,7 @@ async function main() {
           id: account.user.id,
           name: account.name,
           role: account.role,
-          is_active: true,
+          is_active: account.role === "ADMIN",
         }),
         `${account.role} demo profile creation`,
       );
@@ -246,8 +246,17 @@ async function main() {
           .single(),
         `${account.role} profile access verification`,
       );
-      if (profile.role !== account.role || !profile.is_active)
+      if (
+        profile.role !== account.role ||
+        (account.role === "ADMIN" && !profile.is_active)
+      )
         throw new Error(`${account.role} profile verification failed.`);
+      if (account.role === "DRIVER" && !profile.is_active) {
+        console.log(
+          "DRIVER: credentials verified; operational access awaits admin approval in Drivers.",
+        );
+        continue;
+      }
       const days = await sessionClient.from("business_days").select("id");
       if (days.error || (account.role === "DRIVER" && days.data.length !== 0))
         throw new Error(
@@ -261,7 +270,7 @@ async function main() {
     }
   }
   console.log(
-    "Cloud DEMO accounts are ready. Passwords are in ignored .env.local; no passwords, tokens or privileged keys were printed.",
+    "Cloud DEMO accounts checked. New drivers require admin approval in Drivers. Passwords are in ignored .env.local; no passwords, tokens or privileged keys were printed.",
   );
 }
 main().catch((error) => {

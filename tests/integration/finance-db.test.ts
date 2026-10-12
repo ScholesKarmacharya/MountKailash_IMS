@@ -93,7 +93,7 @@ beforeAll(async () => {
     other,
   ]);
   await db.query(
-    "insert into public.profiles(id,name,role) values($1,'Admin','ADMIN'),($2,'Driver','DRIVER'),($3,'Other','DRIVER')",
+    "insert into public.profiles(id,name,role,approval_status) values($1,'Admin', 'ADMIN','APPROVED'),($2,'Driver', 'DRIVER','APPROVED'),($3,'Other', 'DRIVER','APPROVED')",
     [admin, driver, other],
   );
 }, 30000);

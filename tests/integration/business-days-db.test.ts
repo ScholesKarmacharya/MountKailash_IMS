@@ -141,7 +141,7 @@ beforeAll(async () => {
     other,
   ]);
   await db.query(
-    "insert into public.profiles(id,name,role) values($1,'Warehouse admin','ADMIN'),($2,'Delivery driver','DRIVER'),($3,'Other driver','DRIVER')",
+    "insert into public.profiles(id,name,role,approval_status) values($1,'Warehouse admin', 'ADMIN','APPROVED'),($2,'Delivery driver', 'DRIVER','APPROVED'),($3,'Other driver', 'DRIVER','APPROVED')",
     [admin, driver, other],
   );
 }, 30000);
@@ -471,9 +471,10 @@ it("driver and disabled admin cannot close, read global reports or process jars"
     0,
   );
   await db.exec("reset role");
-  await db.query("update public.profiles set is_active=false where id=$1", [
-    admin,
-  ]);
+  await db.query(
+    "update public.profiles set is_active=false,approval_status='SUSPENDED' where id=$1",
+    [admin],
+  );
   await who();
   await rejects(
     "business_day_command",

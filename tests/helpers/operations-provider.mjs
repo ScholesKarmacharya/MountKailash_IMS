@@ -11,7 +11,9 @@ const ids = {
   carton: "00000000-0000-0000-0000-000000000012",
 };
 let db;
+const preferences = new Map();
 async function reset() {
+  preferences.clear();
   await db?.close();
   db = new PGlite();
   await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text);
@@ -66,7 +68,7 @@ function user(id) {
     role: "authenticated",
     email: Object.keys(ids).find((k) => ids[k] === id) + "@fixture.example",
     app_metadata: { provider: "email" },
-    user_metadata: {},
+    user_metadata: preferences.get(id) ?? {},
     created_at: new Date().toISOString(),
   };
 }
@@ -98,6 +100,9 @@ const allowedTables = new Set([
   "inventory_balances",
   "business_days",
   "stock_adjustments",
+  "stock_movements",
+  "trips",
+  "customer_ledger",
 ]);
 const allowedRpc = new Set([
   "save_delivery_customer",
@@ -146,7 +151,7 @@ async function handle(req, res) {
     return reply(200, { ready: true });
   }
   let body = {};
-  if (req.method === "POST") {
+  if (req.method === "POST" || req.method === "PUT") {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
@@ -161,6 +166,12 @@ async function handle(req, res) {
     return reply(200, session(ids[key]));
   }
   const actor = tokenId(req);
+  if (url.pathname === "/auth/v1/user" && req.method === "PUT" && actor) {
+    if (!["en", "ne"].includes(body.data?.locale))
+      return reply(400, { message: "Invalid fixture locale" });
+    preferences.set(actor, { locale: body.data.locale });
+    return reply(200, user(actor));
+  }
   if (url.pathname === "/auth/v1/user")
     return actor
       ? reply(200, user(actor))
@@ -196,10 +207,20 @@ async function handle(req, res) {
           args = [];
         for (const [key, value] of url.searchParams) {
           if (["select", "order", "limit", "offset"].includes(key)) continue;
-          if (!/^[a-z_]+$/.test(key)) throw new Error("Invalid fixture column");
+          const column =
+            table === "trips" && key === "business_days.date_label"
+              ? "d.date_label"
+              : key;
+          if (!/^[a-z_]+$/.test(key) && column !== "d.date_label")
+            throw new Error("Invalid fixture column");
           if (value.startsWith("eq.")) {
             args.push(value.slice(3));
-            filters.push(`${key}=$${args.length}`);
+            filters.push(`${column}=$${args.length}`);
+          } else if (/^(gte|lte|gt|lt)\./.test(value)) {
+            const [operator, ...rest] = value.split(".");
+            args.push(rest.join("."));
+            const symbol = { gte: ">=", lte: "<=", gt: ">", lt: "<" }[operator];
+            filters.push(`${column}${symbol}$${args.length}`);
           } else if (value.startsWith("in.(")) {
             const vals = value.slice(4, -1).split(",");
             const placeholders = vals.map((v) => {
@@ -211,7 +232,10 @@ async function handle(req, res) {
         }
         result = (
           await db.query(
-            `select * from public.${table}${filters.length ? " where " + filters.join(" and ") : ""}`,
+            (table === "trips"
+              ? "select t.*,json_build_object('plate_number',v.plate_number) as vehicles,json_build_object('name',p.name) as profiles,json_build_object('date_label',d.date_label) as business_days from public.trips t join public.vehicles v on v.id=t.vehicle_id join public.profiles p on p.id=t.driver_id join public.business_days d on d.id=t.business_day_id"
+              : `select * from public.${table}`) +
+              (filters.length ? " where " + filters.join(" and ") : ""),
             args,
           )
         ).rows;

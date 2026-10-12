@@ -13,6 +13,10 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/driver\/home/);
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "English", exact: true }),
+  ).toBeEnabled();
   await page.goto(`/driver/trips/${trip}`);
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })

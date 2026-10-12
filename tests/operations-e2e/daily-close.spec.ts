@@ -1,18 +1,28 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip, fixtureIds } from "./fixture-client";
+import {
+  adToBs,
+  formatBusinessDate,
+} from "../../src/domain/localization/calendar";
 import type {
   DayDetail,
   HistoryDay,
 } from "../../src/domain/business-days/types";
 async function login(page: Page, role = "admin") {
   await page.goto("/sign-in");
+  await page.getByRole("button", { name: "English", exact: true }).click();
   await page.getByLabel("Email address").fill(`${role}@fixture.example`);
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(
     role === "admin" ? /admin\/dashboard/ : /driver\/home/,
   );
+
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "English", exact: true }),
+  ).toBeEnabled();
 }
 async function save(page: Page, label: string, heading?: string) {
   const response = page.waitForResponse(
@@ -159,8 +169,29 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
   expect(rangePdf.headers()["cache-control"]).toBe("private, no-store");
   expect((await rangePdf.body()).subarray(0, 4).toString()).toBe("%PDF");
   await page.goto("/admin/reports");
-  await page.getByLabel("From date", { exact: true }).fill("1990-01-01");
-  await page.getByLabel("To date", { exact: true }).fill("1990-01-02");
+  for (const [label, date] of [
+    ["From date", "1990-01-01"],
+    ["To date", "1990-01-02"],
+  ]) {
+    const bs = adToBs(date!);
+    await page
+      .getByRole("button", { name: label!, exact: true })
+      .first()
+      .click();
+    const calendar = page.getByRole("dialog", {
+      name: "BS calendar",
+      exact: true,
+    });
+    await calendar
+      .getByLabel("BS year", { exact: true })
+      .selectOption(String(bs.year));
+    await calendar
+      .getByLabel("BS month", { exact: true })
+      .selectOption(String(bs.month));
+    await calendar
+      .getByRole("button", { name: formatBusinessDate(date!), exact: true })
+      .click();
+  }
   await page
     .getByRole("button", { name: "Filter history", exact: true })
     .click();

@@ -65,3 +65,13 @@ Tests pass, no outstanding negative stock or double-spend issue, all finance amo
 - [x] Existing Cloud admin/driver login and inventory read-only regression; preserve accounts and records.
 - [x] Explicitly approve/apply migration 014; verify catalog/grants/RLS, unchanged account/business fingerprints and real six-page Cloud driver plus admin directory/contact/pending/privacy acceptance on desktop/mobile. Remote migrations are up to date; no sample business data created.
 - [ ] Hosted staging write/UAT, independent-connection races and production-volume/deployment checks remain outstanding.
+
+## English/Nepali and BS calendar (client request, 2026-10-12)
+- [x] Shared English/Nepali dictionaries, translation coverage and independent Auth language preferences; switch preserves drafts and permissions.
+- [x] Validated BS conversion library, Nepal-local current dates, full supported-range round trips and PostgreSQL timezone/boundary tests.
+- [x] Mobile BS year/month/day/range picker, all requested presets and canonical database filters.
+- [x] Admin/driver UI, original pending/FIFO dates, credit/receipt dates, manual closing and historical reports localized.
+- [x] Exact BS-month credit statements, Nepali PDF rendering and machine-readable CSV dates/numbers; no SQL/data conversion needed.
+- [x] Existing Cloud desktop/mobile pages, real Auth redirects and current-language preference persistence verified without business fixtures.
+- [x] Final operational suite: all 20 desktop/mobile scenarios passed; type/lint/unit/Cloud Auth/production build passed. Details in `BILINGUAL_BS_CALENDAR.md`.
+- [ ] Staff Nepali terminology review, approved hosted staging write/UAT, concurrency/volume, HTTPS deployment and restore checks.

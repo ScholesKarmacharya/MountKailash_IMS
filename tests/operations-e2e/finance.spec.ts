@@ -3,12 +3,18 @@ import { activeFixtureTrip, fixtureClient } from "./fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 async function login(page: Page, role = "driver") {
   await page.goto("/sign-in");
+  await page.getByRole("button", { name: "English", exact: true }).click();
   await page.getByLabel("Email address").fill(role + "@fixture.example");
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(
     role === "admin" ? /admin\/dashboard/ : /driver\/home/,
   );
+
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "English", exact: true }),
+  ).toBeEnabled();
 }
 async function signout(page: Page) {
   await page.getByRole("button", { name: "Sign out", exact: true }).click();

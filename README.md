@@ -2,6 +2,8 @@
 
 Application through Sprint 4 with Sprint 6 integration, driver inventory/sales workspace and dated FIFO pending-jar tracking (2026-10-12). Cloud migrations 001-014 are verified applied, including the explicitly approved driver/FIFO/workspace migrations. See [driver inventory acceptance and Cloud verification](docs/DRIVER_INVENTORY_WORKSPACE.md), [Sprint 6 validation](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved; hosted operational write acceptance remains outstanding.
 
+English/Nepali localization and the Bikram Sambat business calendar are implemented. EN/ने switches immediately without losing drafts; preferences belong to each Supabase Auth user (admin default English, driver default Nepali). Both languages use BS dates. See [implementation, tests, supported dates and manual acceptance](docs/BILINGUAL_BS_CALENDAR.md). No SQL migration or environment change is needed.
+
 ## Goal
 
 Track 20L full jars, collected empty jars, water-bottle cartons, multiple drivers and vehicles, repeated customer visits, trip reconciliation, refilling, customer deposits, monthly credit, payments, invoices, and manually closed business days.
@@ -130,3 +132,11 @@ npx.cmd --no-install supabase db push --linked --dry-run
 The first two commands exercise disposable PostgreSQL only. The third checks Cloud history without applying SQL. No Docker, seed or environment changes are needed. The existing Cloud development server remains at http://localhost:3000.
 
 **Next work:** complete hosted staging acceptance, simultaneous-connection close/posting tests, backup/restore verification and operational training. Cloud migrations 012-013 are applied and read-only connected checks pass. Automatic Fonepay still requires official merchant access; deposits remain explicitly configurable and tax unconfigured until confirmed.
+
+## English/Nepali and BS dates
+
+Use the global EN/ने selector after login. History, inventory, trip, pending-jar, payment, invoice, refilling and credit filters provide BS year/month/day pickers and period presets. Credit statements support actual BS months and custom periods. PDFs follow the user's language; Excel-compatible CSV preserves exact ASCII numbers and canonical date columns. Customer-entered content is preserved.
+
+`@inicrea/bikram-sambat-core@0.1.3` supports BS 1975–2100 (canonical 1918-04-13 through 2044-04-12). Dates outside its supported interval display an honest unavailable message. Supabase retains canonical `date`/`timestamptz`, Nepal timezone boundaries and manually managed business-day sessions.
+
+Run `npm.cmd test` for conversion/coverage/permission/financial regressions and `npm.cmd run test:e2e:operations` for real bilingual desktop/mobile workflows on disposable PostgreSQL. With the existing Cloud development server running, `node --env-file=.env.local scripts/verify-cloud-localization.mjs http://localhost:3000` checks actual pages and monthly exports without business or preference writes. Optional `--save-current-preference` saves only each existing demo account's current language and tests reload/login persistence. It does not seed business data or log credentials. Full acceptance steps and limitations are in the linked localization report.

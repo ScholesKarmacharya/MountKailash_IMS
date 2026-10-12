@@ -5,6 +5,7 @@ import type { DeliveryCustomerContext } from "../../src/domain/operations/custom
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 async function login(page: Page, role = "driver") {
   await page.goto("/sign-in");
+  await page.getByRole("button", { name: "English", exact: true }).click();
   await page.getByLabel("Email address").fill(`${role}@fixture.example`);
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -13,6 +14,11 @@ async function login(page: Page, role = "driver") {
   );
   page.removeAllListeners("dialog");
   page.on("dialog", (d) => d.accept());
+
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "English", exact: true }),
+  ).toBeEnabled();
 }
 async function record(page: Page, full: number, empty: number) {
   await page

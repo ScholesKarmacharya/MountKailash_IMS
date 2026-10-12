@@ -63,5 +63,5 @@ Tests pass, no outstanding negative stock or double-spend issue, all finance amo
 - [x] Complete 100-jar round, repeated/empty-only visits, admin return, automatic same-day 80-jar reload and next-day carry-forward executed on desktop/mobile disposable PostgreSQL.
 - [x] Local broader regression: 221 unit/database checks, 48 protected-route browser checks, all 16 operational scenarios across full/targeted runs, type/lint/format/build. Exact commands and initial failures in `DRIVER_INVENTORY_WORKSPACE.md`.
 - [x] Existing Cloud admin/driver login and inventory read-only regression; preserve accounts and records.
-- [ ] Approve/apply migration 014 and execute extended six-page Cloud contact/pending/privacy acceptance; automatic approval review requires explicit approval for this exact migration.
+- [x] Explicitly approve/apply migration 014; verify catalog/grants/RLS, unchanged account/business fingerprints and real six-page Cloud driver plus admin directory/contact/pending/privacy acceptance on desktop/mobile. Remote migrations are up to date; no sample business data created.
 - [ ] Hosted staging write/UAT, independent-connection races and production-volume/deployment checks remain outstanding.

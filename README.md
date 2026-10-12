@@ -1,6 +1,6 @@
 # Mount Kailash Water Distribution Management System
 
-Application through Sprint 4 with Sprint 6 integration, driver workflow and dated FIFO pending-jar tracking (2026-10-12). Cloud migrations 001-013 are verified applied, including the explicitly approved driver/FIFO migrations. See [Sprint 6 validation, migration review and acceptance](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved; hosted operational write acceptance remains outstanding.
+Application through Sprint 4 with Sprint 6 integration, driver inventory/sales workspace and dated FIFO pending-jar tracking (2026-10-12). Cloud migrations 001-014 are verified applied, including the explicitly approved driver/FIFO/workspace migrations. See [driver inventory acceptance and Cloud verification](docs/DRIVER_INVENTORY_WORKSPACE.md), [Sprint 6 validation](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved; hosted operational write acceptance remains outstanding.
 
 ## Goal
 
@@ -107,7 +107,7 @@ See the [Sprint 2 integration audit](docs/SPRINT_2_INTEGRATION_AUDIT.md) for the
 
 ## Sprint 3 finance
 
-The current [driver inventory and simple-round workspace](docs/DRIVER_INVENTORY_WORKSPACE.md) adds dedicated mobile stock, delivery, customers, pending jars, sales history and warehouse-return pages while retaining the existing stock/finance transactions. Its forward-only migration `202610120014_driver_inventory_workspace.sql` adds ordinary contact fields, projected lookup for waiting drivers and tighter private-note access. Read the safety review and pending/application status before pushing Cloud migrations. No new credentials, Docker or sample business data are needed.
+The current [driver inventory and simple-round workspace](docs/DRIVER_INVENTORY_WORKSPACE.md) adds dedicated mobile stock, delivery, customers, pending jars, sales history and warehouse-return pages while retaining the existing stock/finance transactions. Its forward-only migration `202610120014_driver_inventory_workspace.sql` adds ordinary contact fields, projected lookup for waiting drivers and tighter private-note access. Migration 014 was explicitly approved, applied and verified in Cloud on 2026-10-12; all six driver pages and four admin directories passed actual desktop/mobile read-only browser checks. The linked dry run reports no pending migrations. No new credentials, Docker or sample business data are needed.
 
 Read [Sprint 3 implementation, migration review and manual acceptance](docs/SPRINT_3_IMPLEMENTATION.md). New trip visits atomically issue sales/invoices with approved price snapshots and post cash, pending Fonepay, allocations, credit and explicit deposits. Admin Payments, Customer credit and Billing settings use real Supabase RPC data. Invoice/receipt PDFs are private, generated on demand and support English/Nepali with bundled fonts.
 

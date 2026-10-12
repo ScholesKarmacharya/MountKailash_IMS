@@ -3,7 +3,12 @@ import type { Locale } from "@/domain/localization/locale";
 import { formatBusinessDate } from "@/domain/localization/calendar";
 import { sum } from "./money";
 import { digits } from "@/domain/localization/locale";
-import { invoiceTotals } from "./reports";
+import {
+  invoiceTotals,
+  invoicePaymentStatus,
+  invoiceDeliveries,
+} from "./reports";
+import { deliveryText } from "@/domain/operations/product-delivery";
 import type { Invoice, FinanceWorkspace, Payment, Company } from "./types";
 export type ReceiptDocument = {
   title: string;
@@ -36,6 +41,7 @@ export function invoiceDocument(
         ? formatBusinessDate(i.due_date, locale)
         : tr(locale, "Unconfigured"),
     ]),
+    ...invoiceDeliveries(i, f).map((line) => deliveryText(line, locale)),
     ...f.items
       .filter((s) => s.sale_id === i.sale_id)
       .map((s) =>
@@ -61,6 +67,8 @@ export function invoiceDocument(
         ]),
       ),
     tr(locale, "Current total: {0}", [npr(totals.effective)]),
+    `${tr(locale, "Total Amount")}: ${npr(totals.effective)}`,
+    `${tr(locale, "Payment Status")}: ${tr(locale, invoicePaymentStatus(i, f))}`,
     tr(locale, "Collected: {0}", [npr(totals.collected)]),
     tr(locale, "Pending Fonepay: {0}", [npr(totals.pending)]),
     tr(locale, "Outstanding: {0}", [npr(i.outstanding)]),
@@ -137,9 +145,20 @@ export function paymentDocument(
       ]),
       ...f.allocations
         .filter((a) => a.payment_id === p.id)
-        .map((a) => {
+        .flatMap((a) => {
           const i = f.invoices.find((i) => i.id === a.invoice_id);
-          return `${i ? tr(locale, "MK-{0}", [i.number.padStart(8, "0")]) : tr(locale, "Prior customer invoice")}: ${money(a.amount, locale)}`;
+          return [
+            `${i ? tr(locale, "MK-{0}", [i.number.padStart(8, "0")]) : tr(locale, "Prior customer invoice")}: ${money(a.amount, locale)}`,
+            ...(i
+              ? [
+                  `${tr(locale, "Payment Status")}: ${tr(locale, invoicePaymentStatus(i, f))}`,
+                  `${tr(locale, "Total Amount")}: ${npr(invoiceTotals(i, f).effective)}`,
+                  ...invoiceDeliveries(i, f).map((line) =>
+                    deliveryText(line, locale),
+                  ),
+                ]
+              : []),
+          ];
         }),
       ...f.events
         .filter((e) => e.payment_id === p.id)

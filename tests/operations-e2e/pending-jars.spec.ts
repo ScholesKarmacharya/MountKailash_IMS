@@ -21,11 +21,9 @@ async function login(page: Page, role = "driver") {
   ).toBeEnabled();
 }
 async function record(page: Page, full: number, empty: number) {
+  await page.getByLabel("Jars Delivered", { exact: true }).fill(String(full));
   await page
-    .getByLabel("Full jars delivered", { exact: true })
-    .fill(String(full));
-  await page
-    .getByLabel("Empty jars collected", { exact: true })
+    .getByLabel("Empty Jars Returned", { exact: true })
     .fill(String(empty));
   if (full > 0)
     await page.getByRole("button", { name: "Credit", exact: true }).click();

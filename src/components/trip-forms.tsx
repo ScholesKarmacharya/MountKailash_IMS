@@ -8,6 +8,12 @@ import {
   Value,
   useLocale,
 } from "@/components/localization";
+import { ProductDeliverySummary } from "./product-delivery-summary";
+import {
+  deliveryText,
+  deliveryHeading,
+  productDeliveries,
+} from "@/domain/operations/product-delivery";
 import { tr } from "@/domain/localization/format";
 
 import { AmountInput, PaymentButtons } from "./finance-payment";
@@ -423,14 +429,8 @@ export function DeliveryForm({
           simplifiedPayment
             ? tr(locale, "Save {0}: {1} · {2} · {3}?", [
                 walk ? walkName : selected?.name,
-                items
-                  .map((i) =>
-                    tr(locale, "{0} full, {1} empty, {2} cartons", [
-                      i.full_jars,
-                      i.empty_jars,
-                      i.cartons,
-                    ]),
-                  )
+                productDeliveries(items, products)
+                  .map((i) => deliveryText(i, locale))
                   .join("; "),
                 tr(
                   locale,
@@ -455,14 +455,8 @@ export function DeliveryForm({
                       .join("; ")
                   : "",
                 walk ? walkName : selected?.name,
-                items
-                  .map((i) =>
-                    tr(locale, "{0} full, {1} empty, {2} cartons", [
-                      i.full_jars,
-                      i.empty_jars,
-                      i.cartons,
-                    ]),
-                  )
+                productDeliveries(items, products)
+                  .map((i) => deliveryText(i, locale))
                   .join("; "),
                 t(
                   f?.available
@@ -637,7 +631,10 @@ export function DeliveryForm({
                 )?.quantity ?? 0;
               return (
                 <Card key={p.id} className="space-y-5 p-4">
-                  <h3 className="font-semibold">{p.name}</h3>
+                  <h3 className="font-semibold">
+                    <T k={deliveryHeading(p.kind)} />
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{p.name}</p>
                   <p className="text-sm">
                     <T
                       k="Unit price: {0} / {1}"
@@ -668,16 +665,21 @@ export function DeliveryForm({
                         · {available("EMPTY_JAR")} <T k="empty" />{" "}
                       </p>
                       <Counter
-                        label="Full jars delivered"
+                        label="Jars Delivered"
                         value={q.full_jars}
                         max={p.is_active ? available("FULL_JAR") : 0}
                         onChange={(n) => update(p.id, "full_jars", n)}
                       />
                       <Counter
-                        label="Empty jars collected"
+                        label="Empty Jars Returned"
                         value={q.empty_jars}
                         onChange={(n) => update(p.id, "empty_jars", n)}
                       />
+                      <p className="text-sm">
+                        <T k="Unreturned Jars" /> (
+                        <T k="net change from this visit" />
+                        ): <Value value={q.full_jars - q.empty_jars} />
+                      </p>
                       {selected && !walk && (
                         <p className="text-xs text-muted-foreground">
                           <T
@@ -784,7 +786,7 @@ export function DeliveryForm({
                         </strong>
                       </p>
                       <Counter
-                        label="Cartons delivered"
+                        label="Cartons Delivered"
                         value={q.cartons}
                         max={p.is_active ? available("BOTTLE_CARTON") : 0}
                         onChange={(n) => update(p.id, "cartons", n)}
@@ -798,7 +800,7 @@ export function DeliveryForm({
               <div className="space-y-4">
                 <p className="text-xl font-bold">
                   <T
-                    k="Payable: {0}"
+                    k="Total Amount: {0}"
                     values={[<Value key="payable" value={npr(payable)} />]}
                   />
                 </p>
@@ -834,7 +836,7 @@ export function DeliveryForm({
               <div className="space-y-5">
                 <p className="text-xl font-bold">
                   <T
-                    k="Payable: {0}"
+                    k="Total Amount: {0}"
                     values={[<Value key="v0" value={npr(payable)} />]}
                   />
                 </p>
@@ -1058,18 +1060,20 @@ export function DeliveryForm({
               <T k="Confirm delivery" />
             </h3>
             <p>{walk ? walkName : selected?.name}</p>
-            {items.map((i) => (
-              <p key={i.product_id}>
-                <T
-                  k="{0}: {1} full delivered · {2} empty collected · {3} cartons delivered"
-                  values={[
-                    products.find((p) => p.id === i.product_id)?.name,
-                    <Value key="v1" value={i.full_jars} />,
-                    <Value key="v2" value={i.empty_jars} />,
-                    <Value key="v3" value={i.cartons} />,
-                  ]}
-                />
-              </p>
+            {productDeliveries(items, products).map((line) => (
+              <ProductDeliverySummary
+                key={line.product_id}
+                line={line}
+                previousBalance={
+                  walk
+                    ? undefined
+                    : (custody.find(
+                        (c) =>
+                          c.customer_id === customer &&
+                          c.product_id === line.product_id,
+                      )?.quantity ?? 0)
+                }
+              />
             ))}
             {simplifiedPayment ? (
               <p>
@@ -1083,7 +1087,7 @@ export function DeliveryForm({
                         : "Paid"
                   }
                 />{" "}
-                · <Value value={npr(payable)} />
+                · <T k="Total Amount" />: <Value value={npr(payable)} />
               </p>
             ) : (
               <p>

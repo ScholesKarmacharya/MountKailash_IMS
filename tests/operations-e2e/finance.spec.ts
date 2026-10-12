@@ -63,8 +63,8 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("4");
-  await page.getByLabel("Empty jars collected", { exact: true }).fill("2");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("4");
+  await page.getByLabel("Empty Jars Returned", { exact: true }).fill("2");
   await page
     .getByRole("button", { name: "Partial payment", exact: true })
     .click();
@@ -83,7 +83,7 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
     .getByLabel("Transaction reference (unverified)", { exact: true })
     .fill("browser-reference");
   await expect(
-    page.getByText("Payable: NPR 601.00", { exact: true }),
+    page.getByText("Total Amount: NPR 601.00", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Review delivery", exact: true })

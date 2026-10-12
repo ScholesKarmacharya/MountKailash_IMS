@@ -1,3 +1,5 @@
+import { invoicePaymentStatus, invoiceTotals } from "@/domain/finance/reports";
+import { ProductDeliverySummary } from "@/components/product-delivery-summary";
 import { getTripHistory } from "@/services/history";
 import { BsDateRange } from "@/components/bs-date-picker";
 import { inDateRange } from "@/domain/localization/calendar";
@@ -70,13 +72,28 @@ export default async function Page({
                       />
                     </p>
                     <p className="text-sm">
-                      <T
-                        k="Total {0} · outstanding {1}"
-                        values={[
-                          <Value key="v0" value={npr(i.total)} />,
-                          <Value key="v1" value={npr(i.outstanding)} />,
-                        ]}
-                      />
+                      <T k="Payment Status" />:{" "}
+                      <Message value={invoicePaymentStatus(i, finance)} />
+                    </p>
+                    {(finance.delivery_items ?? [])
+                      .filter((line) =>
+                        finance.sales.some(
+                          (sale) =>
+                            sale.id === i.sale_id &&
+                            sale.visit_id === line.visit_id,
+                        ),
+                      )
+                      .map((line) => (
+                        <ProductDeliverySummary
+                          key={line.product_id}
+                          line={line}
+                        />
+                      ))}
+                    <p className="text-sm">
+                      <T k="Total Amount" />:{" "}
+                      <Value value={npr(invoiceTotals(i, finance).effective)} />{" "}
+                      · <T k="Outstanding" />:{" "}
+                      <Value value={npr(i.outstanding)} />
                     </p>
                   </li>
                 ))}

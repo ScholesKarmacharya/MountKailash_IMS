@@ -21,7 +21,7 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("90");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("90");
   // Another signed-in device posts 40 while this browser retains an unsaved 90.
   await driver.rpc("post_trip_visit", {
     p_trip: trip,
@@ -38,7 +38,7 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
   await page
     .getByRole("button", { name: "Refresh stock", exact: true })
     .click();
-  const full = page.getByLabel("Full jars delivered", { exact: true });
+  const full = page.getByLabel("Jars Delivered", { exact: true });
   await expect(full).toHaveAttribute("max", "60");
   await expect(full).toHaveValue("90");
   await expect(

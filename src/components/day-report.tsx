@@ -1,7 +1,12 @@
+import { ProductDeliverySummary } from "./product-delivery-summary";
 import { T, Message, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { Card } from "./ui/card";
-import { amountLabels, groupedTrips } from "@/domain/business-days/reports";
+import {
+  amountLabels,
+  groupedTrips,
+  dayTripDeliveries,
+} from "@/domain/business-days/reports";
 import type { DayReport, AuditRow } from "@/domain/business-days/types";
 import { npr } from "@/domain/finance/money";
 import { stockLabels } from "@/domain/inventory/validation";
@@ -177,16 +182,25 @@ export function DayReportView({ report: r }: { report: DayReport }) {
                 <li key={g.id} className="py-3">
                   <strong>{g.name}</strong>
                   <p className="mt-1 text-sm">
-                    <T
-                      k="{0} trips · {1} full jars · {2} empties · {3} cartons"
-                      values={[
-                        <Value key="v0" value={g.trips} />,
-                        <Value key="v1" value={g.full_jars} />,
-                        <Value key="v2" value={g.empty_jars} />,
-                        <Value key="v3" value={g.cartons} />,
-                      ]}
-                    />
+                    <T k="{0} trips" values={[g.trips]} />
                   </p>
+                  {dayTripDeliveries(
+                    r,
+                    r.trips
+                      .filter(
+                        (trip) =>
+                          (dimension === "driver"
+                            ? trip.driver_id
+                            : trip.vehicle_id) === g.id,
+                      )
+                      .map((trip) => trip.id),
+                  ).map((line) => (
+                    <ProductDeliverySummary
+                      key={line.product_id}
+                      line={line}
+                      aggregate
+                    />
+                  ))}
                   <p className="mt-1 text-sm">
                     <T
                       k="Item sales {0} · collections {1}"
@@ -214,17 +228,17 @@ export function DayReportView({ report: r }: { report: DayReport }) {
           <ul className="divide-y divide-border">
             {r.products.map((p) => (
               <li key={p.product_id} className="py-3">
-                <strong>{p.name}</strong>
-                <p className="mt-1 text-sm">
-                  <T
-                    k="{0} full · {1} empty · {2} cartons · item sales {3} before invoice corrections"
-                    values={[
-                      <Value key="v0" value={p.full_jars} />,
-                      <Value key="v1" value={p.empty_jars} />,
-                      <Value key="v2" value={p.cartons} />,
-                      <Value key="v3" value={npr(p.sales)} />,
-                    ]}
+                {p.kind ? (
+                  <ProductDeliverySummary
+                    line={{ ...p, kind: p.kind }}
+                    aggregate
                   />
+                ) : (
+                  <strong>{p.name}</strong>
+                )}
+                <p className="mt-1 text-sm">
+                  <T k="Item sales before invoice corrections" />:{" "}
+                  <Value value={npr(p.sales)} />
                 </p>
               </li>
             ))}
@@ -245,17 +259,12 @@ export function DayReportView({ report: r }: { report: DayReport }) {
               <li key={c.id} className="py-3">
                 <strong>{c.name}</strong>
                 <p className="mt-1 text-sm">
-                  <T
-                    k="Trip #{0} · {1} · {2} full / {3} empties / {4} cartons"
-                    values={[
-                      c.trip_number,
-                      <DateValue key="v1" value={c.created_at} time />,
-                      <Value key="v2" value={c.full_jars} />,
-                      <Value key="v3" value={c.empty_jars} />,
-                      <Value key="v4" value={c.cartons} />,
-                    ]}
-                  />
+                  <T k="Trip #{0}" values={[c.trip_number]} /> ·{" "}
+                  <DateValue value={c.created_at} time />
                 </p>
+                {(c.items ?? []).map((line) => (
+                  <ProductDeliverySummary key={line.product_id} line={line} />
+                ))}
                 {c.invoice_id && (
                   <Link
                     href={`/admin/invoices/${c.invoice_id}`}

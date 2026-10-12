@@ -80,7 +80,15 @@ export async function activeFixtureTrip(
   await admin.rpc("load_trip", {
     p_trip: trip,
     p_items: [
-      { product_id: fixtureIds.jar, stock_kind: "FULL_JAR", quantity: load },
+      ...(load
+        ? [
+            {
+              product_id: fixtureIds.jar,
+              stock_kind: "FULL_JAR",
+              quantity: load,
+            },
+          ]
+        : []),
       ...(cartons
         ? [
             {

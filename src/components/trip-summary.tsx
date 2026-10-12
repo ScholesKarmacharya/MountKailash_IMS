@@ -1,3 +1,9 @@
+import { invoicePaymentStatus, invoiceTotals } from "@/domain/finance/reports";
+import { ProductDeliverySummary } from "./product-delivery-summary";
+import {
+  productDeliveries,
+  groupDeliveries,
+} from "@/domain/operations/product-delivery";
 import { T, Message, DateValue, Value } from "@/components/localization";
 import { getFinance } from "@/services/finance";
 import { npr, sum } from "@/domain/finance/money";
@@ -425,16 +431,24 @@ export async function TripDetail({
                   ]}
                 />
               </p>
-              <p className="mt-2 text-sm">
-                <T
-                  k="{0} full delivered · {1} empty collected · {2} cartons delivered"
-                  values={[
-                    g.full,
-                    g.empty,
-                    <Value key="v2" value={g.cartons} />,
-                  ]}
+              {groupDeliveries(
+                productDeliveries(
+                  w.items.filter((i) =>
+                    w.visits.some(
+                      (v) =>
+                        v.id === i.visit_id &&
+                        (v.customer_id ?? `walk:${v.id}`) === key,
+                    ),
+                  ),
+                  w.products,
+                ),
+              ).map((line) => (
+                <ProductDeliverySummary
+                  key={line.product_id}
+                  line={line}
+                  aggregate
                 />
-              </p>
+              ))}
             </div>
           ))
         )}
@@ -450,6 +464,9 @@ export async function TripDetail({
         )}
         {w.visits.map((v) => {
           const payment = w.payments.find((p) => p.visit_id === v.id);
+          const invoice = f.invoices.find((i) =>
+            f.sales.some((s) => s.id === i.sale_id && s.visit_id === v.id),
+          );
           return (
             <article
               key={v.id}
@@ -462,42 +479,49 @@ export async function TripDetail({
               <p className="text-xs text-muted-foreground">
                 <DateValue value={v.created_at} time /> · {v.id}
               </p>
-              {w.items
-                .filter((i) => i.visit_id === v.id)
-                .map((i) => (
-                  <p className="text-sm" key={i.product_id}>
+              {productDeliveries(
+                w.items.filter((i) => i.visit_id === v.id),
+                w.products,
+              ).map((line) => (
+                <ProductDeliverySummary key={line.product_id} line={line} />
+              ))}
+              {invoice ? (
+                <p className="text-sm">
+                  <T k="Payment Status" />:{" "}
+                  <Message value={invoicePaymentStatus(invoice, f)} /> ·{" "}
+                  <T k="Total Amount" />:{" "}
+                  <Value value={npr(invoiceTotals(invoice, f).effective)} />
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm">
                     <T
-                      k="{0}: {1} full · {2} empty · {3} cartons · Unit price NPR {4}"
+                      k="Delivery value NPR {0} · {1} · Reported {2}"
                       values={[
-                        w.products.find((p) => p.id === i.product_id)?.name,
-                        <Value key="v1" value={i.full_jars} />,
-                        <Value key="v2" value={i.empty_jars} />,
-                        <Value key="v3" value={i.cartons} />,
-                        <Value key="price" value={i.unit_price_snapshot} />,
+                        <Value key="value" value={v.value_snapshot} />,
+                        <Message key="method" value={payment?.selection} />,
+                        payment?.reported_amount ? (
+                          <Value
+                            key="reported"
+                            value={payment.reported_amount}
+                          />
+                        ) : (
+                          <T key="unspecified" k="not specified" />
+                        ),
                       ]}
                     />
                   </p>
-                ))}
-              <p className="text-sm">
-                <T
-                  k="Delivery value NPR {0} · {1} · Reported {2}"
-                  values={[
-                    <Value key="value" value={v.value_snapshot} />,
-                    <Message key="method" value={payment?.selection} />,
-                    payment?.reported_amount ? (
-                      <Value key="reported" value={payment.reported_amount} />
-                    ) : (
-                      <T key="unspecified" k="not specified" />
-                    ),
-                  ]}
-                />
-              </p>
+                </>
+              )}
               <p className="text-xs text-amber-800">
                 <Message
                   value={
                     f.available
                       ? f.sales.some((s) => s.visit_id === v.id)
-                        ? "Invoice recorded; Fonepay requires reconciliation"
+                        ? invoice &&
+                          invoicePaymentStatus(invoice, f) === "Pending payment"
+                          ? "Invoice recorded; Fonepay requires reconciliation"
+                          : "Invoice recorded"
                         : w.items
                               .filter((i) => i.visit_id === v.id)
                               .every((i) => i.full_jars + i.cartons === 0)

@@ -137,6 +137,8 @@ The first two commands exercise disposable PostgreSQL only. The third checks Clo
 
 ## English/Nepali and BS dates
 
+Product-specific delivery, history and export fields now use the recorded product kind. Cartons show carton quantities; reusable jars show delivery, empty returns and the signed custody change, with the registered customer's updated total in confirmation. No database migration is needed. See [product-specific fields and testing](docs/PRODUCT_SPECIFIC_DELIVERY.md).
+
 Use the global EN/ने selector after login. History, inventory, trip, pending-jar, payment, invoice, refilling and credit filters provide BS year/month/day pickers and period presets. Credit statements support actual BS months and custom periods. PDFs follow the user's language; Excel-compatible CSV preserves exact ASCII numbers and canonical date columns. Customer-entered content is preserved.
 
 `@inicrea/bikram-sambat-core@0.1.3` supports BS 1975–2100 (canonical 1918-04-13 through 2044-04-12). Dates outside its supported interval display an honest unavailable message. Supabase retains canonical `date`/`timestamptz`, Nepal timezone boundaries and manually managed business-day sessions.

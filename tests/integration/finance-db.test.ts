@@ -3,7 +3,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, beforeEach, afterEach, it, expect } from "vitest";
 import { receiptPdf } from "@/services/pdf";
-import { invoiceDocument } from "@/domain/finance/documents";
+import { invoiceDocument, paymentDocument } from "@/domain/finance/documents";
+import type { ProductDelivery } from "@/domain/operations/product-delivery";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { financeMetrics } from "@/domain/finance/reports";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
@@ -930,6 +931,157 @@ it("simplified Paid settles the actual invoice once and persists its stock and f
   expect(await rpc("post_driver_delivery", args)).toBe(id);
   expect(await workspace()).toEqual(w);
   expect(await scalar("select count(*) from public.trip_visits")).toBe(1);
+});
+it("carton-only, jar-only and mixed deliveries preserve separate stock and custody ledgers and typed PDFs", async () => {
+  await active();
+  const cartonItems = JSON.stringify([
+    { product_id: carton, full_jars: 0, empty_jars: 0, cartons: 5 },
+  ]);
+  const args = [
+    trip,
+    customer,
+    "",
+    "",
+    cartonItems,
+    "PAID",
+    "751.25",
+    "",
+    randomUUID(),
+  ];
+  const cartonVisit = await rpc("post_driver_delivery", args);
+  expect(await rpc("post_driver_delivery", args)).toBe(cartonVisit);
+  expect(await scalar("select count(*) from public.jar_custody_entries")).toBe(
+    0,
+  );
+  expect(await scalar("select count(*) from public.jar_custody_balances")).toBe(
+    0,
+  );
+  expect(
+    await scalar(
+      "select count(*) from public.stock_movements where visit_id=$1 and stock_kind<>'BOTTLE_CARTON'",
+      [cartonVisit],
+    ),
+  ).toBe(0);
+  await rejects(
+    "post_driver_delivery",
+    [
+      trip,
+      customer,
+      "",
+      "",
+      JSON.stringify([
+        { product_id: carton, full_jars: 0, empty_jars: 1, cartons: 1 },
+      ]),
+      "CREDIT",
+      null,
+      "",
+      randomUUID(),
+    ],
+    /carton|product|jar/i,
+  );
+  const f = await workspace();
+  // Read actual immutable visit rows and kinds as the authenticated driver.
+  f.delivery_items = (
+    await db.query<ProductDelivery>(
+      "select vi.*,p.kind,p.name from public.visit_items vi join public.products p on p.id=vi.product_id where vi.visit_id=$1",
+      [cartonVisit],
+    )
+  ).rows;
+  expect(f.delivery_items).toHaveLength(1);
+  for (const doc of [
+    invoiceDocument(f.invoices[0]!, f),
+    paymentDocument(f.payments[0]!, f, f.invoices[0]!.date_label),
+    invoiceDocument(f.invoices[0]!, f, "ne"),
+  ]) {
+    const bytes = await receiptPdf(doc);
+    const task = getDocument({ data: bytes, useSystemFonts: false });
+    const pdf = await task.promise;
+    const pages: string[] = [];
+    for (let page = 1; page <= pdf.numPages; page++)
+      pages.push(
+        (await (await pdf.getPage(page)).getTextContent()).items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" "),
+      );
+    const text = pages.join(" ");
+    expect(text).not.toMatch(
+      /Jars Delivered|Empty Jars Returned|Unreturned Jars|फिर्ता आउन बाँकी जार|फिर्ता आएका खाली जार/,
+    );
+    // Embedded Devanagari shaping reorders extracted glyphs; source labels are checked separately.
+    expect(doc.lines.join(" ")).not.toMatch(
+      /Jars Delivered|Empty Jars Returned|Unreturned Jars|फिर्ता आउन बाँकी जार|फिर्ता आएका खाली जार/,
+    );
+    expect(text.replaceAll(/\s/g, "")).toMatch(
+      /CartonsDelivered:5|डेिलभरीभएकाकाटुर्न:५/,
+    );
+    await task.destroy();
+  }
+  await rpc("post_driver_delivery", driverDelivery("CREDIT", null)); // Earlier custody: 10.
+  const mixedVisit = await rpc("post_driver_delivery", [
+    trip,
+    customer,
+    "",
+    "",
+    JSON.stringify([
+      { product_id: jar, full_jars: 12, empty_jars: 8, cartons: 0 },
+      { product_id: carton, full_jars: 0, empty_jars: 0, cartons: 2 },
+    ]),
+    "CREDIT",
+    null,
+    "",
+    randomUUID(),
+  ]);
+  expect(
+    await scalar(
+      "select quantity from public.jar_custody_balances where product_id=$1",
+      [jar],
+    ),
+  ).toBe(14);
+  expect(
+    await scalar(
+      "select count(*) from public.jar_custody_entries where product_id=$1",
+      [carton],
+    ),
+  ).toBe(0);
+  const mixed = await workspace();
+  mixed.delivery_items = (
+    await db.query<ProductDelivery>(
+      "select vi.*,p.kind,p.name from public.visit_items vi join public.products p on p.id=vi.product_id where vi.visit_id=$1",
+      [mixedVisit],
+    )
+  ).rows;
+  const i = mixed.invoices.find((i) =>
+    mixed.sales.some((s) => s.id === i.sale_id && s.visit_id === mixedVisit),
+  )!;
+  expect(i).toMatchObject({ total: "2103.50", outstanding: "2103.50" });
+  const text = invoiceDocument(i, mixed).lines.join("\n");
+  expect(text).toContain("Jars Delivered: 12");
+  expect(text).toContain("Empty Jars Returned: 8");
+  expect(text).toContain("Unreturned Jars: 4");
+  expect(text).toContain("Cartons Delivered: 2");
+  const balances = await db.query<{ stock_kind: string; quantity: number }>(
+    "select b.stock_kind,b.quantity from public.inventory_balances b join public.vehicles v on v.location_id=b.location_id where v.id=$1",
+    [vehicle],
+  );
+  expect(
+    Object.fromEntries(balances.rows.map((b) => [b.stock_kind, b.quantity])),
+  ).toMatchObject({ FULL_JAR: 78, EMPTY_JAR: 8, BOTTLE_CARTON: 3 });
+  await who(other);
+  expect(
+    (
+      await db.query("select * from public.visit_items where visit_id=$1", [
+        cartonVisit,
+      ])
+    ).rows,
+  ).toHaveLength(0);
+  expect(
+    (
+      await db.query("select * from public.products where id in ($1,$2)", [
+        jar,
+        carton,
+      ])
+    ).rows,
+  ).toHaveLength(0);
 });
 it.each([null, "1502.49", "1502.51"])(
   "incorrect Paid amount %s rolls back the whole delivery",

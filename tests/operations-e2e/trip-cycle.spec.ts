@@ -108,42 +108,40 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
     await page.getByRole("button", { name: /Browser Customer/ }).click();
     await page
       .getByRole("button", {
-        name: "Increase Full jars delivered",
+        name: "Increase Jars Delivered",
         exact: true,
       })
       .click();
     await expect(
-      page.getByLabel("Full jars delivered", { exact: true }),
+      page.getByLabel("Jars Delivered", { exact: true }),
     ).toHaveValue("1");
     await page
       .getByRole("button", {
-        name: "Decrease Full jars delivered",
+        name: "Decrease Jars Delivered",
         exact: true,
       })
       .click();
+    await page.getByLabel("Jars Delivered", { exact: true }).fill(String(full));
     await page
-      .getByLabel("Full jars delivered", { exact: true })
-      .fill(String(full));
-    await page
-      .getByLabel("Empty jars collected", { exact: true })
+      .getByLabel("Empty Jars Returned", { exact: true })
       .fill(String(empty));
     await page
       .getByRole("button", {
-        name: "Increase Empty jars collected",
+        name: "Increase Empty Jars Returned",
         exact: true,
       })
       .click();
     await expect(
-      page.getByLabel("Empty jars collected", { exact: true }),
+      page.getByLabel("Empty Jars Returned", { exact: true }),
     ).toHaveValue(String(empty + 1));
     await page
       .getByRole("button", {
-        name: "Decrease Empty jars collected",
+        name: "Decrease Empty Jars Returned",
         exact: true,
       })
       .click();
     await expect(
-      page.getByLabel("Empty jars collected", { exact: true }),
+      page.getByLabel("Empty Jars Returned", { exact: true }),
     ).toHaveValue(String(empty));
     await page
       .getByLabel("Total Amount Received (NPR)", { exact: true })
@@ -155,7 +153,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       .getByRole("button", { name: "Correct quantities", exact: true })
       .click();
     await expect(
-      page.getByLabel("Full jars delivered", { exact: true }),
+      page.getByLabel("Jars Delivered", { exact: true }),
     ).toHaveValue(String(full));
     await page
       .getByRole("button", { name: "Review delivery", exact: true })
@@ -187,7 +185,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await expect(
     page.getByText("Browser Customer · 2 visits", { exact: true }),
   ).toBeVisible();
-  const fullInput = page.getByLabel("Full jars delivered", { exact: true });
+  const fullInput = page.getByLabel("Jars Delivered", { exact: true });
   await fullInput.fill("21");
   await expect(fullInput).toHaveValue("21");
   await expect(

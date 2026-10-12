@@ -50,14 +50,12 @@ async function record(
   selection = "Credit",
   cartons = 0,
 ) {
+  await page.getByLabel("Jars Delivered", { exact: true }).fill(String(full));
   await page
-    .getByLabel("Full jars delivered", { exact: true })
-    .fill(String(full));
-  await page
-    .getByLabel("Empty jars collected", { exact: true })
+    .getByLabel("Empty Jars Returned", { exact: true })
     .fill(String(empty));
   await page
-    .getByLabel("Cartons delivered", { exact: true })
+    .getByLabel("Cartons Delivered", { exact: true })
     .fill(String(cartons));
   if (full + cartons > 0)
     await page.getByRole("button", { name: selection, exact: true }).click();
@@ -125,12 +123,12 @@ test("driver inventory, simplified selling, audited returns and automatic second
       .click();
     await page
       .getByRole("button", {
-        name: "Increase Full jars delivered",
+        name: "Increase Jars Delivered",
         exact: true,
       })
       .click();
     await expect(
-      page.getByLabel("Full jars delivered", { exact: true }),
+      page.getByLabel("Jars Delivered", { exact: true }),
     ).toHaveValue("1");
     await page
       .getByRole("button", { name: "Add New Customer", exact: true })
@@ -150,7 +148,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
       page.getByText("Selected: ABC Hotel", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByLabel("Full jars delivered", { exact: true }),
+      page.getByLabel("Jars Delivered", { exact: true }),
     ).toHaveValue("1");
     const hotel = (await admin.workspace()).customers.find(
       (c) => c.name === "ABC Hotel",
@@ -226,7 +224,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
     await expect(
       page.getByText("Selected: ABC Hotel", { exact: true }),
     ).toBeVisible();
-    await page.getByLabel("Full jars delivered", { exact: true }).fill("41");
+    await page.getByLabel("Jars Delivered", { exact: true }).fill("41");
     await expect(
       page.getByRole("button", { name: "Review delivery", exact: true }),
     ).toBeDisabled();

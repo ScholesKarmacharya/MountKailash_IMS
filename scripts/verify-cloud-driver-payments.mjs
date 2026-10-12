@@ -136,10 +136,10 @@ try {
         has: page.locator('input[name="operation"][value="driver-visit"]'),
       });
       if (await form.count()) {
-        const quantities = form.getByLabel(label("Full jars delivered"), {
+        const quantities = form.getByLabel(label("Jars Delivered"), {
           exact: true,
         });
-        const cartons = form.getByLabel(label("Cartons delivered"), {
+        const cartons = form.getByLabel(label("Cartons Delivered"), {
           exact: true,
         });
         let changed = false;

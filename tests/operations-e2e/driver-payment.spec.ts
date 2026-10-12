@@ -54,8 +54,8 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
   const form = page.locator("form").filter({
     has: page.locator('input[name="operation"][value="driver-visit"]'),
   });
-  await form.getByLabel("Full jars delivered", { exact: true }).fill("2");
-  await form.getByLabel("Empty jars collected", { exact: true }).fill("1");
+  await form.getByLabel("Jars Delivered", { exact: true }).fill("2");
+  await form.getByLabel("Empty Jars Returned", { exact: true }).fill("1");
   const group = form.getByRole("group", {
     name: "Payment Status",
     exact: true,
@@ -142,7 +142,7 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
     status: "CONFIRMED",
   });
   await page.goto(`/driver/delivery?customer=${customer}`);
-  await form.getByLabel("Full jars delivered", { exact: true }).fill("2");
+  await form.getByLabel("Jars Delivered", { exact: true }).fill("2");
   await group.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(amount).toHaveCount(0);
   await save(page);
@@ -152,8 +152,8 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
   expect(w.credit.find((i) => i.outstanding === "300.50")).toBeTruthy();
   await page.goto("/driver/delivery");
   await page.getByRole("button", { name: "Walk-in", exact: true }).click();
-  await form.getByLabel("Full jars delivered", { exact: true }).fill("1");
-  await form.getByLabel("Empty jars collected", { exact: true }).fill("1");
+  await form.getByLabel("Jars Delivered", { exact: true }).fill("1");
+  await form.getByLabel("Empty Jars Returned", { exact: true }).fill("1");
   await group.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(
     form

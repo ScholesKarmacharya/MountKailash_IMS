@@ -1,6 +1,12 @@
+import { ProductDeliverySummary } from "./product-delivery-summary";
+import {
+  groupDeliveries,
+  type ProductDelivery,
+} from "@/domain/operations/product-delivery";
 import { T, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { getCustomerDeliveries } from "@/services/operations";
+import { npr } from "@/domain/finance/money";
 
 import { Card } from "./ui/card";
 export async function CustomerReport({ id }: { id: string }) {
@@ -8,6 +14,7 @@ export async function CustomerReport({ id }: { id: string }) {
   const trips = new Map<
     string,
     {
+      items: ProductDelivery[];
       number: number;
       date: string;
       full: number;
@@ -18,6 +25,7 @@ export async function CustomerReport({ id }: { id: string }) {
   >();
   for (const v of visits) {
     const t = trips.get(v.trip_id) ?? {
+      items: [],
       number: v.trip_number,
       date: v.date_label,
       full: 0,
@@ -29,6 +37,7 @@ export async function CustomerReport({ id }: { id: string }) {
     t.empty += v.empty_jars;
     t.cartons += v.cartons;
     t.visits++;
+    t.items.push(...(v.items ?? []));
     trips.set(v.trip_id, t);
   }
   return (
@@ -57,35 +66,34 @@ export async function CustomerReport({ id }: { id: string }) {
                 />
               </Link>
               <p className="mt-2 text-sm">
-                <T
-                  k="{0} visits · {1} full delivered · {2} empty collected · {3} cartons"
-                  values={[
-                    <Value key="v0" value={t.visits} />,
-                    t.full,
-                    t.empty,
-                    <Value key="v3" value={t.cartons} />,
-                  ]}
-                />
+                <T k="Visits" />: <Value value={t.visits} />
               </p>
+              {groupDeliveries(t.items).map((line) => (
+                <ProductDeliverySummary
+                  key={line.product_id}
+                  line={line}
+                  aggregate
+                />
+              ))}
             </div>
           ))}
           <h3 className="mt-5 text-sm font-semibold">
             <T k="Separate visits" />
           </h3>
           {visits.map((v) => (
-            <p key={v.id} className="py-3 text-sm">
-              <T
-                k="{0} · Trip #{1} · {2} full / {3} empty / {4} cartons · NPR {5}"
-                values={[
-                  <DateValue key="v0" value={v.created_at} time />,
-                  v.trip_number,
-                  <Value key="v2" value={v.full_jars} />,
-                  <Value key="v3" value={v.empty_jars} />,
-                  <Value key="v4" value={v.cartons} />,
-                  v.value_snapshot,
-                ]}
-              />
-            </p>
+            <article key={v.id} className="space-y-2 py-3 text-sm">
+              <p>
+                <DateValue value={v.created_at} time /> ·{" "}
+                <T k="Trip #{0}" values={[v.trip_number]} />
+              </p>
+              {(v.items ?? []).map((line) => (
+                <ProductDeliverySummary key={line.product_id} line={line} />
+              ))}
+              <p>
+                <T k="Delivery value" />:{" "}
+                <Value value={npr(v.value_snapshot)} />
+              </p>
+            </article>
           ))}
         </>
       )}

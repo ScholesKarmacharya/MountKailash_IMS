@@ -3,6 +3,7 @@ import { receiptPdf } from "@/services/pdf";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "@napi-rs/canvas";
 import { mkdir, writeFile } from "node:fs/promises";
+import { deliveryText } from "@/domain/operations/product-delivery";
 it("embeds Nepali glyphs, preserves money and renders measured lines without clipping", async () => {
   const pdf = await receiptPdf({
     title: "बिल मिति: २६ असोज २०८३",
@@ -19,8 +20,28 @@ it("embeds Nepali glyphs, preserves money and renders measured lines without cli
     lines: [
       "ग्राहक: ABC Hotel 123",
       "जम्मा: NPR ५,२५८.७५",
-      "फिर्ता आउन बाँकी जार: ५",
-      "संकलित खाली जार: ३०",
+      deliveryText(
+        {
+          product_id: "jar",
+          name: "20L Water Jar",
+          kind: "FULL_JAR",
+          full_jars: 12,
+          empty_jars: 8,
+          cartons: 0,
+        },
+        "ne",
+      ),
+      deliveryText(
+        {
+          product_id: "carton",
+          name: "Water Carton",
+          kind: "BOTTLE_CARTON",
+          full_jars: 0,
+          empty_jars: 0,
+          cartons: 5,
+        },
+        "ne",
+      ),
       "लामो ग्राहक ठेगाना काठमाडौं नेपाल ".repeat(20),
     ],
   });

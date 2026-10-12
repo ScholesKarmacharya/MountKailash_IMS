@@ -111,16 +111,16 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   // Historical trip detail remains a supported operational entry point.
   await page.goto(`/driver/trips/${trip}`);
   await page
-    .getByRole("button", { name: "Increase Full jars delivered", exact: true })
+    .getByRole("button", { name: "Increase Jars Delivered", exact: true })
     .click();
-  await expect(
-    page.getByLabel("Full jars delivered", { exact: true }),
-  ).toHaveValue("1");
+  await expect(page.getByLabel("Jars Delivered", { exact: true })).toHaveValue(
+    "1",
+  );
   await page
-    .getByRole("button", { name: "Decrease Full jars delivered", exact: true })
+    .getByRole("button", { name: "Decrease Jars Delivered", exact: true })
     .click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("20");
-  await page.getByLabel("Empty jars collected", { exact: true }).fill("5");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("20");
+  await page.getByLabel("Empty Jars Returned", { exact: true }).fill("5");
   await page
     .getByRole("button", { name: "Add New Customer", exact: true })
     .click();
@@ -137,11 +137,11 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await expect(
     page.getByText("Selected: Driver customer", { exact: true }),
   ).toBeVisible();
+  await expect(page.getByLabel("Jars Delivered", { exact: true })).toHaveValue(
+    "20",
+  );
   await expect(
-    page.getByLabel("Full jars delivered", { exact: true }),
-  ).toHaveValue("20");
-  await expect(
-    page.getByLabel("Empty jars collected", { exact: true }),
+    page.getByLabel("Empty Jars Returned", { exact: true }),
   ).toHaveValue("5");
   const created = (await admin.workspace()).customers.find(
     (c) => c.name === "Driver customer",
@@ -160,7 +160,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
           ?.phone,
     )
     .toBe("9812345679");
-  await page.getByLabel("Cartons delivered", { exact: true }).fill("1");
+  await page.getByLabel("Cartons Delivered", { exact: true }).fill("1");
   await page
     .getByLabel("Total Amount Received (NPR)", { exact: true })
     .fill("3155.25");
@@ -179,8 +179,8 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     .getByLabel("Search active customers", { exact: true })
     .fill("Known shop");
   await page.getByRole("button", { name: /Existing shop/ }).click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("25");
-  await page.getByLabel("Empty jars collected", { exact: true }).fill("15");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("25");
+  await page.getByLabel("Empty Jars Returned", { exact: true }).fill("15");
   await page.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
@@ -194,8 +194,8 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     .toBe(2);
   await page.reload();
   await page.getByRole("button", { name: "Walk-in", exact: true }).click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("10");
-  await page.getByLabel("Empty jars collected", { exact: true }).fill("10");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("10");
+  await page.getByLabel("Empty Jars Returned", { exact: true }).fill("10");
   await page
     .getByLabel("Total Amount Received (NPR)", { exact: true })
     .fill("1502.50");
@@ -213,8 +213,8 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page
     .getByRole("button", { name: /Driver customer · Roadside shop/ })
     .click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("15");
-  await page.getByLabel("Empty jars collected", { exact: true }).fill("10");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("15");
+  await page.getByLabel("Empty Jars Returned", { exact: true }).fill("10");
   await page.getByRole("button", { name: "Credit", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
@@ -239,7 +239,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await page
     .getByRole("button", { name: /Driver customer · Roadside shop/ })
     .click();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("11");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("11");
   await expect(
     page
       .getByRole("alert")
@@ -248,7 +248,7 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeDisabled();
-  await page.getByLabel("Full jars delivered", { exact: true }).fill("0");
+  await page.getByLabel("Jars Delivered", { exact: true }).fill("0");
   await page
     .getByLabel("Collection customer", { exact: true })
     .selectOption(existing);

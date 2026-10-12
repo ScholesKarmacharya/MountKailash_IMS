@@ -1,3 +1,7 @@
+import {
+  deliveryText,
+  groupDeliveries,
+} from "@/domain/operations/product-delivery";
 import { digits } from "@/domain/localization/locale";
 import { tr, money } from "@/domain/localization/format";
 import type { Locale } from "@/domain/localization/locale";
@@ -24,6 +28,13 @@ export const amountLabels = {
   deposits_reversed: "Deposits reversed",
   deposit_liability: "Refundable deposit liability",
 } satisfies Partial<Record<keyof DayTotals, string>>;
+export function dayTripDeliveries(report: DayReport, tripIds: string[]) {
+  return groupDeliveries(
+    report.customers
+      .filter((c) => tripIds.includes(c.trip_id))
+      .flatMap((c) => c.items ?? []),
+  );
+}
 export function groupedTrips(
   report: DayReport,
   dimension: "driver" | "vehicle",
@@ -211,11 +222,21 @@ export function reportRows(r: DayReport, locale: Locale = "en"): ReportRow[] {
         id: g.id,
         label: g.name,
         amount: g.sales,
-        details: tr(
-          locale,
-          "{0} trips; {1} full / {2} empties / {3} cartons; excludes invoice-level corrections",
-          [g.trips, g.full_jars, g.empty_jars, g.cartons],
-        ),
+        details: [
+          tr(locale, "{0} trips", [g.trips]),
+          ...dayTripDeliveries(
+            r,
+            r.trips
+              .filter(
+                (trip) =>
+                  (dimension === "driver"
+                    ? trip.driver_id
+                    : trip.vehicle_id) === g.id,
+              )
+              .map((trip) => trip.id),
+          ).map((line) => deliveryText(line, locale, true)),
+          tr(locale, "Item sales before invoice corrections"),
+        ].join("; "),
       });
       rows.push({
         section: tr(locale, "{0} collections", [tr(locale, dimension)]),
@@ -230,11 +251,10 @@ export function reportRows(r: DayReport, locale: Locale = "en"): ReportRow[] {
       id: p.product_id,
       label: p.name,
       amount: p.sales,
-      details: tr(
-        locale,
-        "{0} full / {1} empties / {2} cartons; {3}; excludes invoice-level corrections",
-        [p.full_jars, p.empty_jars, p.cartons, p.unit],
-      ),
+      details: [
+        p.kind ? deliveryText({ ...p, kind: p.kind }, locale, true) : p.unit,
+        tr(locale, "Item sales before invoice corrections"),
+      ].join("; "),
     });
   for (const t of r.trips) {
     rows.push({
@@ -242,19 +262,17 @@ export function reportRows(r: DayReport, locale: Locale = "en"): ReportRow[] {
       id: t.id,
       label: tr(locale, "Trip #{0}", [t.trip_number]),
       amount: t.sales,
-      details: tr(
-        locale,
-        "{0}; {1}; {2}; {3} full / {4} empties / {5} cartons; {6}",
-        [
-          t.driver_name,
-          t.plate_number,
-          tr(locale, t.status),
-          t.full_jars,
-          t.empty_jars,
-          t.cartons,
-          t.close_reason,
-        ],
-      ),
+      details: [
+        t.driver_name,
+        t.plate_number,
+        tr(locale, t.status),
+        ...dayTripDeliveries(r, [t.id]).map((line) =>
+          deliveryText(line, locale, true),
+        ),
+        t.close_reason,
+      ]
+        .filter(Boolean)
+        .join("; "),
     });
     for (const c of t.checks)
       for (const i of c.items)
@@ -287,19 +305,14 @@ export function reportRows(r: DayReport, locale: Locale = "en"): ReportRow[] {
       id: c.id,
       label: c.name,
       amount: c.sales,
-      details: tr(
-        locale,
-        "Trip #{0}; invoice {1}; {2} full / {3} empties / {4} cartons; tax {5}; {6}",
-        [
-          c.trip_number,
-          c.invoice_number ?? tr(locale, "not posted"),
-          c.full_jars,
-          c.empty_jars,
-          c.cartons,
-          money(c.tax, locale),
-          formatBusinessDate(c.created_at, locale, true),
-        ],
-      ),
+      details: [
+        tr(locale, "Trip #{0}", [c.trip_number]),
+        c.invoice_number ?? tr(locale, "not posted"),
+        ...(c.items ?? []).map((line) => deliveryText(line, locale)),
+        tr(locale, "Tax"),
+        money(c.tax, locale),
+        formatBusinessDate(c.created_at, locale, true),
+      ].join("; "),
     });
   for (const p of r.payments) {
     rows.push({

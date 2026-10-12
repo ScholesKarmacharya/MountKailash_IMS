@@ -59,27 +59,27 @@ test("Nepali driver delivery preserves drafts during language switches and downl
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
-  await page.getByLabel("डेलिभरी भएका भरिएका जार", { exact: true }).fill("35");
-  await page.getByLabel("संकलित खाली जार", { exact: true }).fill("30");
+  await page.getByLabel("डेलिभरी भएका जार", { exact: true }).fill("35");
+  await page.getByLabel("फिर्ता आएका खाली जार", { exact: true }).fill("30");
   await page
     .getByLabel("प्राप्त भएको जम्मा रकम (NPR)", { exact: true })
     .fill("५२५८.७५");
   const url = page.url();
   await language(page, "en");
   expect(page.url()).toBe(url);
+  await expect(page.getByLabel("Jars Delivered", { exact: true })).toHaveValue(
+    "35",
+  );
   await expect(
-    page.getByLabel("Full jars delivered", { exact: true }),
-  ).toHaveValue("35");
-  await expect(
-    page.getByLabel("Empty jars collected", { exact: true }),
+    page.getByLabel("Empty Jars Returned", { exact: true }),
   ).toHaveValue("30");
   await language(page, "ne");
   await expect(
-    page.getByLabel("डेलिभरी भएका भरिएका जार", { exact: true }),
+    page.getByLabel("डेलिभरी भएका जार", { exact: true }),
   ).toHaveValue("35");
-  await expect(page.getByLabel("संकलित खाली जार", { exact: true })).toHaveValue(
-    "30",
-  );
+  await expect(
+    page.getByLabel("फिर्ता आएका खाली जार", { exact: true }),
+  ).toHaveValue("30");
   await page
     .getByRole("button", { name: "डेलिभरी समीक्षा", exact: true })
     .click();

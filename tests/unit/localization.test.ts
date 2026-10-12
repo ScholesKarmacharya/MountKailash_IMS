@@ -111,6 +111,7 @@ describe("language, translation coverage and exact finance", () => {
     );
     for (const [key, value] of Object.entries(dictionaries.ne)) {
       expect(value.trim(), key).not.toBe("");
+      expect(value, key).not.toMatch(/\?{2,}/);
       const tokens = key.match(/\{\d+\}/g) ?? [];
       for (const token of value.match(/\{\d+\}/g) ?? [])
         expect(tokens, key).toContain(token);

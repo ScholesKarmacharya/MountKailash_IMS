@@ -893,3 +893,155 @@ it("rejected walk-in Fonepay can be replaced on the same assigned active trip", 
   expect(f.invoices[0]!.outstanding).toBe("0.00");
   expect(f.sales).toHaveLength(1);
 });
+
+function driverDelivery(
+  status = "PAID",
+  amount: string | null = "1502.50",
+  key = randomUUID(),
+  registered: string | null = customer,
+  full = 10,
+  empty = 0,
+) {
+  return [
+    trip,
+    registered,
+    "Walk-in",
+    "",
+    items(full, empty),
+    status,
+    amount,
+    "",
+    key,
+  ];
+}
+it("simplified Paid settles the actual invoice once and persists its stock and financial journals", async () => {
+  await active();
+  const args = driverDelivery();
+  const id = await rpc("post_driver_delivery", args);
+  const w = await workspace();
+  expect(w.invoices[0]!.total).toBe("1502.50");
+  expect(w.invoices[0]!.outstanding).toBe("0.00");
+  expect(w.payments).toHaveLength(1);
+  expect(w.payments[0]).toMatchObject({
+    method: "CASH",
+    status: "CONFIRMED",
+    amount: "1502.50",
+  });
+  expect(await rpc("post_driver_delivery", args)).toBe(id);
+  expect(await workspace()).toEqual(w);
+  expect(await scalar("select count(*) from public.trip_visits")).toBe(1);
+});
+it.each([null, "1502.49", "1502.51"])(
+  "incorrect Paid amount %s rolls back the whole delivery",
+  async (amount) => {
+    await active();
+    const before = await scalar("select public.operations_workspace($1)", [
+      trip,
+    ]);
+    const money = await workspace();
+    const key = randomUUID();
+    await rejects(
+      "post_driver_delivery",
+      driverDelivery("PAID", amount, key),
+      /received|amount|allocation|payable|invoice balance/i,
+    );
+    expect(
+      await scalar("select public.operations_workspace($1)", [trip]),
+    ).toEqual(before);
+    expect(await workspace()).toEqual(money);
+    // Failed validation must not consume the retry key.
+    await rpc("post_driver_delivery", driverDelivery("PAID", "1502.50", key));
+    expect((await workspace()).invoices).toHaveLength(1);
+  },
+);
+it("simplified Credit posts the full customer debt and no receipt; empty returns preserve finance", async () => {
+  await active();
+  await rpc("post_driver_delivery", driverDelivery("CREDIT", null));
+  const w = await workspace();
+  expect(w.invoices[0]!.outstanding).toBe("1502.50");
+  expect(w.credit[0]!.outstanding).toBe("1502.50");
+  expect(w.payments).toHaveLength(0);
+  await rpc(
+    "post_driver_delivery",
+    driverDelivery("RETURN_ONLY", null, randomUUID(), customer, 0, 5),
+  );
+  expect(await workspace()).toEqual(w);
+  expect(await scalar("select count(*) from public.trip_visits")).toBe(2);
+});
+it("simplified Credit rejects walk-ins, new receipts and forged return-only sales", async () => {
+  await active();
+  await rejects(
+    "post_driver_delivery",
+    driverDelivery("CREDIT", null, randomUUID(), null),
+    /registered customer/,
+  );
+  await rejects(
+    "post_driver_delivery",
+    driverDelivery("CREDIT", "1"),
+    /cannot collect/,
+  );
+  await rejects(
+    "post_driver_delivery",
+    driverDelivery("RETURN_ONLY", null),
+    /status does not match/,
+  );
+  expect((await workspace()).invoices).toHaveLength(0);
+});
+it("simplified delivery respects trip ownership and authenticated-only grants", async () => {
+  await active();
+  await who(other);
+  await rejects(
+    "post_driver_delivery",
+    driverDelivery(),
+    /assigned|permission|not authorized|own|access/i,
+  );
+  expect(
+    await scalar(
+      "select has_function_privilege('anon','public.post_driver_delivery(uuid,uuid,text,text,jsonb,text,text,text,uuid)','EXECUTE')",
+    ),
+  ).toBe(false);
+  expect(
+    await scalar(
+      "select has_function_privilege('authenticated','public.post_driver_delivery(uuid,uuid,text,text,jsonb,text,text,text,uuid)','EXECUTE')",
+    ),
+  ).toBe(true);
+});
+it("Paid validates server prices rather than a stale form total", async () => {
+  await finance("PRICE", {
+    customer,
+    product: jar,
+    price: "99.99",
+    active: true,
+    version: 0,
+    reason: "Approved negotiated rate",
+  });
+  await active();
+  await rejects(
+    "post_driver_delivery",
+    driverDelivery(),
+    /received|amount|allocation|payable|invoice balance/i,
+  );
+  await rpc("post_driver_delivery", driverDelivery("PAID", "999.90"));
+  expect((await invoice()).outstanding).toBe("0.00");
+});
+it("Paid includes the server tax snapshot in its equality check", async () => {
+  await finance("COMPANY", {
+    version: 1,
+    name: "Mount Kailash",
+    address: "Kathmandu",
+    phone: "",
+    registration: "",
+    tax_mode: "EXPLICIT",
+    tax_label: "Confirmed test tax",
+    tax_rate: "13",
+    reason: "Isolated test configuration",
+  });
+  await active();
+  await rejects("post_driver_delivery", driverDelivery(), /payable/);
+  await rpc("post_driver_delivery", driverDelivery("PAID", "1697.83"));
+  expect(await invoice()).toMatchObject({
+    total: "1697.83",
+    outstanding: "0.00",
+    tax: "195.33",
+  });
+});

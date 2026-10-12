@@ -47,7 +47,7 @@ it.each([true, false])(
     expect(mocks.read).not.toHaveBeenCalled();
   },
 );
-it.each(["start", "load"])(
+it.each(["start", "load", "driver-visit"])(
   "guards %s mutations before database access",
   async (operation) => {
     const form = new FormData();
@@ -56,11 +56,17 @@ it.each(["start", "load"])(
       key: "00000000-0000-0000-0000-000000000001",
       trip: "00000000-0000-0000-0000-000000000002",
       items: "[]",
+      customer: "00000000-0000-0000-0000-000000000001",
+      walk_name: "",
+      walk_phone: "",
+      notes: "",
+      payment_status: "PAID",
+      received_amount: "1.00",
     }))
       form.set(key, value);
     await expect(saveOperation(form)).rejects.toThrow("Forbidden");
     expect(mocks.guard).toHaveBeenCalledWith(
-      operation === "start" ? "trip:operate" : "trip:assign",
+      operation === "load" ? "trip:assign" : "trip:operate",
     );
     expect(mocks.write).not.toHaveBeenCalled();
   },

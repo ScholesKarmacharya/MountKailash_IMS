@@ -314,6 +314,7 @@ export async function TripDetail({
               <T k="New Delivery" />
             </h2>
             <DeliveryForm
+              simplifiedPayment={!admin}
               finance={f}
               workspace={w}
               trip={trip}

@@ -1265,5 +1265,20 @@
   "Legacy visit: finance has not been posted": "Legacy visit: finance has not been posted",
   "Finance migration required; legacy payment intent": "Finance migration required; legacy payment intent",
   "Delivery values preserve original prices. Payments, credit and deposits are shown in the separate financial ledgers.": "Delivery values preserve original prices. Payments, credit and deposits are shown in the separate financial ledgers.",
-  "{0} blockers": "{0} blockers"
+  "{0} blockers": "{0} blockers",
+  "Paid": "Paid",
+  "Credit": "Credit",
+  "Payment Status": "Payment Status",
+  "Total Amount Received": "Total Amount Received",
+  "Total Amount Received (NPR)": "Total Amount Received (NPR)",
+  "Credit requires a registered customer.": "Credit requires a registered customer.",
+  "Enter the total amount received.": "Enter the total amount received.",
+  "Total amount received must equal the payable total.": "Total amount received must equal the payable total.",
+  "Choose Paid or Credit.": "Choose Paid or Credit.",
+  "Payment status does not match the delivery.": "Payment status does not match the delivery.",
+  "Credit or return-only visits cannot collect a new payment.": "Credit or return-only visits cannot collect a new payment.",
+  "Empty jar return": "Empty jar return",
+  "Finance migration required before saving a delivery.": "Finance migration required before saving a delivery.",
+  "The reviewed driver payment migration is required before saving this delivery.": "The reviewed driver payment migration is required before saving this delivery.",
+  "Save {0}: {1} · {2} · {3}?": "Save {0}: {1} · {2} · {3}?"
 }

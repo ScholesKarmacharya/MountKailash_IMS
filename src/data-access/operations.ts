@@ -43,6 +43,13 @@ export async function writeOperation(command: Command): Promise<string> {
   const client = await createClient();
   const { data, error } = await client.rpc(command.rpc, command.args);
   if (error) {
+    if (
+      command.rpc === "post_driver_delivery" &&
+      ["PGRST202", "42883"].includes(error.code)
+    )
+      throw new Error(
+        "The reviewed driver payment migration is required before saving this delivery.",
+      );
     if (error.code === "23505")
       throw new Error(
         "That assignment, request or verified transaction reference already exists. Refresh and check before retrying.",

@@ -74,6 +74,7 @@ export async function DriverRoundWorkspace({
                   />
                 ) : (
                   <DeliveryForm
+                    simplifiedPayment
                     workspace={w}
                     finance={finance}
                     trip={trip}

@@ -13,6 +13,7 @@ export type Operation =
   | "review"
   | "cancel"
   | "visit"
+  | "driver-visit"
   | "submit"
   | "reconcile"
   | "custody";
@@ -158,6 +159,36 @@ export function parseCommand(form: FormData): Command {
           ...common,
         },
       };
+    case "driver-visit": {
+      const status = str("payment_status", 11),
+        received = str("received_amount", 16);
+      if (!["PAID", "CREDIT", "RETURN_ONLY"].includes(status))
+        throw new Error("Choose Paid or Credit.");
+      if (status === "PAID" && !/^\d{1,12}(\.\d{1,2})?$/.test(received))
+        throw new Error("Enter the total amount received.");
+      if (status !== "PAID" && received)
+        throw new Error(
+          "Credit or return-only visits cannot collect a new payment.",
+        );
+      const customer = str("customer", 36) ? id("customer") : null;
+      if (status === "CREDIT" && !customer)
+        throw new Error("Credit requires a registered customer.");
+      return {
+        admin: false,
+        rpc: "post_driver_delivery",
+        args: {
+          p_trip: id("trip"),
+          p_customer: customer,
+          p_walk_name: str("walk_name", 120),
+          p_walk_phone: str("walk_phone", 40),
+          p_items: json("items"),
+          p_status: status,
+          p_received: received || null,
+          p_notes: str("notes"),
+          ...common,
+        },
+      };
+    }
     case "visit":
       return {
         admin: false,

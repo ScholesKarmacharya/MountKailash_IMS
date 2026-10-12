@@ -13,6 +13,8 @@ import { tr } from "@/domain/localization/format";
 import { AmountInput, PaymentButtons } from "./finance-payment";
 import { cents, decimal, sum, npr } from "@/domain/finance/money";
 import { paymentPlan } from "@/domain/finance/payment-plan";
+import { driverPaymentPlan } from "@/domain/finance/driver-payment";
+import { DriverPayment } from "./driver-payment";
 import type { FinanceWorkspace, PaymentDraft } from "@/domain/finance/types";
 
 import { useState, useEffect } from "react";
@@ -188,12 +190,14 @@ export function DeliveryForm({
   trip,
   requestKey,
   initialCustomer,
+  simplifiedPayment = false,
 }: {
   finance?: FinanceWorkspace;
   workspace: Workspace;
   trip: Trip;
   requestKey: string;
   initialCustomer?: string;
+  simplifiedPayment?: boolean;
 }) {
   const { locale, t, number } = useLocale();
   const [search, setSearch] = useState(""),
@@ -258,6 +262,12 @@ export function DeliveryForm({
       ? decimal((cents(total) * cents(f.company.tax_rate) + 5000n) / 10000n)
       : "0.00";
   const payable = sum([total, tax]);
+  const hasSale = items.some((i) => i.full_jars + i.cartons > 0);
+  const driverStatus = hasSale
+    ? payment === "UNPAID"
+      ? "CREDIT"
+      : "PAID"
+    : "RETURN_ONLY";
   let financeProblem = "",
     payments: PaymentDraft[] = [];
   if (f?.available) {
@@ -266,16 +276,23 @@ export function DeliveryForm({
         throw new Error(
           "This delivery exceeds the supported invoice amount. Reduce quantities.",
         );
-      payments = paymentPlan({
-        selection: payment,
-        total: payable,
-        amount,
-        oldAmount: walk ? "0" : oldAmount,
-        deposit: walk ? "0" : deposit,
-        fonepayPart,
-        reference,
-        credit,
-      });
+      payments = simplifiedPayment
+        ? driverPaymentPlan({
+            status: driverStatus,
+            total: payable,
+            amount,
+            customer: walk ? null : customer || null,
+          })
+        : paymentPlan({
+            selection: payment,
+            total: payable,
+            amount,
+            oldAmount: walk ? "0" : oldAmount,
+            deposit: walk ? "0" : deposit,
+            fonepayPart,
+            reference,
+            credit,
+          });
       if (
         walk &&
         payments.reduce((s, p) => s + cents(p.current_amount ?? "0"), 0n) <
@@ -299,8 +316,7 @@ export function DeliveryForm({
     context?.customer ?? w.customers.find((c) => c.id === customer);
   const walkProblem =
     walk &&
-    (payment === "UNPAID" ||
-      payment === "PARTIAL" ||
+    ((!simplifiedPayment && (payment === "UNPAID" || payment === "PARTIAL")) ||
       items.some((i) => i.full_jars !== i.empty_jars));
   const custodyProblem =
     !walk &&
@@ -337,6 +353,7 @@ export function DeliveryForm({
     !custodyProblem &&
     !stockProblem &&
     !financeProblem;
+  const canReview = eligible && (!simplifiedPayment || !!f?.available);
   const router = useRouter();
   return (
     <div className="space-y-5">
@@ -397,41 +414,75 @@ export function DeliveryForm({
         </Button>
       </div>
       <OperationForm
-        operation="visit"
+        operation={simplifiedPayment ? "driver-visit" : "visit"}
         trip={trip.id}
         requestKey={requestKey}
-        showSubmit={review && eligible}
+        showSubmit={review && canReview}
         label="Save Delivery"
-        confirm={tr(locale, "Save {0} {1}: {2}? {3}", [
-          f?.available
-            ? payments
-                .map((p) =>
-                  tr(locale, "{0} {1} NPR (deposit {2})", [
-                    t(p.method),
-                    number(p.amount),
-                    number(p.deposit_amount),
-                  ]),
-                )
-                .join("; ")
-            : "",
-          walk ? walkName : selected?.name,
-          items
-            .map((i) =>
-              tr(locale, "{0} full, {1} empty, {2} cartons", [
-                i.full_jars,
-                i.empty_jars,
-                i.cartons,
-              ]),
-            )
-            .join("; "),
-          t(
-            f?.available
-              ? "Cash is recorded; Fonepay remains pending."
-              : "Payment remains unverified.",
-          ),
-        ])}
+        confirm={
+          simplifiedPayment
+            ? tr(locale, "Save {0}: {1} · {2} · {3}?", [
+                walk ? walkName : selected?.name,
+                items
+                  .map((i) =>
+                    tr(locale, "{0} full, {1} empty, {2} cartons", [
+                      i.full_jars,
+                      i.empty_jars,
+                      i.cartons,
+                    ]),
+                  )
+                  .join("; "),
+                tr(
+                  locale,
+                  driverStatus === "RETURN_ONLY"
+                    ? "Empty jar return"
+                    : payment === "UNPAID"
+                      ? "Credit"
+                      : "Paid",
+                ),
+                number(npr(payable)),
+              ])
+            : tr(locale, "Save {0} {1}: {2}? {3}", [
+                f?.available
+                  ? payments
+                      .map((p) =>
+                        tr(locale, "{0} {1} NPR (deposit {2})", [
+                          t(p.method),
+                          number(p.amount),
+                          number(p.deposit_amount),
+                        ]),
+                      )
+                      .join("; ")
+                  : "",
+                walk ? walkName : selected?.name,
+                items
+                  .map((i) =>
+                    tr(locale, "{0} full, {1} empty, {2} cartons", [
+                      i.full_jars,
+                      i.empty_jars,
+                      i.cartons,
+                    ]),
+                  )
+                  .join("; "),
+                t(
+                  f?.available
+                    ? "Cash is recorded; Fonepay remains pending."
+                    : "Payment remains unverified.",
+                ),
+              ])
+        }
       >
-        {f?.available && (
+        {simplifiedPayment && (
+          <>
+            <input type="hidden" name="payment_status" value={driverStatus} />
+            <input
+              type="hidden"
+              name="received_amount"
+              value={driverStatus === "PAID" ? amount : ""}
+            />
+          </>
+        )}
+        {f?.available && !simplifiedPayment && (
           <input
             type="hidden"
             name="finance_payments"
@@ -442,13 +493,17 @@ export function DeliveryForm({
         <input type="hidden" name="items" value={JSON.stringify(items)} />
         <input type="hidden" name="walk_name" value={walk ? walkName : ""} />
         <input type="hidden" name="walk_phone" value={walk ? phone : ""} />
-        <input type="hidden" name="payment" value={payment} />
-        <input
-          type="hidden"
-          name="amount"
-          value={f?.available || payment === "UNPAID" ? "" : amount}
-        />
-        <input type="hidden" name="reference" value={reference} />
+        {!simplifiedPayment && (
+          <>
+            <input type="hidden" name="payment" value={payment} />
+            <input
+              type="hidden"
+              name="amount"
+              value={f?.available || payment === "UNPAID" ? "" : amount}
+            />
+            <input type="hidden" name="reference" value={reference} />
+          </>
+        )}
         <input type="hidden" name="notes" value={notes} />
         {!review ? (
           <>
@@ -739,7 +794,43 @@ export function DeliveryForm({
                 </Card>
               );
             })}
-            {f?.available ? (
+            {simplifiedPayment ? (
+              <div className="space-y-4">
+                <p className="text-xl font-bold">
+                  <T
+                    k="Payable: {0}"
+                    values={[<Value key="payable" value={npr(payable)} />]}
+                  />
+                </p>
+                {!f?.available ? (
+                  <p role="alert">
+                    <T k="Finance migration required before saving a delivery." />
+                  </p>
+                ) : !hasSale ? (
+                  <p className="text-sm">
+                    <T k="Empty jar return" />
+                  </p>
+                ) : (
+                  <DriverPayment
+                    credit={payment === "UNPAID"}
+                    amount={amount}
+                    onCreditChange={(credit) => {
+                      setPayment(credit ? "UNPAID" : "CASH");
+                      setReview(false);
+                    }}
+                    onAmountChange={(value) => {
+                      setAmount(value);
+                      setReview(false);
+                    }}
+                  />
+                )}
+                {financeProblem && (
+                  <p role="alert" className="text-sm text-red-700">
+                    <Message value={financeProblem} />
+                  </p>
+                )}
+              </div>
+            ) : f?.available ? (
               <div className="space-y-5">
                 <p className="text-xl font-bold">
                   <T
@@ -854,7 +945,7 @@ export function DeliveryForm({
                 </p>
                 {financeProblem && (
                   <p role="alert" className="text-red-700">
-                    {financeProblem}
+                    <Message value={financeProblem} />
                   </p>
                 )}
               </div>
@@ -918,21 +1009,25 @@ export function DeliveryForm({
                 onChange={(e) => setNotes(e.target.value)}
               />
             </label>
-            <p className="text-lg font-bold">
-              <T
-                k="Indicative delivery value: NPR {0}"
-                values={[<Value key="total" value={total} />]}
-              />
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <Message
-                value={
-                  f?.available
-                    ? "Server confirms approved prices and exact tax at saving. Deposits are separate from sales."
-                    : "Server snapshots current default prices. Finance migration is required for settlement."
-                }
-              />
-            </p>
+            {!simplifiedPayment && (
+              <p className="text-lg font-bold">
+                <T
+                  k="Indicative delivery value: NPR {0}"
+                  values={[<Value key="total" value={total} />]}
+                />
+              </p>
+            )}
+            {!simplifiedPayment && (
+              <p className="text-sm text-muted-foreground">
+                <Message
+                  value={
+                    f?.available
+                      ? "Server confirms approved prices and exact tax at saving. Deposits are separate from sales."
+                      : "Server snapshots current default prices. Finance migration is required for settlement."
+                  }
+                />
+              </p>
+            )}
             {walkProblem && (
               <p role="alert" className="text-sm text-red-700">
                 <T k="Walk-in jars need an equal empty exchange. Register the customer for jar custody or credit." />
@@ -951,7 +1046,7 @@ export function DeliveryForm({
             <Button
               type="button"
               className="min-h-14 w-full"
-              disabled={!eligible}
+              disabled={!canReview}
               onClick={() => setReview(true)}
             >
               <T k="Review delivery" />
@@ -976,21 +1071,38 @@ export function DeliveryForm({
                 />
               </p>
             ))}
-            <p>
-              <T
-                k="NPR {0} · {1} · {2}"
-                values={[
-                  <Value key="payable" value={payable} />,
-                  <Message key="method" value={payment} />,
-                  amount ? (
-                    <Value key="amount" value={amount} />
-                  ) : (
-                    <T key="no-amount" k="No amount reported" />
-                  ),
-                ]}
-              />
-            </p>
+            {simplifiedPayment ? (
+              <p>
+                <T k="Payment Status" />:{" "}
+                <T
+                  k={
+                    driverStatus === "RETURN_ONLY"
+                      ? "Empty jar return"
+                      : payment === "UNPAID"
+                        ? "Credit"
+                        : "Paid"
+                  }
+                />{" "}
+                · <Value value={npr(payable)} />
+              </p>
+            ) : (
+              <p>
+                <T
+                  k="NPR {0} · {1} · {2}"
+                  values={[
+                    <Value key="payable" value={payable} />,
+                    <Message key="method" value={payment} />,
+                    amount ? (
+                      <Value key="amount" value={amount} />
+                    ) : (
+                      <T key="no-amount" k="No amount reported" />
+                    ),
+                  ]}
+                />
+              </p>
+            )}
             {f?.available &&
+              !simplifiedPayment &&
               payments.map((p, index) => (
                 <p key={index}>
                   <T
@@ -1008,15 +1120,17 @@ export function DeliveryForm({
                   />
                 </p>
               ))}
-            <p className="text-sm">
-              <Message
-                value={
-                  f?.available
-                    ? "Invoices, cash receipts and credit are posted atomically. Fonepay stays pending."
-                    : "This saves an immutable visit. Financial settlement remains pending."
-                }
-              />
-            </p>
+            {!simplifiedPayment && (
+              <p className="text-sm">
+                <Message
+                  value={
+                    f?.available
+                      ? "Invoices, cash receipts and credit are posted atomically. Fonepay stays pending."
+                      : "This saves an immutable visit. Financial settlement remains pending."
+                  }
+                />
+              </p>
+            )}
             <Button
               type="button"
               variant="outline"

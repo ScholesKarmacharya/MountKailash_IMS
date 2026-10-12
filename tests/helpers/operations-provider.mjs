@@ -128,6 +128,7 @@ const allowedRpc = new Set([
   "load_trip",
   "transition_trip",
   "post_trip_visit",
+  "post_driver_delivery",
   "submit_trip",
   "reconcile_trip",
   "adjust_customer_custody",

@@ -16,9 +16,9 @@ Responsive web app, desktop-first admin and mobile-first driver. Fast numeric en
 10. `/admin/settings`: driver account assignment, role management, vehicles, optional deposit and credit policies.
 
 ## Driver screens
-1. `/driver/home`: active assigned trip, status, counts and quick actions.
-2. `/driver/trips/[id]`: loaded stock, sold, remaining, collected empties, all visits with add visit button.
-3. `/driver/trips/[id]/visits/new`: customer search/add walk-in, item quantities, empty jar count, unit prices (read-only unless policy), deposit, payment entry, outstanding and save confirmation.
+1. `/driver/home`: My Active Trip/vehicle, Loaded Stock, Remaining Stock, empty collection/delivery/visit counts, business-day sales and recorded collections, primary New Delivery, Add / Find Customer, Pending Jars and Submit Trip.
+2. `/driver/trips/[id]`: loaded stock, sold, remaining, independent empty collections, all visits and New Delivery. Admin trip creation assigns driver/vehicle/load without customer destinations.
+3. Delivery form within `/driver/trips/[id]`: search all active customers, Add New Customer/Edit contact inline without leaving or losing quantity inputs, or walk-in with optional contacts. Large plus/minus and direct integer entry, read-only resolved prices, separate credit/deposit amounts, review and confirmation. Selected customer history includes FIFO pending quantities/original dates and return allocations.
 4. `/driver/customers/[id]`: basic info, customer jar balance, outstanding credit, previous records relevant to trip; collect prior credit button.
 5. `/driver/trips/[id]/submit`: declare remaining full jars, empty jars, cartons and payment totals; review; submit for admin verification.
 6. `/driver/receipts/[id]`: show/share receipt, download PDF (subject to online connectivity).

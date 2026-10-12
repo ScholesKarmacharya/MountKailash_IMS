@@ -41,3 +41,12 @@
 
 ## Testing levels
 Unit: price resolution, ledger math, closing state machine. Integration: SQL transfers/locks/RLS and journal consistency. E2E: admin + driver browser flows. UAT: observe physical factory run with sample data and sign off discrepancies.
+
+## Sprint 6 regression scenarios
+**T23 Driver-selected destinations:** load 80 full jars; create customer inline; deliver 20, then 25 to existing, 10 walk-in and 15 repeat. Assert 10 left, reject 11 atomically, submit and admin reconcile; no admin preassignment.
+
+**T24 FIFO pending jars:** 20 full/15 empties leaves 5. Later 10 full/12 empties consumes the oldest 5 and 7 new, leaving 3 dated to the second delivery. Collect 3 without a sale; no new invoice/financial credit, no pending jars, positive vehicle empties and immutable audit. Retry produces one event.
+
+**T25 Simultaneous driver sessions:** independent drivers/vehicles post through separate browser sessions together, preserve assignment isolation and shared-customer custody. Browser fixture serializes PostgreSQL; repeat overlapping last-stock/close/posting/duplicate races on approved multi-connection staging before sign-off.
+
+**T26 Dated carry-forward:** close with dated pending jars and credit, open next day, verify original dates/quantities and fresh daily counters; later returns must not change the old archive/PDF/CSV.

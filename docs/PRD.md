@@ -8,8 +8,8 @@
 Today the business needs visibility into what each vehicle loaded, delivered, brought back, and collected in money, and how many jars are at the warehouse, in vehicles, and with customers. The software must provide an accurate financial and physical ledger with verifiable daily close.
 
 ## User roles
-- **Admin:** Manage accounts, customers, products, standard/customer prices, vehicles, trip assignments/loading, refilling confirmations, reconcile submitted trips, inventory corrections, reports, day close/reopen corrections.
-- **Driver:** Access only assigned trips, enter visits to registered or walk-in customers, record sales, full-jar exchanges, empty returns, cash/Fonepay/credit/partial payments, collect prior credit during deliveries, and submit trips. Cannot directly adjust warehouse inventory or approve their own reconciliation.
+- **Admin:** Manage accounts, customers, products, prices, vehicles, trip assignments/loading, refilling, reconciliation, corrections, reports and day close. Perform normal driver operations on eligible trips with the admin's own audit attribution. Assign driver, vehicle and authorized load; never preassign customer destinations.
+- **Driver:** Access assigned trips. During an ACTIVE trip on an OPEN day, search active contacts, choose any registered/walk-in destination, register customers inline and edit ordinary contacts. Record repeated visits, sales, independent empty returns, cash/Fonepay/credit/partial payments, prior-credit collections and physical return declarations. Cannot load vehicles, adjust warehouse stock, rewrite balances/history or approve reconciliation.
 
 ## In-scope MVP
 1. Email/password account access, admin/driver roles and account disabling.

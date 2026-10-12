@@ -7,9 +7,9 @@
 - No negative warehouse/vehicle available stock. Handle physically missing stock through an explicit variance/damage workflow, not negative quantity.
 
 ## 2. Trip loading and delivery
-1. Admin creates trip for one driver, one vehicle, one business day, and approves load quantities. Loading transfers stock from warehouse to vehicle.
-2. A driver can record unlimited visits for a trip, including repeated visits to a customer; never enforce unique(trip_id, customer_id).
-3. A visit can have multiple items; full 20L jar deliveries and empty collections are separate entries. A walk-in can be served with basic identifying details; for repeat credit, deposits or jar custody, require a registered customer account.
+1. Admin creates trip for one driver, one vehicle, one business day, and approves load quantities. Loading transfers stock from warehouse to vehicle. Admin never preassigns customers/destinations; drivers choose where to sell authorized stock.
+2. An ACTIVE assigned trip on an OPEN day allows unlimited visits to any active registered or walk-in customer, including repeated visits; never enforce unique(trip_id, customer_id). No per-visit admin approval is required.
+3. Full jars, empties and cartons are independent quantities. Walk-in name/phone are optional. **Provisional:** anonymous jar sales require equal empties and no ongoing credit/deposit/custody; register a customer inline for those arrangements until anonymous ongoing-custody rules are confirmed. Return-only registered visits do not create a new sale or invoice.
 4. Delivering a full 20L jar transfers it from vehicle-full to customer custody (physical position represented through customer jar ledger). Returning an empty transfers custody from customer to vehicle-empty. Sale value is based on delivered water units, not difference between full and empty jars.
 5. Bottle-carton sales transfer cartons from vehicle to customer, no jar return ledger change.
 6. Pricing resolved from customer-specific price if active, otherwise default price; persist actual unit price on every invoice item. Any ad hoc price override must follow explicit authorization policy (OPEN_QUESTIONS).
@@ -47,3 +47,8 @@
 ## 7. Concurrent use
 - Use database transactions/locking or compare-and-swap versions for competing inventory reservations and trip approvals. Enforce server-validated idempotency keys for driver retries.
 - Support intermittent internet by clear submission confirmation, unsent data warnings and retry-safe APIs; full offline entry/sync is not committed until business confirms needs.
+
+## Confirmed customer and pending-jar workflow (2026-10-12)
+- Admins and drivers can register customers during eligible delivery operations and edit name/shop/phone/address. Creator is server stamped; edits require versions and audit events. Duplicate normalized phone/name-and-shop matches require explicit separate-customer confirmation. Drivers cannot edit status, admin notes, prices or balances.
+- Empty returns settle oldest positive custody entries first, separately by customer/product. Outstanding portions retain the original delivery timestamp and business date; admin opening/correction lots retain their correction date. Custody balances remain separate from financial credit.
+- Example: 20 delivered minus 15 empties leaves 5; a subsequent 10 delivered and 12 empties consumes that oldest 5 plus 7 of the new delivery, leaving 3 against the new delivery date.

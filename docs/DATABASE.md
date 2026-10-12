@@ -56,3 +56,8 @@ Refill 65: WAREHOUSE/EMPTY_JAR -65; WAREHOUSE/FULL_JAR +65.
 
 ## Implementation checkpoint
 Translate this **logical** draft to real migrations only after settling deposit treatment and invoice tax fields. Add tests for trigger/RPC transactions and constraints before enabling actual writes.
+
+## Confirmed implementation additions (2026-10-12)
+Migration 012 adds nullable `customers.created_by` stamped by an insert trigger, contact/directory/context RPCs and checked trip/finance wrappers. Existing customers retain unknown/null creator. Historical `trip_customers` remain; new associations identify customers served/collected, never allowed destinations.
+
+Migration 013 adds immutable `custody_event_order` and `return_only_visits`. FIFO lots/allocations derive from existing signed custody entries and order metadata. Equal-timestamp legacy ordering was not stored: positives precede returns with UUID tie-break, original timestamps unchanged. New entries capture exact posting order. No account, inventory, sales, payment, custody journal or archive is rewritten. See Sprint 6 migration review before Cloud application.

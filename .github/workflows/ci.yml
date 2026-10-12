@@ -19,6 +19,8 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps --no-shell chromium
       - run: npm run test:e2e
+      - run: npm run test:e2e:operations
+      - run: npm audit --omit=dev
   database:
     runs-on: ubuntu-latest
     steps:

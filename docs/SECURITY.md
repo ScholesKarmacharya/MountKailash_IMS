@@ -3,7 +3,10 @@
 ## Role matrix
 | Operation | Admin | Driver |
 |---|---|---|
-| View all warehouse stock, all customers, reports | Yes | No, limited assigned/customer data |
+| View warehouse stock and global reports | Yes | No |
+| Search active customer contacts | Yes | Yes, contact-only RPC during own ACTIVE trip on OPEN day |
+| Create customers / edit ordinary contacts during delivery | Yes | Yes, owned ACTIVE trip on OPEN day, audited/version checked |
+| View selected customer credit/jar history and pending dates | Yes | Yes, authorized trip, no other drivers' raw invoices/trips |
 | Create/assign/load trips | Yes | No |
 | View assigned active trips | Yes | Yes |
 | Record visits, sales, empty returns and payments for assigned open trip | Yes | Yes |
@@ -30,3 +33,6 @@
 
 ## Explicit negative tests
 Driver attempts to call admin stock-adjust endpoint directly; driver edits another driver's trip; edit posted invoice; submit duplicate sale/payment; driver sends forged verified Fonepay flag; approve same trip twice; close a day with unresolved stock discrepancy; reopen past day without authorization.
+
+## Driver customer RPC boundary (2026-10-12)
+Contact search projects ordinary contacts without broadening raw customer RLS. Selected-customer context validates an owned ACTIVE trip and OPEN day; admin notes are excluded from driver RPC responses. Drivers cannot call private posting/context/FIFO/report helpers or write ordering metadata. Served-customer associations commit with successful sales/collections; failed postings roll back all effects. Existing route history and completed request retries remain intact. Pending jar readers enforce active identity and eligible trip in the database as well as the server.

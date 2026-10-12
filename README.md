@@ -1,6 +1,6 @@
 # Mount Kailash Water Distribution Management System
 
-Specification pack and application through Sprint 4 (2026-10-12). Supabase Cloud migrations 001–008 are verified applied. Daily closing, historical reports, carry-forward, refilling and damaged-jar workflows are implemented; Sprint 4 migrations 009–011 await review and approval. See [Sprint 4 implementation, migration review and acceptance](docs/SPRINT_4_IMPLEMENTATION.md). Existing accounts and business data are preserved.
+Application through Sprint 4 with Sprint 6 integration, driver workflow and dated FIFO pending-jar tracking (2026-10-12). Cloud migrations 001-011 are verified applied; new migrations 012-013 remain pending approval. See [Sprint 6 validation, migration review and acceptance](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved.
 
 ## Goal
 
@@ -115,7 +115,7 @@ Run `npm.cmd test` and `npm.cmd run test:e2e:operations` for disposable PostgreS
 
 ## Sprint 4 business days and reports
 
-Read [Sprint 4 migration review, validation and manual acceptance](docs/SPRINT_4_IMPLEMENTATION.md) before applying migrations 009–011. `/admin/daily-close` checks actual trips, physical balances and finance journals, freezes posting during review, requires an explicit net cash handover and confirmations, and atomically archives the close. `/admin/reports` filters Nepal business dates and exports private PDF/Excel-compatible CSV reports. `/admin/refilling` records completed one-for-one refills and quarantines damaged jars separately.
+Cloud migrations 009-011 are verified applied. Read [Sprint 4 migration review and manual acceptance](docs/SPRINT_4_IMPLEMENTATION.md); its original verification records the earlier pending state. `/admin/daily-close` checks actual trips, physical balances and finance journals, freezes posting during review, requires an explicit net cash handover and confirmations, and atomically archives the close. `/admin/reports` filters Nepal business dates and exports private PDF/Excel-compatible CSV reports. `/admin/refilling` records completed one-for-one refills and quarantines damaged jars separately.
 
 Closing/opening never resets warehouse stock, jar custody, credit, deposits or journals. Earlier-day invoice corrections, receipt reversals and explicitly linked stock corrections append on a new OPEN day; the original archive remains version 1 with subsequent amendments displayed separately. Pending Fonepay never counts as verified collections. The conservative cash and pending-payment closing controls are marked provisional in the Sprint 4 report.
 
@@ -127,4 +127,4 @@ npx.cmd --no-install supabase db push --linked --dry-run
 
 The first two commands exercise disposable PostgreSQL only. The third checks Cloud history without applying SQL. No Docker, seed or environment changes are needed. The existing Cloud development server remains at http://localhost:3000.
 
-**Next work:** approve/apply Sprint 4 migrations and conduct staging acceptance, simultaneous-connection close/posting tests, backup/restore verification and operational training. Automatic Fonepay still requires official merchant access; deposits remain explicitly configurable and tax unconfigured until confirmed.
+**Next work:** review/apply migrations 012-013 and complete hosted staging acceptance, simultaneous-connection close/posting tests, backup/restore verification and operational training. Automatic Fonepay still requires official merchant access; deposits remain explicitly configurable and tax unconfigured until confirmed.

@@ -34,7 +34,9 @@
     ".next-scaffold-e2e/types/**/*.ts",
     ".next-scaffold-e2e/dev/types/**/*.ts",
     ".next-build-check/types/**/*.ts",
-    ".next-build-check/dev/types/**/*.ts"
+    ".next-build-check/dev/types/**/*.ts",
+    ".next-auth-e2e/types/**/*.ts",
+    ".next-auth-e2e/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

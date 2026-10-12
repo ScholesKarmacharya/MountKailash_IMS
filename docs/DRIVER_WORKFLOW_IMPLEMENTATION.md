@@ -1,0 +1,14 @@
+# Confirmed driver permissions and trip sales workflow
+
+Implemented on `fix-driver-delivery-workflow`, carried into the Sprint 6 audit. The current acceptance record is [Sprint 6 implementation](SPRINT_6_IMPLEMENTATION.md).
+
+- Admin assigns driver, vehicle and authorized load without customer destinations. New backend preassignment requests are rejected; earlier route records and completed retries remain valid.
+- An assigned ACTIVE driver on an OPEN business day searches all active contacts, registers/edits contacts inline, chooses registered or walk-in destinations and revisits customers without per-visit approval. Quantity drafts survive inline contact creation/editing.
+- Drivers can collect empties independently, sell cartons, record cash/pending Fonepay/unpaid/partial receipts, collect earlier credit and submit physical returns. Admin can perform these operations with its own audit identity and separately verify returns.
+- Customer creator is stamped by the server and shown in the admin directory. Contact writes whitelist name/shop/phone/address, require an expected version and detect normalized duplicate phone/name-and-shop matches. Separate-customer overrides require explicit confirmation and are audited. Drivers cannot change status, pricing, balances or historical transactions.
+- Active contact search uses a projected RPC; raw customer/warehouse/finance RLS remains scoped. Selected customer context exposes operational balances/history without other drivers' raw trips/invoices. Private posting cores and FIFO helpers have no client execution grants.
+- Existing stock/finance posting implementations are reused under checked wrappers. Trip/day/balance locks, exact numeric money, immutable journals and actor-scoped idempotency remain authoritative. A failed sale/collection rolls back its new served-customer association.
+
+Migration `202610120012_driver_customer_workflow.sql` remains pending in Supabase Cloud. Sprint 6 additionally requires `202610120013_sprint6_pending_jars.sql`. See the linked report for review risks and commands before applying either. No passwords, account IDs/roles or business data were changed in Cloud.
+
+The complete 80-jar flow executed in desktop/mobile Chromium using real application screens, server actions, RLS and SQL against disposable PostgreSQL: 20 + 25 + 10 walk-in + 15 repeat leaves 10; an attempt to sell 11 is blocked; submission preserves warehouse balances until admin physical approval. Creator attribution, invoice/receipt persistence, prior-credit collection and other-driver denial were checked. These browser writes were not executed in Cloud.

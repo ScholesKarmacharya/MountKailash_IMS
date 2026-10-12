@@ -11,7 +11,7 @@
 1. **Auth / RBAC:** identity, account roles, active status, permissions.
 2. **Catalog / Customer:** products, customer prices, deposit policies, customer setup.
 3. **Inventory:** immutable movement journal and balances per location and stock state.
-4. **Trips:** loading, route visits, returns, admin reconciliation.
+4. **Trips:** admin-authorized loading, driver-selected visits, returns and admin reconciliation; no destination preassignment.
 5. **Refill:** transfer empty warehouse jars into full warehouse jars after completion.
 6. **Billing:** invoice creation, sale items, price snapshots, credit allocations, customer ledgers.
 7. **Payments:** cash, pending Fonepay, verified Fonepay when available, idempotent settlement.
@@ -35,3 +35,6 @@ Schema migration -> seed demo admin/driver, products, customers -> add stock tra
 
 ## Deferred integrations
 Fonepay verification requires official credentials/docs and security review. Full offline sync is deferred until network needs confirmed. Do not claim either capability is complete in MVP scaffolding.
+
+## Sprint 6 custody read model
+Immutable custody entries remain authoritative. An append-only ordering table captures exact new posting order; existing entries are indexed chronologically with a documented stable tie-break. FIFO outstanding lots and return allocations are derived from cumulative posting intervals, with no mutable pending date or duplicate physical journal. New closing snapshots include dated lots; old archives are untouched. Contact command parsing, authorized services and checked RPCs retain domain/data-access separation.

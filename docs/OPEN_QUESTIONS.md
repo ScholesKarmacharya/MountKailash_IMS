@@ -7,7 +7,6 @@ Only the questions below remain open; confirmed requirements are in `PRD.md`.
 | P0 | Are jars only exchanged, or can customers permanently purchase a physical jar? | Treat jars as returnable custody; exception requires admin operation |
 | P0 | Exact jar deposit/refund calculation and whether deposit may offset debts | Separate refundable deposit; do not auto-offset |
 | P0 | Can delivery drivers change a price or grant discounts? | Default/customer price locked; admin-controlled override |
-| P0 | Who authorizes actual warehouse loads/reload stock? | Admin only |
 | P0 | Actual method to reconcile collected cash and Fonepay at end of each trip | Admin checks submitted totals and payment rows |
 | P0 | Does returning a vehicle unload all full/empty items, or can stock remain on vehicle overnight? | All are declared and warehouse verified per trip; allow future configurable carryover |
 | P1 | Does every shop receive formal invoices, and what are tax/PAN/VAT printing requirements? | Generic receipt/PDF first; compliance pending accountant confirmation |
@@ -20,3 +19,5 @@ Only the questions below remain open; confirmed requirements are in `PRD.md`.
 | P2 | Should vehicle GPS/fuel/tracking be implemented? | Out of scope |
 
 **Do not assume** bottled-water carton pack size, jar refill prices, jar deposit amounts, tax rates, or monthly credit limits. All must be configurable or explicitly deferred.
+
+Confirmed: loads/reloads are admin-only; no admin destination preassignment; drivers may search/create/edit ordinary contacts and visit any active customer during an owned ACTIVE trip. FIFO oldest-delivery-first empty allocation is confirmed. Anonymous ongoing custody, detailed deposit/tax/cash/provider/offline rules remain provisional as listed above.

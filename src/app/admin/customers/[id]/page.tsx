@@ -1,4 +1,4 @@
-import { T } from "@/components/localization";
+import { T, DateValue } from "@/components/localization";
 import { getFinance } from "@/services/finance";
 import { FinanceRequired } from "@/components/finance-overview";
 import { CustomerBillingForms } from "@/components/finance-admin-forms";
@@ -36,6 +36,27 @@ export default async function Page({
         description="Changes are audited. A record changed by another user must be reloaded before saving."
       />
       <Card>
+        <details className="mb-4 rounded-lg border border-border p-3">
+          <summary className="min-h-12 cursor-pointer font-medium">
+            <T k="Customer creation details" />
+          </summary>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">
+                <T k="Added by" />
+              </dt>
+              <dd>{record.created_by_name || <T k="Not recorded" />}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">
+                <T k="Created at" />
+              </dt>
+              <dd>
+                <DateValue value={record.created_at} time />
+              </dd>
+            </div>
+          </dl>
+        </details>
         <CustomerForm customer={record} />
         {(record.contact_person ||
           record.customer_type ||

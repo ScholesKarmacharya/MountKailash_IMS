@@ -10,6 +10,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Concurrent PostgreSQL/WASM migration suites can starve the translation
+    // scan and PDF renderer on development/CI machines. Keep their deadlines.
+    maxWorkers: 2,
     include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
     environment: "node",
   },

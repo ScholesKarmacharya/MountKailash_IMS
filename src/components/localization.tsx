@@ -38,7 +38,7 @@ export function LocaleProvider({
   useEffect(() => {
     if (
       !userId &&
-      /^\/(admin|driver|account)(\/|$)/.test(window.location.pathname)
+      /^\/(admin|driver|account|offline)(\/|$)/.test(window.location.pathname)
     )
       return;
     document.documentElement.lang = locale;
@@ -57,10 +57,19 @@ export function LocaleProvider({
     window.addEventListener("mk-locale-changed", sync);
     return () => window.removeEventListener("mk-locale-changed", sync);
   }, [userId]);
+  useEffect(() => {
+    const restore = (event: Event) =>
+      setCurrent((event as CustomEvent<Locale>).detail);
+    window.addEventListener("mk-locale-restored", restore);
+    return () => window.removeEventListener("mk-locale-restored", restore);
+  }, []);
   async function setLocale(next: Locale) {
     if (saving) return;
     setCurrent(next);
     setFailed(false);
+    window.dispatchEvent(
+      new CustomEvent("mk-locale-selected", { detail: next }),
+    );
     window.dispatchEvent(
       new CustomEvent("mk-locale-changed", { detail: next }),
     );

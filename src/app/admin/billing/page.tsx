@@ -7,11 +7,11 @@ export default async function Page() {
   const f = await getFinance(true);
   if (!f.available || !f.company) return <FinanceRequired />;
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" data-testid="billing-workspace">
       <h1 className="text-3xl font-bold">
         <T k="Billing settings" />
       </h1>
-      <p>
+      <p className="text-sm text-muted-foreground">
         <T k="Save confirmed company and tax details. Unconfigured tax remains explicitly labeled on invoices; no VAT or PAN status is inferred." />
       </p>
       <Card>

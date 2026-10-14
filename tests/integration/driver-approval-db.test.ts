@@ -58,7 +58,9 @@ async function history() {
     rows.push(
       (
         await db.query<Record<string, unknown>>(
-          `select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as v from ${table} t`,
+          // Compare all original fields across forward migrations. New optional
+          // offline metadata is checked separately; old records stay unchanged.
+          `select coalesce(jsonb_agg(to_jsonb(t)-array['offline_occurred_at','supply_classification','reference_price_snapshot','free_value_snapshot','scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled'] order by (to_jsonb(t)-array['offline_occurred_at','supply_classification','reference_price_snapshot','free_value_snapshot','scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled'])::text),'[]'::jsonb) as v from ${table} t`,
         )
       ).rows[0]!.v,
     );
@@ -164,6 +166,23 @@ beforeAll(async () => {
   legacyBefore = await history();
   for (const file of files.filter((f) => f >= "202610120016"))
     await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
+  const metadata = (
+    await db.query<Record<string, unknown>>(
+      "select scheduled_date::text,created_business_day_id,loaded_at,cancelled from public.trips where id=$1",
+      [trip],
+    )
+  ).rows[0]!;
+  expect(metadata.created_business_day_id).toBe(day);
+  expect(metadata.scheduled_date).toBe(
+    (
+      await db.query<Record<string, unknown>>(
+        "select date_label::text from public.business_days where id=$1",
+        [day],
+      )
+    ).rows[0]!.date_label,
+  );
+  expect(metadata.loaded_at).toBeNull(); // No invented historical loading stamp.
+  expect(metadata.cancelled).toBe(false);
 }, 30000);
 afterAll(async () => db.close());
 beforeEach(async () => {
@@ -189,6 +208,13 @@ it("backfills only previously trusted active drivers and preserves real business
   });
   await db.exec("reset role");
   expect(await history()).toBe(legacyBefore);
+  expect(
+    (
+      await db.query<{ n: number }>(
+        "select count(*)::int n from public.trip_visits where offline_occurred_at is not null",
+      )
+    ).rows[0]!.n,
+  ).toBe(0);
 });
 it("registers only the authenticated identity as pending and blocks business RLS and operational RPCs", async () => {
   await actor(pending);

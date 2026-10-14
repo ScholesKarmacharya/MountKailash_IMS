@@ -4,6 +4,8 @@ import {
   roundFinance,
   roundStock,
   roundLabel,
+  tripDayOpen,
+  tripCanStart,
 } from "@/domain/operations/driver-workspace";
 import { pendingDays } from "@/domain/operations/pending-age";
 import {
@@ -18,6 +20,32 @@ const trip = {
   status: "ACTIVE",
   created_at: "2026-10-12",
 } as Trip;
+it("a prepared trip uses the current open day without starting before its scheduled date", () => {
+  const prepared = {
+    ...trip,
+    status: "LOADED",
+    business_day_id: "closed-yesterday",
+    scheduled_date: "2026-10-15",
+    date_label: "2026-10-15",
+  } as Trip;
+  const w = {
+    ...emptyWorkspace,
+    days: [{ id: "today", date_label: "2026-10-14", status: "OPEN" }],
+  };
+  expect(tripDayOpen(w, prepared)).toBe(true);
+  expect(tripCanStart(w, prepared)).toBe(false);
+  w.days[0]!.date_label = "2026-10-15";
+  expect(tripCanStart(w, prepared)).toBe(true);
+  expect(
+    tripDayOpen(w, {
+      ...prepared,
+      status: "ACTIVE",
+      business_day_id: "today",
+      carryover_pending: true,
+    }),
+  ).toBe(false);
+  expect(tripDayOpen(w, { ...prepared, status: "ACTIVE" })).toBe(false);
+});
 it("100 loaded, 35 sold and 30 empties remains 65 full with independent jar states", () => {
   const w = {
     ...emptyWorkspace,
@@ -154,4 +182,85 @@ it("pending age uses Nepal calendar dates and never mutates the original date", 
   const original = "2026-10-11T18:14:59Z";
   expect(pendingDays(original, new Date("2026-10-11T18:15:01Z"))).toBe(1);
   expect(pendingDays(original, new Date("2026-10-11T18:14:59Z"))).toBe(0);
+});
+it("driver totals use authorized invoice and payment events when the accounting journal is withheld", () => {
+  const f = {
+    ...emptyFinance,
+    available: true,
+    sales: [{ id: "sale", trip_id: trip.id, business_day_id: "old" }],
+    invoices: [{ id: "invoice", sale_id: "sale", total: "100.00" }],
+    adjustments: [
+      {
+        id: "adjustment",
+        invoice_id: "invoice",
+        subtotal_delta: "-5.00",
+        tax_delta: "0.00",
+        business_day_id: "today",
+      },
+    ],
+    payments: [
+      {
+        id: "cash",
+        trip_id: trip.id,
+        method: "CASH",
+        business_day_id: "today",
+        status: "CONFIRMED",
+        amount: "50.25",
+      },
+      {
+        id: "fp",
+        trip_id: trip.id,
+        method: "FONEPAY",
+        business_day_id: "old",
+        status: "REVERSED",
+        amount: "10.50",
+      },
+    ],
+    events: [
+      {
+        payment_id: "cash",
+        sequence: 3,
+        status: "CONFIRMED",
+        business_day_id: "today",
+      },
+      {
+        payment_id: "fp",
+        sequence: 1,
+        status: "PENDING",
+        business_day_id: "old",
+      },
+      {
+        payment_id: "fp",
+        sequence: 2,
+        status: "CONFIRMED",
+        business_day_id: "old",
+      },
+      {
+        payment_id: "fp",
+        sequence: 4,
+        status: "REVERSED",
+        business_day_id: "today",
+      },
+    ],
+  } as FinanceWorkspace;
+  expect(roundFinance(f, trip.id, "today")).toMatchObject({
+    sales: "-5.00",
+    cash: "50.25",
+    fonepayVerified: "-10.50",
+  });
+  expect(roundFinance(f, trip.id, "old")).toMatchObject({
+    sales: "100.00",
+    cash: "0.00",
+    fonepayVerified: "10.50",
+  });
+  expect(roundFinance(f, trip.id)).toMatchObject({
+    sales: "95.00",
+    cash: "50.25",
+    fonepayVerified: "0.00",
+  });
+  expect(roundFinance(f, "different-trip")).toMatchObject({
+    sales: "0.00",
+    cash: "0.00",
+    fonepayVerified: "0.00",
+  });
 });

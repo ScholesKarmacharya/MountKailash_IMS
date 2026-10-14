@@ -41,12 +41,15 @@ describe("BS history filters query canonical data through caller RLS", () => {
     expect(q.lt).toHaveBeenCalledWith("created_at", "2026-10-17T18:15:00.000Z");
     expect(q.range).toHaveBeenCalledWith(50, 75);
   });
-  it("trip histories use the original business-date session including overnight trips", async () => {
+  it("trip histories filter the scheduled delivery date and disambiguate the posting-day foreign key", async () => {
     const q = builder(),
       r = bsMonthRange(2083, 6);
     await readTripHistory(r);
-    expect(q.gte).toHaveBeenCalledWith("business_days.date_label", r.from);
-    expect(q.lte).toHaveBeenCalledWith("business_days.date_label", r.to);
+    expect(q.gte).toHaveBeenCalledWith("scheduled_date", r.from);
+    expect(q.lte).toHaveBeenCalledWith("scheduled_date", r.to);
+    expect(q.select).toHaveBeenCalledWith(
+      expect.stringContaining("business_days!trips_business_day_id_fkey!inner"),
+    );
   });
   it("denies warehouse history before reading the database", async () => {
     mocks.guard.mockRejectedValue(new Error("Forbidden"));

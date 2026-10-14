@@ -28,7 +28,7 @@ export default async function Layout({
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <LanguageSwitcher />
-            <SignOutButton />
+            <SignOutButton user={profile?.id} />
           </div>
         </header>
         <main

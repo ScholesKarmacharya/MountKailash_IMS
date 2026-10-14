@@ -1,11 +1,13 @@
 "use client";
 import { T, Message, DateValue, Value } from "@/components/localization";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { operationAction } from "@/app/operations-actions";
 import {
-  deliveryCustomerAction,
-  operationAction,
-} from "@/app/operations-actions";
+  fetchCustomerContext,
+  notifyConfirmedCustomer,
+} from "@/lib/customers/request";
+import { CustomerLookupError } from "@/domain/operations/customer-errors";
 import type { Customer, Workspace } from "@/domain/operations/types";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
 import { npr } from "@/domain/finance/money";
@@ -14,25 +16,84 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card } from "./ui/card";
 import { PendingJars } from "./pending-jars";
+import { HouseCustomerFields } from "./house-customer-fields";
+import { useDriverRuntime } from "./driver-runtime-context";
 
 export function useDeliveryCustomer(trip: string, enabled: boolean) {
+  const runtime = useDriverRuntime();
   const [customer, setCustomer] = useState("");
   const [context, setContext] = useState<DeliveryCustomerContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sequence = useRef(0);
+  const request = useRef<AbortController | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      // Development effect replay immediately mounts again. Only cancel an
+      // actual unmount; otherwise a valid selection becomes a spurious outage.
+      queueMicrotask(() => {
+        if (!mounted.current) {
+          // This is a live request counter, not a DOM ref captured at mount.
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+          sequence.current++;
+          request.current?.abort();
+        }
+      });
+    };
+  }, []);
+  useEffect(() => {
+    if (!runtime || !customer || !context || error) return;
+    const updated = runtime.cachedCustomer(customer);
+    if (updated && JSON.stringify(updated) !== JSON.stringify(context))
+      queueMicrotask(() => setContext(updated));
+    // Only confirmed business changes replace this selected context. Routine
+    // fetch timestamps and connectivity checks cannot invalidate a draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime?.revision, customer]);
   async function selectCustomer(id: string) {
     const current = ++sequence.current;
+    request.current?.abort();
     setCustomer(id);
     setContext(null);
     setError(null);
     setLoading(!!id && enabled);
-    if (!id || !enabled) return;
-    const result = await deliveryCustomerAction(trip, id);
-    if (sequence.current !== current) return;
-    setContext(result.data);
-    setError(result.error);
-    setLoading(false);
+    if (!id || !enabled) {
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    request.current = controller;
+    const timer = setTimeout(
+      () =>
+        controller.abort(
+          new DOMException("Customer lookup timed out", "TimeoutError"),
+        ),
+      15000,
+    );
+    try {
+      const result = runtime
+        ? {
+            data: await runtime.customer(trip, id, controller.signal),
+            user: "",
+          }
+        : await fetchCustomerContext(trip, id, controller.signal);
+      if (sequence.current !== current) return;
+      setContext(result.data);
+      if (!runtime) notifyConfirmedCustomer(result.user, trip);
+    } catch (failure) {
+      if (sequence.current !== current) return;
+      setError(
+        failure instanceof CustomerLookupError
+          ? failure.message
+          : "Customer details are temporarily unavailable. Retry; your draft is preserved.",
+      );
+    } finally {
+      clearTimeout(timer);
+      if (sequence.current === current) setLoading(false);
+    }
   }
   return { customer, context, loading, error, selectCustomer };
 }
@@ -50,6 +111,7 @@ export function DeliveryCustomerForm({
   onCancel: () => void;
   detailsEnabled?: boolean;
 }) {
+  const runtime = useDriverRuntime();
   const [id] = useState(() => customer?.id ?? crypto.randomUUID());
   const [key] = useState(() => crypto.randomUUID());
   const [contacts, setContacts] = useState({
@@ -64,7 +126,9 @@ export function DeliveryCustomerForm({
   const [duplicate, setDuplicate] = useState(false);
   const [state, action, pending] = useActionState(
     async (previous: Parameters<typeof operationAction>[0], form: FormData) => {
-      const result = await operationAction(previous, form);
+      const result = runtime
+        ? await runtime.submit(form)
+        : await operationAction(previous, form);
       if (result?.id && result.success) onSaved(result.id);
       return result;
     },
@@ -91,6 +155,7 @@ export function DeliveryCustomerForm({
         <input type="hidden" name="key" value={key} />
         <input type="hidden" name="version" value={customer?.version ?? 0} />
         <fieldset disabled={pending} className="space-y-4">
+          {detailsEnabled && <HouseCustomerFields customer={customer} />}
           {(
             [
               ["name", "Customer name"],
@@ -137,11 +202,6 @@ export function DeliveryCustomerForm({
                 />
               </label>
             ))}
-          {detailsEnabled && (
-            <p className="text-xs text-muted-foreground">
-              <T k="Customer type is a descriptive label. Monthly credit, prices and deposits remain under existing billing arrangements." />
-            </p>
-          )}
           {(duplicate || state?.error?.includes("matching customer")) && (
             <label className="flex min-h-14 items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm">
               <input
@@ -202,6 +262,22 @@ export function DeliveryCustomerHistory({
         <T k="Customer credit and jar history" />
       </summary>
       <div className="mt-4 space-y-4">
+        {context.free_deliveries?.length ? (
+          <div className="space-y-2">
+            <h4 className="font-semibold">
+              <T k="Free Supply" />
+            </h4>
+            {context.free_deliveries.map((r) => (
+              <p key={`${r.visit_id}:${r.product_id}`}>
+                <DateValue value={r.occurred_at} /> · {r.product_name} ·{" "}
+                <Value value={r.full_jars + r.cartons} /> ·{" "}
+                <T k="Empty Jars Returned" />: <Value value={r.empty_jars} /> ·{" "}
+                <T k="Value of Free Supply" />:{" "}
+                <Value value={npr(r.reference_value)} /> · {r.driver_name}
+              </p>
+            ))}
+          </div>
+        ) : null}
         <PendingJars
           workspace={{
             available: context.pending_jars !== undefined,

@@ -6,6 +6,7 @@ export default defineConfig([
   ...nextTs,
   globalIgnores([
     ".next/**",
+    ".next-offline-e2e/**",
     ".next-sprint2-e2e/**",
     ".next-scaffold-e2e/**",
     ".next-auth-e2e/**",

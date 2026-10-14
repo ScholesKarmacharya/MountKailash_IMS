@@ -19,5 +19,13 @@ export async function getAdminDashboard() {
     businessDay && history.available
       ? await readDayReport(businessDay.id)
       : null;
-  return { businessDay, inventory, operations, finance, dayDetail };
+  return {
+    businessDay,
+    inventory,
+    operations,
+    finance,
+    dayDetail,
+    latestDay: history.days.find((day) => day.status === "CLOSED") ?? null,
+    updatedAt: new Date().toISOString(),
+  };
 }

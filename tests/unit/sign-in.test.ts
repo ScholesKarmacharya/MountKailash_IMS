@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT:${path}`);
   }),
+  deleteCookie: vi.fn(),
+}));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ delete: mocks.deleteCookie }),
 }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/supabase/env", () => ({ supabaseConfig: mocks.configured }));

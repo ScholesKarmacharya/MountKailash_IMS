@@ -38,7 +38,7 @@ async function save(page: Page) {
     .click();
   expect((await response).ok()).toBe(true);
   await expect(
-    page.getByText("Record saved.", { exact: true }).last(),
+    page.getByText(/^(Record saved\.|Saved to Supabase\.)$/).last(),
   ).toBeVisible();
 }
 async function pdfText(page: Page, url: string) {

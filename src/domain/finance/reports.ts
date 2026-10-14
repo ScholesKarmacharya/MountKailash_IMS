@@ -61,6 +61,11 @@ export function invoiceTotals(i: Invoice, f: FinanceWorkspace) {
   };
 }
 export function invoicePaymentStatus(i: Invoice, f: FinanceWorkspace) {
+  if (
+    f.sales.find((s) => s.id === i.sale_id)?.supply_classification ===
+    "FREE_SUPPLY"
+  )
+    return "Free Supply";
   const totals = invoiceTotals(i, f);
   if (cents(i.outstanding) === 0n) return "Paid";
   if (cents(totals.pending) > 0n) return "Pending payment";
@@ -70,4 +75,18 @@ export function invoicePaymentStatus(i: Invoice, f: FinanceWorkspace) {
 export function invoiceDeliveries(i: Invoice, f: FinanceWorkspace) {
   const visit = f.sales.find((s) => s.id === i.sale_id)?.visit_id;
   return (f.delivery_items ?? []).filter((line) => line.visit_id === visit);
+}
+export function invoiceFreeValue(i: Invoice, f: FinanceWorkspace) {
+  return decimal(
+    f.items
+      .filter(
+        (s) =>
+          s.sale_id === i.sale_id && s.supply_classification === "FREE_SUPPLY",
+      )
+      .reduce(
+        (n, s) =>
+          n + cents(s.reference_price_snapshot ?? "0.00") * BigInt(s.quantity),
+        0n,
+      ),
+  );
 }

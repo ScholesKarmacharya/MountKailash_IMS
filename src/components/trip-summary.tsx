@@ -20,7 +20,11 @@ import {
 import { stockLabels } from "@/domain/inventory/validation";
 
 import { Card } from "./ui/card";
-import { roundLabel } from "@/domain/operations/driver-workspace";
+import {
+  roundLabel,
+  tripDayOpen,
+  tripCanStart,
+} from "@/domain/operations/driver-workspace";
 import { DriverStock } from "./driver-stock";
 import { Button } from "./ui/button";
 import {
@@ -29,7 +33,12 @@ import {
   TripLink,
 } from "./operations-layout";
 import { OperationForm, Field } from "./operation-form";
-import { DeliveryForm, LoadTripForm, ReturnForm } from "./trip-forms";
+import {
+  DeliveryForm,
+  LoadTripForm,
+  ReturnForm,
+  TripPreparationForms,
+} from "./trip-forms";
 export function TripList({ trips, admin }: { trips: Trip[]; admin: boolean }) {
   return (
     <div className="space-y-3">
@@ -57,7 +66,11 @@ export function TripList({ trips, admin }: { trips: Trip[]; admin: boolean }) {
           <span className="rounded-full bg-muted px-3 py-2 text-xs font-semibold">
             <Message
               value={
-                admin ? t.status.replaceAll("_", " ") : roundLabel(t.status)
+                t.cancelled
+                  ? "Cancelled"
+                  : admin
+                    ? t.status.replaceAll("_", " ")
+                    : roundLabel(t.status)
               }
             />
           </span>
@@ -134,9 +147,7 @@ export async function TripDetail({
   const trip = w.trips.find((t) => t.id === id);
   if (!trip) notFound();
   const operational = trip.status !== "CLOSED";
-  const dayOpen = w.days.some(
-    (d) => d.id === trip.business_day_id && d.status === "OPEN",
-  );
+  const dayOpen = tripDayOpen(w, trip);
   const groups = new Map<
     string,
     {
@@ -181,7 +192,7 @@ export async function TripDetail({
         title={`Trip #${trip.trip_number}`}
         description={
           <T
-            k="{0} · {1} · Business day {2}"
+            k="{0} · {1} · Scheduled delivery {2}"
             values={[
               trip.plate_number,
               trip.driver_name,
@@ -193,11 +204,39 @@ export async function TripDetail({
       <p className="inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white">
         <Message
           value={
-            admin ? trip.status.replaceAll("_", " ") : roundLabel(trip.status)
+            trip.cancelled
+              ? "Cancelled"
+              : admin
+                ? trip.status.replaceAll("_", " ")
+                : roundLabel(trip.status)
           }
         />
       </p>
       {trip.notes && <p className="text-sm">{trip.notes}</p>}
+      {trip.loaded_at && (
+        <p className="text-sm">
+          <T k="Physical loading confirmed" /> ·{" "}
+          <DateValue value={trip.loaded_at} time />
+        </p>
+      )}
+      {admin && operational && !trip.carryover_pending && (
+        <Card>
+          <TripPreparationForms workspace={w} trip={trip} />
+        </Card>
+      )}
+      {trip.carryover_pending && (
+        <Card>
+          <p className="mb-4">
+            <T k="Trip is paused for authorized carryover. Vehicle stock and pending settlement are preserved." />
+          </p>
+          <OperationForm
+            operation="continue"
+            trip={id}
+            requestKey={randomUUID()}
+            label="Resume carried trip"
+          />
+        </Card>
+      )}
       {w.loads.length > 0 && <DriverStock workspace={w} trip={trip} />}
       {w.loads.length > 0 && (
         <>
@@ -302,7 +341,7 @@ export async function TripDetail({
           <LoadTripForm workspace={w} trip={trip} requestKey={randomUUID()} />
         </Card>
       )}
-      {dayOpen && trip.status === "LOADED" && (
+      {tripCanStart(w, trip) && (
         <Card>
           <OperationForm
             operation="start"
@@ -313,7 +352,17 @@ export async function TripDetail({
           />
         </Card>
       )}
-      {dayOpen && trip.status === "ACTIVE" && (
+      {dayOpen && !admin && trip.status === "ACTIVE" && (
+        <Card className="flex flex-wrap gap-4">
+          <Link className="text-primary underline" href="/driver/delivery">
+            <T k="New Sale" />
+          </Link>
+          <Link className="text-primary underline" href="/driver/return">
+            <T k="Return to Warehouse" />
+          </Link>
+        </Card>
+      )}
+      {dayOpen && admin && trip.status === "ACTIVE" && (
         <>
           <Card id="add-delivery">
             <h2 className="mb-5 text-xl font-bold">
@@ -683,14 +732,14 @@ export async function TripDetail({
       {!admin && trip.status === "ACTIVE" && (
         <div className="sticky bottom-3 grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 shadow-lg">
           <Button asChild className="min-h-14">
-            <a href="#add-delivery">
+            <Link href="/driver/delivery">
               <T k="New Delivery" />
-            </a>
+            </Link>
           </Button>
           <Button asChild variant="outline" className="min-h-14">
-            <a href="#submit-trip">
+            <Link href="/driver/return">
               <T k="End trip" />
-            </a>
+            </Link>
           </Button>
         </div>
       )}

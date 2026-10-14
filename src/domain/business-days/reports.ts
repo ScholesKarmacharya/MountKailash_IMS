@@ -164,6 +164,46 @@ export function reportRows(r: DayReport, locale: Locale = "en"): ReportRow[] {
       label: tr(locale, label),
       amount: r.totals[key as keyof typeof amountLabels],
     });
+  if (r.totals.paid_sales !== undefined) {
+    rows.push({
+      section: tr(locale, "Money (NPR)"),
+      id: "paid_sales",
+      label: tr(locale, "Paid sales"),
+      amount: r.totals.paid_sales,
+    });
+  }
+  if (r.totals.free_supply_value !== undefined) {
+    rows.push(
+      {
+        section: tr(locale, "Free Supply"),
+        id: "free_jars",
+        label: tr(locale, "Total Free Jars"),
+        quantity: r.totals.free_jars ?? 0,
+      },
+      {
+        section: tr(locale, "Free Supply"),
+        id: "free_cartons",
+        label: tr(locale, "Total Free Cartons"),
+        quantity: r.totals.free_cartons ?? 0,
+      },
+      {
+        section: tr(locale, "Free Supply"),
+        id: "free_value",
+        label: tr(locale, "Value of Free Supply"),
+        amount: r.totals.free_supply_value,
+        details: tr(
+          locale,
+          "Reference value only; excluded from revenue and customer credit.",
+        ),
+      },
+      {
+        section: tr(locale, "Free Supply"),
+        id: "free_adjustments",
+        label: tr(locale, "Reference value adjustments"),
+        amount: r.totals.free_supply_adjustments ?? "0.00",
+      },
+    );
+  }
   for (const [key, label] of Object.entries({
     trips: tr(locale, "Total trips"),
     completed_trips: tr(locale, "Completed trips"),

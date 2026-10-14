@@ -51,14 +51,17 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   });
   await login(page, "admin");
   await page.goto("/admin/vehicles");
+  await page.getByRole("button", { name: "Add vehicle", exact: true }).click();
   await page.getByLabel("Number plate").fill("TEST-DRIVER-80");
   await page.getByLabel("Reason for this change").fill("Disposable vehicle");
   await save(page, "Register vehicle");
   await page.goto("/admin/trips");
   await page
+    .getByTestId("create-trip-section")
     .getByLabel("Driver", { exact: true })
     .selectOption({ label: "Fixture driver" });
   await page
+    .getByTestId("create-trip-section")
     .getByLabel("Vehicle", { exact: true })
     .selectOption({ label: "TEST-DRIVER-80" });
   await expect(
@@ -108,8 +111,12 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     .locator("main")
     .getByRole("link", { name: "New Delivery", exact: true })
     .click();
-  // Historical trip detail remains a supported operational entry point.
+  // Historical round details enter the same driver sales interface.
   await page.goto(`/driver/trips/${trip}`);
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "New Sale", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Increase Jars Delivered", exact: true })
     .click();
@@ -161,9 +168,9 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     )
     .toBe("9812345679");
   await page.getByLabel("Cartons Delivered", { exact: true }).fill("1");
-  await page
-    .getByLabel("Total Amount Received (NPR)", { exact: true })
-    .fill("3155.25");
+  await expect(
+    page.getByLabel("Total Amount Received (NPR)", { exact: true }),
+  ).toHaveValue("3155.25");
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();
@@ -226,16 +233,24 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await expect
     .poll(async () => (await admin.workspace(trip)).visits.length)
     .toBe(4);
-  await page.reload();
+  await page.goto(`/driver/trips/${trip}`);
   await expect(
     page.getByText("Driver customer · 2 visits", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Return to Warehouse", exact: true })
+    .click();
   await expect(
     page.getByLabel("Full jars counted", { exact: true }),
   ).toHaveValue("10");
   await expect(
     page.getByLabel("Empty jars counted", { exact: true }),
   ).toHaveValue("40");
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "New Sale", exact: true })
+    .click();
   await page
     .getByRole("button", { name: /Driver customer · Roadside shop/ })
     .click();
@@ -249,6 +264,11 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
     page.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeDisabled();
   await page.getByLabel("Jars Delivered", { exact: true }).fill("0");
+  await page
+    .getByText("Collect previous credit without a new delivery", {
+      exact: true,
+    })
+    .click();
   await page
     .getByLabel("Collection customer", { exact: true })
     .selectOption(existing);
@@ -264,7 +284,10 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await save(page, "Collect outstanding credit");
   const finance = () => admin.rpc<FinanceWorkspace>("finance_workspace", {});
   await expect.poll(async () => (await finance()).payments.length).toBe(3);
-  await page.reload();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Return to Warehouse", exact: true })
+    .click();
   const before = await admin.workspace(trip);
   await save(page, "Submit warehouse returns");
   await expect
@@ -279,9 +302,12 @@ test("driver selects destinations, creates/edits contacts inside delivery, recor
   await logout(page);
   await login(page, "admin");
   await page.goto("/admin/customers");
-  await expect(
-    page.getByRole("link", { name: /Driver customer/ }),
-  ).toContainText("Added by Fixture driver");
+  await page
+    .getByTestId(`directory-card-${created}`)
+    .getByRole("link", { name: "View / edit", exact: true })
+    .click();
+  await page.getByText("Customer creation details", { exact: true }).click();
+  await expect(page.getByText("Fixture driver", { exact: true })).toBeVisible();
   await page.goto(`/admin/trips/${trip}`);
   await expect(
     page.getByText("Driver customer · 2 visits", { exact: true }),

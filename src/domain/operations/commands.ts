@@ -1,6 +1,9 @@
 import { uuid } from "@/domain/inventory/validation";
 import { paymentDraft } from "@/domain/finance/commands";
+import { dateFilter } from "@/domain/business-days/commands";
 export type Operation =
+  | "instant"
+  | "instant-convert"
   | "customer"
   | "delivery-customer"
   | "delivery-contact"
@@ -12,6 +15,10 @@ export type Operation =
   | "start"
   | "review"
   | "cancel"
+  | "continue"
+  | "reschedule"
+  | "unload-cancel"
+  | "carryover"
   | "visit"
   | "driver-visit"
   | "submit"
@@ -22,6 +29,9 @@ export type Command = {
   args: Record<string, unknown>;
   admin: boolean;
 };
+function invalidSchedule(): never {
+  throw new Error("Choose a valid scheduled delivery date.");
+}
 // Whitelist every RPC argument. Browser prices, roles and actor IDs are never forwarded.
 export function parseCommand(form: FormData): Command {
   const str = (name: string, max = 2000) => {
@@ -66,10 +76,33 @@ export function parseCommand(form: FormData): Command {
     ...common,
   });
   switch (operation) {
+    case "instant-convert":
+      return {
+        admin: true,
+        rpc: "convert_instant_customer",
+        args: { p_id: id("id"), p_reason: reason(), ...common },
+      };
+    case "instant":
+      return {
+        admin: false,
+        rpc: "post_instant_delivery",
+        args: {
+          p_trip: id("trip"),
+          p_id: id("id"),
+          p_name: str("event_name", 120),
+          p_phone: str("phone", 40),
+          p_location: str("location", 500),
+          p_items: json("items"),
+          p_status: str("payment_status", 11),
+          p_received: str("received_amount", 16) || null,
+          p_notes: str("notes"),
+          ...common,
+        },
+      };
     case "customer":
       return {
         admin: true,
-        rpc: "save_customer",
+        rpc: form.has("supply_type") ? "save_house_customer" : "save_customer",
         args: {
           ...master(),
           p_name: str("name", 120),
@@ -77,6 +110,13 @@ export function parseCommand(form: FormData): Command {
           p_phone: str("phone", 40),
           p_address: str("address", 500),
           p_notes: str("notes"),
+          ...(form.has("supply_type")
+            ? {
+                p_contact_person: str("contact_person", 120),
+                p_supply_type: str("supply_type", 7),
+                p_house_status: str("house_status", 9),
+              }
+            : {}),
         },
       };
     case "vehicle":
@@ -98,13 +138,18 @@ export function parseCommand(form: FormData): Command {
     case "create":
       return {
         admin: true,
-        rpc: "create_trip",
+        rpc: form.has("scheduled") ? "schedule_trip" : "create_trip",
         args: {
           p_id: id("id"),
           p_driver: id("driver"),
           p_vehicle: id("vehicle"),
           p_day: id("day"),
-          p_customers: [],
+          ...(form.has("scheduled")
+            ? {
+                p_scheduled:
+                  dateFilter(str("scheduled", 10)) ?? invalidSchedule(),
+              }
+            : { p_customers: [] }),
           p_notes: str("notes"),
           ...common,
         },
@@ -119,7 +164,9 @@ export function parseCommand(form: FormData): Command {
         admin: false,
         rpc:
           operation === "delivery-contact"
-            ? "save_delivery_contact"
+            ? form.has("supply_type")
+              ? "request_house_contact"
+              : "save_delivery_contact"
             : "save_delivery_customer",
         args: {
           p_trip: id("trip"),
@@ -135,6 +182,9 @@ export function parseCommand(form: FormData): Command {
                 p_contact_person: str("contact_person", 120),
                 p_customer_type: str("customer_type", 80),
                 p_delivery_notes: str("delivery_notes"),
+                ...(form.has("supply_type")
+                  ? { p_supply_type: str("supply_type", 7) }
+                  : {}),
               }
             : {}),
           ...common,
@@ -147,22 +197,41 @@ export function parseCommand(form: FormData): Command {
         args: { p_trip: id("trip"), p_items: json("items"), ...common },
       };
     case "start":
+    case "continue":
     case "review":
     case "cancel":
       return {
-        admin: operation !== "start",
+        admin: !["start", "continue"].includes(operation),
         rpc: "transition_trip",
         args: {
           p_trip: id("trip"),
           p_action: operation.toUpperCase(),
-          p_reason: operation === "start" ? "" : reason(),
+          p_reason: ["start", "continue"].includes(operation) ? "" : reason(),
+          ...common,
+        },
+      };
+    case "reschedule":
+    case "unload-cancel":
+    case "carryover":
+      return {
+        admin: true,
+        rpc: "trip_preparation_command",
+        args: {
+          p_trip: id("trip"),
+          p_action: operation.replaceAll("-", "_").toUpperCase(),
+          p_scheduled:
+            operation === "reschedule"
+              ? (dateFilter(str("scheduled", 10)) ?? invalidSchedule())
+              : null,
+          p_counts: operation === "unload-cancel" ? json("counts") : null,
+          p_reason: reason(),
           ...common,
         },
       };
     case "driver-visit": {
       const status = str("payment_status", 11),
         received = str("received_amount", 16);
-      if (!["PAID", "CREDIT", "RETURN_ONLY"].includes(status))
+      if (!["PAID", "CREDIT", "RETURN_ONLY", "FREE_SUPPLY"].includes(status))
         throw new Error("Choose Paid or Credit.");
       if (status === "PAID" && !/^\d{1,12}(\.\d{1,2})?$/.test(received))
         throw new Error("Enter the total amount received.");

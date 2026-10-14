@@ -17,7 +17,7 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
   await expect(
     page.getByRole("button", { name: "English", exact: true }),
   ).toBeEnabled();
-  await page.goto(`/driver/trips/${trip}`);
+  await page.goto(`/driver/delivery?customer=${customer}`);
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();

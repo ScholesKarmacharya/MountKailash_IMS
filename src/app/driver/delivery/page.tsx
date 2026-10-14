@@ -1,10 +1,2 @@
-import { DriverRoundWorkspace } from "@/components/driver-round-workspace";
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ customer?: string }>;
-}) {
-  return (
-    <DriverRoundWorkspace initialCustomer={(await searchParams).customer} />
-  );
-}
+// The persistent driver layout owns these screens, including offline navigation.
+export default function Page() { return null; }

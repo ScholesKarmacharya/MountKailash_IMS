@@ -1,4 +1,5 @@
-import { T, DateValue } from "@/components/localization";
+import { T, DateValue, Message } from "@/components/localization";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { getDayHistory, getDayReport } from "@/services/business-days";
@@ -11,12 +12,13 @@ import {
 import { OpenDayForm } from "@/components/inventory-forms";
 import { Card } from "@/components/ui/card";
 import { isOvernightDay } from "@/domain/business-days/time";
+import { PreparedTrips } from "@/components/prepared-trips";
 export default async function DailyClose() {
   const history = await getDayHistory();
   const active = history.days.find((d) => d.status !== "CLOSED");
   const detail = active ? await getDayReport(active.id) : null;
   return (
-    <div className="space-y-7">
+    <div className="space-y-5" data-testid="daily-close-workspace">
       <div>
         <h1 className="text-3xl font-bold">
           <T k="Daily closing" />
@@ -62,9 +64,27 @@ export default async function DailyClose() {
               />
             </p>
           )}
-          <Card>
+          <Card
+            className={
+              detail.blockers.length
+                ? "space-y-4 border-amber-300 bg-amber-50/40"
+                : "space-y-4 border-teal-200"
+            }
+            data-testid="pre-close-checklist"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <DateValue value={detail.report.day.date_label} />
+              <StatusBadge
+                label={
+                  detail.blockers.length
+                    ? "Closing blocked"
+                    : "Ready for reconciliation review"
+                }
+                tone={detail.blockers.length ? "warning" : "positive"}
+              />
+            </div>
             <h2 className="mb-4 text-xl font-semibold">
-              <T k="Pre-closing checklist" />
+              <T k="Today's operations and pre-closing checklist" />
             </h2>
             {!detail.blockers.length ? (
               <p role="status" className="mb-4 text-emerald-800">
@@ -78,7 +98,7 @@ export default async function DailyClose() {
                     className="rounded-lg bg-red-50 p-3 text-sm text-red-900"
                   >
                     <Link href={b.href} className="underline">
-                      {b.message}
+                      <Message value={b.message} />
                     </Link>
                   </li>
                 ))}
@@ -96,6 +116,7 @@ export default async function DailyClose() {
               </p>
             )}
           </Card>
+          <PreparedTrips report={detail.report} />
           {detail.report.day.status === "CLOSING_REVIEW" && (
             <div className="grid items-start gap-6 xl:grid-cols-2">
               <Card>

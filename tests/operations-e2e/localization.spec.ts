@@ -85,7 +85,7 @@ test("Nepali driver delivery preserves drafts during language switches and downl
     .click();
   await page.getByRole("button", { name: "डेलिभरी बचत", exact: true }).click();
   await expect(
-    page.getByText("अभिलेख बचत भयो।", { exact: true }),
+    page.getByText(message("ne", "Saved to Supabase."), { exact: true }),
   ).toBeVisible();
   expect(confirmation).toContain("३५");
   expect(confirmation).toContain("Refresh customer");
@@ -155,7 +155,7 @@ test("Nepali driver delivery preserves drafts during language switches and downl
   await expect(
     page
       .getByRole("status")
-      .filter({ hasText: message("ne", "Saved to the database.") }),
+      .filter({ hasText: message("ne", "Saved to Supabase.") }),
   ).toBeVisible();
   expect((await fixture.driver.workspace(fixture.trip)).trips[0]!.status).toBe(
     "SUBMITTED",

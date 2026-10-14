@@ -14,6 +14,9 @@ export type Product = {
   default_price: string;
   is_active: boolean;
   version: number;
+  house_eligible?: boolean;
+  reference_price?: string;
+  house_version?: number;
 };
 function text(form: FormData, name: string) {
   const value = form.get(name);

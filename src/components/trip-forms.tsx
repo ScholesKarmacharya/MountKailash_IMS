@@ -1,5 +1,7 @@
 "use client";
 import { LocalizedSelect } from "@/components/localization";
+import { BsDatePicker } from "./bs-date-picker";
+import { nepalDateLabel } from "@/domain/business-days/time";
 
 import {
   T,
@@ -21,6 +23,7 @@ import { cents, decimal, sum, npr } from "@/domain/finance/money";
 import { paymentPlan } from "@/domain/finance/payment-plan";
 import { driverPaymentPlan } from "@/domain/finance/driver-payment";
 import { DriverPayment } from "./driver-payment";
+import { freeProduct, approvedHouse } from "@/domain/house/pricing";
 import type { FinanceWorkspace, PaymentDraft } from "@/domain/finance/types";
 
 import { useState, useEffect } from "react";
@@ -32,6 +35,7 @@ import { OperationForm, Counter, Field, Select } from "./operation-form";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
+import { useDriverRuntime } from "./driver-runtime-context";
 import {
   DeliveryCustomerForm,
   DeliveryCustomerHistory,
@@ -46,6 +50,7 @@ export function CreateTripForm({
   requestKey: string;
   id: string;
 }) {
+  const { t } = useLocale();
   const open = w.days.find((d) => d.status === "OPEN");
   const usedDrivers = new Set(
     w.trips.filter((t) => t.status !== "CLOSED").map((t) => t.driver_id),
@@ -66,6 +71,7 @@ export function CreateTripForm({
       id={id}
       label="Create draft trip"
       resultHref="/admin/trips"
+      preserveFields
     >
       <input type="hidden" name="day" value={open.id} />
       <p className="text-sm">
@@ -75,35 +81,161 @@ export function CreateTripForm({
           <DateValue value={open.date_label} />
         </strong>
       </p>
-      <Select name="driver" label="Driver">
-        <option value="">
-          <T k="Choose available driver" />
-        </option>
-        {w.drivers
-          .filter((d) => d.is_active && !usedDrivers.has(d.id))
-          .map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-      </Select>
-      <Select name="vehicle" label="Vehicle">
-        <option value="">
-          <T k="Choose available vehicle" />
-        </option>
-        {w.vehicles
-          .filter((v) => v.is_active && !usedVehicles.has(v.id))
-          .map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.plate_number}
-            </option>
-          ))}
-      </Select>
+      <div className="grid items-start gap-4 md:grid-cols-2">
+        <BsDatePicker
+          name="scheduled"
+          label="Scheduled delivery date"
+          defaultValue={
+            open.date_label > nepalDateLabel(new Date())
+              ? open.date_label
+              : nepalDateLabel(new Date())
+          }
+          min={open.date_label}
+          required
+        />
+        <Select name="driver" label="Driver">
+          <option value="">{t("Choose available driver")}</option>
+          {w.drivers
+            .filter((d) => d.is_active && !usedDrivers.has(d.id))
+            .map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+        </Select>
+        <Select name="vehicle" label="Vehicle">
+          <option value="">{t("Choose available vehicle")}</option>
+          {w.vehicles
+            .filter((v) => v.is_active && !usedVehicles.has(v.id))
+            .map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.plate_number}
+              </option>
+            ))}
+        </Select>
+        <Field name="notes" label="Trip notes (optional)" />
+      </div>
       <p className="text-sm text-muted-foreground">
-        <T k="Drivers choose their customers and destinations during delivery. Admin assigns only the driver, vehicle and authorized load." />
+        <T k="A draft reserves the driver and vehicle. Warehouse stock changes only after Confirm physical loading. The driver starts the prepared trip separately." />
       </p>
-      <Field name="notes" label="Trip notes" />
     </OperationForm>
+  );
+}
+export function TripPreparationForms({
+  workspace: w,
+  trip,
+}: {
+  workspace: Workspace;
+  trip: Trip;
+}) {
+  const open = w.days.find((d) => d.status === "OPEN");
+  if (!open) return null;
+  return (
+    <div className="space-y-5">
+      {["DRAFT", "LOADED"].includes(trip.status) && (
+        <OperationForm
+          operation="reschedule"
+          trip={trip.id}
+          requestKey={crypto.randomUUID()}
+          label="Reschedule trip"
+        >
+          <BsDatePicker
+            name="scheduled"
+            label="Scheduled delivery date"
+            defaultValue={trip.scheduled_date ?? trip.date_label}
+            min={open.date_label}
+            required
+          />
+          <Field
+            name="reason"
+            label="Rescheduling reason"
+            required
+            maxLength={500}
+          />
+        </OperationForm>
+      )}
+      {trip.status === "DRAFT" && (
+        <OperationForm
+          operation="cancel"
+          trip={trip.id}
+          requestKey={crypto.randomUUID()}
+          label="Cancel draft trip"
+        >
+          <Field
+            name="reason"
+            label="Cancellation reason"
+            required
+            maxLength={500}
+          />
+        </OperationForm>
+      )}
+      {trip.status === "LOADED" && (
+        <OperationForm
+          operation="unload-cancel"
+          trip={trip.id}
+          requestKey={crypto.randomUUID()}
+          label="Confirm physical unloading and cancel"
+          confirm="Confirm that all counted stock has physically returned to the warehouse?"
+        >
+          <p className="text-sm">
+            <T k="Cancellation requires physical unloading. Confirm every vehicle count; the original loading history is preserved." />
+          </p>
+          <UnloadingCounts workspace={w} trip={trip} />
+          <Field
+            name="reason"
+            label="Cancellation reason"
+            required
+            maxLength={500}
+          />
+        </OperationForm>
+      )}
+      {trip.status === "ACTIVE" && !trip.carryover_pending && (
+        <OperationForm
+          operation="carryover"
+          trip={trip.id}
+          requestKey={crypto.randomUUID()}
+          label="Authorize overnight carryover"
+          confirm="Pause this trip for the next business day, retaining vehicle stock and pending settlement?"
+        >
+          <p className="text-sm">
+            <T k="Carryover pauses deliveries until the next day is opened and the driver resumes. An unsealed offline queue still blocks closing." />
+          </p>
+          <Field
+            name="reason"
+            label="Carryover reason"
+            required
+            maxLength={500}
+          />
+        </OperationForm>
+      )}
+    </div>
+  );
+}
+function UnloadingCounts({
+  workspace: w,
+  trip,
+}: {
+  workspace: Workspace;
+  trip: Trip;
+}) {
+  const { t } = useLocale();
+  const [counts, setCounts] = useState(vehicleCounts(w, trip));
+  return (
+    <>
+      <input type="hidden" name="counts" value={JSON.stringify(counts)} />
+      {counts.map((c, i) => (
+        <Counter
+          key={`${c.product_id}:${c.stock_kind}`}
+          label={`${w.products.find((p) => p.id === c.product_id)?.name} · ${t(stockLabels[c.stock_kind])}`}
+          value={c.quantity}
+          onChange={(quantity) =>
+            setCounts((old) =>
+              old.map((r, n) => (n === i ? { ...r, quantity } : r)),
+            )
+          }
+        />
+      ))}
+    </>
   );
 }
 export function LoadTripForm({
@@ -220,6 +352,7 @@ export function DeliveryForm({
   const [editor, setEditor] = useState<"new" | "edit" | null>(null);
   const [payment, setPayment] = useState("CASH"),
     [amount, setAmount] = useState(""),
+    [driverReceived, setDriverReceived] = useState<string | null>(null),
     [reference, setReference] = useState(""),
     [notes, setNotes] = useState(""),
     [review, setReview] = useState(false);
@@ -229,6 +362,7 @@ export function DeliveryForm({
   const [oldAmount, setOldAmount] = useState(""),
     [deposit, setDeposit] = useState(""),
     [fonepayPart, setFonepayPart] = useState("");
+  const runtime = useDriverRuntime();
   const credit =
     context?.credit ??
     f?.credit.filter((i) => i.customer_id === customer) ??
@@ -251,15 +385,35 @@ export function DeliveryForm({
   const items = products
     .map((p) => ({ product_id: p.id, ...quantity(p.id) }))
     .filter((i) => i.full_jars + i.empty_jars + i.cartons > 0);
+  const selected =
+    context?.customer ?? w.customers.find((c) => c.id === customer);
+  const isFree = (p: Workspace["products"][number]) =>
+    !walk &&
+    (!w.driver_workflow || (!!context && !lookup.loading && !lookup.error)) &&
+    freeProduct(
+      selected,
+      context?.house_products?.find((h) => h.id === p.id) ?? p,
+    );
+  const hasFree = items.some(
+    (i) =>
+      i.full_jars + i.cartons > 0 &&
+      isFree(products.find((p) => p.id === i.product_id)!),
+  );
+  const fullyFree =
+    hasFree &&
+    items
+      .filter((i) => i.full_jars + i.cartons > 0)
+      .every((i) => isFree(products.find((p) => p.id === i.product_id)!));
   const total = moneyTotal(
     products.map((p) => ({
-      price:
-        (context?.prices ?? f?.prices)?.find(
-          (r) =>
-            r.customer_id === (walk ? null : customer) &&
-            r.product_id === p.id &&
-            r.active,
-        )?.price ?? p.default_price,
+      price: isFree(p)
+        ? "0.00"
+        : ((context?.prices ?? f?.prices)?.find(
+            (r) =>
+              r.customer_id === (walk ? null : customer) &&
+              r.product_id === p.id &&
+              r.active,
+          )?.price ?? p.default_price),
       quantity: quantity(p.id).full_jars + quantity(p.id).cartons,
     })),
   );
@@ -268,11 +422,14 @@ export function DeliveryForm({
       ? decimal((cents(total) * cents(f.company.tax_rate) + 5000n) / 10000n)
       : "0.00";
   const payable = sum([total, tax]);
+  const receivedAmount = driverReceived ?? payable;
   const hasSale = items.some((i) => i.full_jars + i.cartons > 0);
   const driverStatus = hasSale
-    ? payment === "UNPAID"
-      ? "CREDIT"
-      : "PAID"
+    ? fullyFree
+      ? "FREE_SUPPLY"
+      : payment === "UNPAID"
+        ? "CREDIT"
+        : "PAID"
     : "RETURN_ONLY";
   let financeProblem = "",
     payments: PaymentDraft[] = [];
@@ -282,23 +439,25 @@ export function DeliveryForm({
         throw new Error(
           "This delivery exceeds the supported invoice amount. Reduce quantities.",
         );
-      payments = simplifiedPayment
-        ? driverPaymentPlan({
-            status: driverStatus,
-            total: payable,
-            amount,
-            customer: walk ? null : customer || null,
-          })
-        : paymentPlan({
-            selection: payment,
-            total: payable,
-            amount,
-            oldAmount: walk ? "0" : oldAmount,
-            deposit: walk ? "0" : deposit,
-            fonepayPart,
-            reference,
-            credit,
-          });
+      payments = fullyFree
+        ? []
+        : simplifiedPayment
+          ? driverPaymentPlan({
+              status: driverStatus,
+              total: payable,
+              amount: receivedAmount,
+              customer: walk ? null : customer || null,
+            })
+          : paymentPlan({
+              selection: payment,
+              total: payable,
+              amount,
+              oldAmount: walk ? "0" : oldAmount,
+              deposit: walk ? "0" : deposit,
+              fonepayPart,
+              reference,
+              credit,
+            });
       if (
         walk &&
         payments.reduce((s, p) => s + cents(p.current_amount ?? "0"), 0n) <
@@ -318,8 +477,6 @@ export function DeliveryForm({
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const selected =
-    context?.customer ?? w.customers.find((c) => c.id === customer);
   const walkProblem =
     walk &&
     ((!simplifiedPayment && (payment === "UNPAID" || payment === "PARTIAL")) ||
@@ -360,6 +517,15 @@ export function DeliveryForm({
     !stockProblem &&
     !financeProblem;
   const canReview = eligible && (!simplifiedPayment || !!f?.available);
+  const reviewContract = JSON.stringify({
+    context,
+    counts,
+    tax: f?.company?.tax_rate,
+    mode: f?.company?.tax_mode,
+  });
+  useEffect(() => {
+    queueMicrotask(() => setReview(false));
+  }, [reviewContract]);
   const router = useRouter();
   return (
     <div className="space-y-5">
@@ -372,7 +538,8 @@ export function DeliveryForm({
           variant="outline"
           onClick={() => {
             setReview(false);
-            router.refresh();
+            if (runtime) void runtime.refresh();
+            else router.refresh();
           }}
         >
           <T k="Refresh stock" />
@@ -436,9 +603,11 @@ export function DeliveryForm({
                   locale,
                   driverStatus === "RETURN_ONLY"
                     ? "Empty jar return"
-                    : payment === "UNPAID"
-                      ? "Credit"
-                      : "Paid",
+                    : fullyFree
+                      ? "Free Supply"
+                      : payment === "UNPAID"
+                        ? "Credit"
+                        : "Paid",
                 ),
                 number(npr(payable)),
               ])
@@ -468,11 +637,12 @@ export function DeliveryForm({
       >
         {simplifiedPayment && (
           <>
+            <input type="hidden" name="reviewed_total" value={payable} />
             <input type="hidden" name="payment_status" value={driverStatus} />
             <input
               type="hidden"
               name="received_amount"
-              value={driverStatus === "PAID" ? amount : ""}
+              value={driverStatus === "PAID" ? receivedAmount : ""}
             />
           </>
         )}
@@ -489,16 +659,39 @@ export function DeliveryForm({
         <input type="hidden" name="walk_phone" value={walk ? phone : ""} />
         {!simplifiedPayment && (
           <>
-            <input type="hidden" name="payment" value={payment} />
+            <input
+              type="hidden"
+              name="payment"
+              value={fullyFree ? "FREE_SUPPLY" : payment}
+            />
             <input
               type="hidden"
               name="amount"
-              value={f?.available || payment === "UNPAID" ? "" : amount}
+              value={
+                fullyFree || f?.available || payment === "UNPAID" ? "" : amount
+              }
             />
             <input type="hidden" name="reference" value={reference} />
           </>
         )}
-        <input type="hidden" name="notes" value={notes} />
+        <input
+          type="hidden"
+          name="notes"
+          value={simplifiedPayment ? "" : notes}
+        />
+        {!walk && selected?.supply_type === "HOUSE" && (
+          <div className="rounded-lg bg-teal-50 p-4 font-semibold">
+            <T k="HOUSE" /> /{" "}
+            <T
+              k={approvedHouse(selected) ? "Free Supply" : "Approval Required"}
+            />
+            {fullyFree && (
+              <p>
+                <T k="No Payment Required" />
+              </p>
+            )}
+          </div>
+        )}
         {!review ? (
           <>
             {walk ? (
@@ -527,6 +720,7 @@ export function DeliveryForm({
                   {customers.map((c) => (
                     <Button
                       key={c.id}
+                      data-customer-id={c.id}
                       type="button"
                       variant={customer === c.id ? "default" : "outline"}
                       className="min-h-14 w-full justify-start whitespace-normal text-left"
@@ -594,7 +788,7 @@ export function DeliveryForm({
                 )}
                 {lookup.error && (
                   <p role="alert" className="text-red-800">
-                    {lookup.error}{" "}
+                    <Message value={lookup.error} />{" "}
                     <Button
                       type="button"
                       variant="outline"
@@ -642,18 +836,34 @@ export function DeliveryForm({
                         <Value
                           key="v0"
                           value={npr(
-                            (context?.prices ?? f?.prices)?.find(
-                              (r) =>
-                                r.customer_id === (walk ? null : customer) &&
-                                r.product_id === p.id &&
-                                r.active,
-                            )?.price ?? p.default_price,
+                            isFree(p)
+                              ? "0.00"
+                              : ((context?.prices ?? f?.prices)?.find(
+                                  (r) =>
+                                    r.customer_id ===
+                                      (walk ? null : customer) &&
+                                    r.product_id === p.id &&
+                                    r.active,
+                                )?.price ?? p.default_price),
                           )}
                         />,
                         <Message key="v1" value={p.unit} />,
                       ]}
                     />
                   </p>
+                  {isFree(p) && (
+                    <p className="text-sm text-teal-800">
+                      <T k="Free Supply" /> · <T k="Reference Price" />:{" "}
+                      <Value
+                        value={npr(
+                          context?.house_products?.find((h) => h.id === p.id)
+                            ?.reference_price ??
+                            p.reference_price ??
+                            p.default_price,
+                        )}
+                      />
+                    </p>
+                  )}
                   {p.kind === "FULL_JAR" ? (
                     <>
                       <p className="text-sm">
@@ -796,7 +1006,12 @@ export function DeliveryForm({
                 </Card>
               );
             })}
-            {simplifiedPayment ? (
+            {fullyFree ? (
+              <p className="text-xl font-bold">
+                <T k="Total Amount" />: <Value value={npr(payable)} /> ·{" "}
+                <T k="No Payment Required" />
+              </p>
+            ) : simplifiedPayment ? (
               <div className="space-y-4">
                 <p className="text-xl font-bold">
                   <T
@@ -815,13 +1030,14 @@ export function DeliveryForm({
                 ) : (
                   <DriverPayment
                     credit={payment === "UNPAID"}
-                    amount={amount}
+                    amount={receivedAmount}
                     onCreditChange={(credit) => {
                       setPayment(credit ? "UNPAID" : "CASH");
+                      setDriverReceived(null);
                       setReview(false);
                     }}
                     onAmountChange={(value) => {
-                      setAmount(value);
+                      setDriverReceived(value);
                       setReview(false);
                     }}
                   />
@@ -1002,15 +1218,17 @@ export function DeliveryForm({
                 </label>
               </>
             )}
-            <label className="grid gap-2 text-sm font-semibold">
-              {" "}
-              <T k="Visit notes" />{" "}
-              <Input
-                value={notes}
-                maxLength={2000}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </label>
+            {!simplifiedPayment && (
+              <label className="grid gap-2 text-sm font-semibold">
+                {" "}
+                <T k="Visit notes" />{" "}
+                <Input
+                  value={notes}
+                  maxLength={2000}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </label>
+            )}
             {!simplifiedPayment && (
               <p className="text-lg font-bold">
                 <T
@@ -1082,9 +1300,11 @@ export function DeliveryForm({
                   k={
                     driverStatus === "RETURN_ONLY"
                       ? "Empty jar return"
-                      : payment === "UNPAID"
-                        ? "Credit"
-                        : "Paid"
+                      : fullyFree
+                        ? "Free Supply"
+                        : payment === "UNPAID"
+                          ? "Credit"
+                          : "Paid"
                   }
                 />{" "}
                 · <T k="Total Amount" />: <Value value={npr(payable)} />

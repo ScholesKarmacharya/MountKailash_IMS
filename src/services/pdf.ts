@@ -19,20 +19,37 @@ export async function receiptPdf(document: ReceiptDocument) {
   pdf.setSubject("Mount Kailash financial receipt");
   let page = pdf.addPage([595, 842]),
     y = 795;
+  const segmenter = new Intl.Segmenter("ne", { granularity: "grapheme" });
   const draw = (line: string, size = 11) => {
     const text = line.replace(/[\x00-\x1f]/g, " ");
-    let current = "";
-    // Wrap by measured glyph width; long unbroken names/references wrap instead of clipping.
-    for (const { segment: char } of new Intl.Segmenter("ne", {
-      granularity: "grapheme",
-    }).segment(text)) {
-      if (font.widthOfTextAtSize(current + char, size) > 505) {
-        write(current, size);
-        current = "";
-      }
-      current += char;
+    if (!text) {
+      write("", size);
+      return;
     }
-    write(current, size);
+    const boundaries = [...segmenter.segment(text)]
+      .map((s) => s.index)
+      .concat(text.length);
+    let start = 0;
+    // Fontkit shapes a complete string for every width measurement. Search for
+    // each line boundary instead of reshaping every growing prefix. Grapheme
+    // boundaries keep Nepali conjuncts intact and measured lines within 505pt.
+    while (start < boundaries.length - 1) {
+      let low = start + 1,
+        high = boundaries.length - 1;
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (
+          font.widthOfTextAtSize(
+            text.slice(boundaries[start], boundaries[middle]),
+            size,
+          ) <= 505
+        )
+          low = middle;
+        else high = middle - 1;
+      }
+      write(text.slice(boundaries[start], boundaries[low]), size);
+      start = low;
+    }
   };
   const write = (line: string, size: number) => {
     if (y < 55) {

@@ -1,6 +1,15 @@
 import "server-only";
 import { requirePermission } from "./auth";
-import { readStockHistory, readTripHistory } from "@/data-access/history";
+import {
+  readStockHistory,
+  readTripHistory,
+  readTripLoads,
+} from "@/data-access/history";
+import { uuid } from "@/domain/inventory/validation";
+export async function getTripLoads(ids: string[]) {
+  await requirePermission("admin:read");
+  return readTripLoads([...new Set(ids.map(uuid))]);
+}
 import {
   canonicalRange,
   EPOCH_AD_ISO,

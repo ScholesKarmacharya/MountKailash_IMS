@@ -4,8 +4,35 @@ import { signOut } from "@/app/sign-in/actions";
 import { Button } from "./ui/button";
 import { Message } from "./localization";
 import { unstable_rethrow } from "next/navigation";
-export function SignOutButton() {
+import { offlinePending, lockOfflineUser } from "@/lib/offline/store";
+import { useLocale } from "./localization";
+import { clearDriverSessionCookies } from "@/lib/offline/sign-out";
+export function SignOutButton({
+  user,
+  driver = false,
+}: {
+  user?: string;
+  driver?: boolean;
+}) {
+  const { t } = useLocale();
   const [state, action, pending] = useActionState(async () => {
+    try {
+      if (
+        (await offlinePending(user)) &&
+        !window.confirm(
+          t(
+            "Unsynced records remain on this device. Export a backup and sync before changing devices. Sign out anyway?",
+          ),
+        )
+      )
+        return undefined;
+      await lockOfflineUser();
+    } catch {
+      return {
+        error:
+          "Device records could not be checked. Sign out was cancelled to protect pending records.",
+      };
+    }
     // Pause periodic workspace refreshes while logout changes the session.
     window.dispatchEvent(new Event("operation-saving"));
     try {
@@ -15,6 +42,17 @@ export function SignOutButton() {
     } catch (error) {
       unstable_rethrow(error);
       window.dispatchEvent(new Event("operation-settled"));
+      if (driver) {
+        // Local sign-out must work even when the server cannot be contacted.
+        // lockOfflineUser has already preserved the journal and required a
+        // fresh online sign-in. Never clear an admin's session by this path.
+        clearDriverSessionCookies();
+        // A document navigation clears mounted session data and lets the
+        // service worker reopen its public shell without an offline RSC request.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.assign("/sign-in?reauth=1");
+        return undefined;
+      }
       return { error: "Could not sign out. Please try again." };
     }
   }, undefined);

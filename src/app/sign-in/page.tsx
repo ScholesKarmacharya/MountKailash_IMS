@@ -7,18 +7,24 @@ import { accountHome } from "@/domain/auth/roles";
 import { redirect } from "next/navigation";
 import { SignInForm } from "./sign-in-form";
 import { LanguageSwitcher } from "@/components/localization";
+import { cookies } from "next/headers";
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string }>;
+  searchParams: Promise<{ reason?: string; reauth?: string }>;
 }) {
   const configured = !!supabaseConfig();
+  const { reason, reauth } = await searchParams;
+  const trusted = (await cookies()).get("mk-driver-device")?.value === "1";
   if (configured) {
-    const profile = await readCurrentProfile();
-    if (profile?.role === "DRIVER" || profile?.is_active)
+    const profile = await readCurrentProfile().catch((error) => {
+      if (trusted) return null;
+      throw error;
+    });
+    if (reauth !== "1" && (profile?.role === "DRIVER" || profile?.is_active))
       redirect(accountHome(profile));
+    if (!profile && reauth !== "1" && trusted) redirect("/driver/home");
   }
-  const { reason } = await searchParams;
   return (
     <main id="main-content" className="grid min-h-dvh lg:grid-cols-2">
       <section className="flex flex-col justify-between bg-[#12394a] p-8 text-white lg:p-16">

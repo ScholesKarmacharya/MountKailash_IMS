@@ -1,0 +1,18 @@
+import {beforeEach,it,expect,vi} from "vitest";
+const mocks=vi.hoisted(()=>({profile:vi.fn(),rpc:vi.fn(),permission:vi.fn(),operations:vi.fn(),finance:vi.fn(),locale:vi.fn()}));
+vi.mock("@/data-access/profiles",()=>({readCurrentProfile:mocks.profile}));
+vi.mock("@/data-access/offline",async original=>({...await original<typeof import("@/data-access/offline")>(),offlineRpc:mocks.rpc}));
+vi.mock("@/data-access/operations",()=>({readOperations:mocks.operations}));
+vi.mock("@/data-access/finance",()=>({readFinance:mocks.finance}));
+vi.mock("@/lib/i18n/server",()=>({getLocale:mocks.locale}));
+vi.mock("@/services/auth",()=>({requirePermission:mocks.permission}));
+import {offlineIdentity,offlineCommand} from "@/services/offline";
+import {saveOfflineAdmin} from "@/services/offline-admin";
+import {POST} from "@/app/api/driver/offline/route";
+import {canonical,fingerprint} from "@/domain/offline/operations";
+const id=crypto.randomUUID(),device=crypto.randomUUID(),token="a".repeat(64);
+beforeEach(()=>{vi.resetAllMocks();mocks.profile.mockResolvedValue({id,name:"Driver",role:"DRIVER",is_active:true,approval_status:"APPROVED"});});
+it.each([null,{id,role:"ADMIN",is_active:true},{id,role:"DRIVER",is_active:true,approval_status:"SUSPENDED"},{id,role:"DRIVER",is_active:false,approval_status:"APPROVED"}])("rejects identity before any business RPC: %j",async profile=>{mocks.profile.mockResolvedValue(profile);await expect(offlineIdentity()).rejects.toThrow();expect(mocks.rpc).not.toHaveBeenCalled();});
+it("posts only validated original metadata and never accepts a browser actor",async()=>{const payload=canonical({customer:null});const op={id,trip:id,version:1,sequence:1,kind:"DELIVERY",payload,fingerprint:await fingerprint(payload),occurredAt:new Date().toISOString()};await offlineCommand({action:"post",trip:id,device,token,actor:"forged admin",operation:op});expect(mocks.rpc.mock.calls[0]![1]).toMatchObject({p_id:id,p_payload:payload,p_fingerprint:op.fingerprint,p_sequence:1});expect(mocks.rpc.mock.calls[0]![1]).not.toHaveProperty("actor");await expect(offlineCommand({action:"post",trip:id,device,token,operation:{...op,payload:canonical({customer:id})}})).rejects.toThrow();expect(mocks.rpc).toHaveBeenCalledOnce();});
+it("blocks admin recovery before parsing or database effects",async()=>{mocks.permission.mockRejectedValue(new Error("Forbidden"));await expect(saveOfflineAdmin(new FormData())).rejects.toThrow("Forbidden");expect(mocks.rpc).not.toHaveBeenCalled();});
+it("denies cross-origin and malformed JSON without leaking data",async()=>{const foreign=await POST(new Request("http://localhost/api/driver/offline",{method:"POST",headers:{Origin:"https://evil.example"},body:"{}"}));expect(foreign.status).toBe(403);const invalid=await POST(new Request("http://localhost/api/driver/offline",{method:"POST",headers:{Origin:"http://localhost"},body:"{"}));expect(invalid.status).toBe(400);expect(invalid.headers.get("cache-control")).toContain("no-store");expect(mocks.rpc).not.toHaveBeenCalled();});

@@ -92,12 +92,12 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
     .getByLabel("Jar product", { exact: true })
     .selectOption(fixtureIds.jar);
   await refill
-    .getByLabel("Eligible empties successfully refilled", { exact: true })
+    .getByLabel("Jars Successfully Refilled", { exact: true })
     .fill("60");
   await refill
-    .getByLabel("Processing reason / inspection notes", { exact: true })
+    .getByLabel("Processing Reason / Notes", { exact: true })
     .fill("Completed inspected refill batch");
-  await save(page, "Record completed refill");
+  await save(page, "Record Completed Refill");
   await page.reload();
   const damage = page.locator("form").filter({
     has: page.locator('input[name="operation"][value="day:DAMAGE"]'),
@@ -107,9 +107,9 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
     .selectOption(fixtureIds.jar);
   await damage.getByLabel("Damaged jar quantity", { exact: true }).fill("5");
   await damage
-    .getByLabel("Processing reason / inspection notes", { exact: true })
+    .getByLabel("Inspection Reason / Notes", { exact: true })
     .fill("Five rejected cracked jars");
-  await save(page, "Record damaged jars");
+  await save(page, "Record Damaged Jars");
   await page.goto("/admin/daily-close");
   await expect(page.getByText(/No critical blockers detected/)).toBeVisible();
   await save(page, "Begin closing review", "Confirm daily reconciliation");

@@ -13,6 +13,11 @@ export type Day = {
   closed_by_name: string | null;
 };
 export type DayTotals = {
+  free_jars?: number;
+  free_cartons?: number;
+  free_supply_value?: string;
+  free_supply_adjustments?: string;
+  paid_sales?: string;
   trips: number;
   completed_trips: number;
   pending_trips: number;
@@ -123,6 +128,34 @@ export type DayPayment = {
 };
 export type AuditRow = { id: string; [key: string]: unknown };
 export type DayReport = {
+  prepared_trips?: {
+    id: string;
+    trip_number: number;
+    scheduled_date: string;
+    driver_name: string;
+    plate_number: string;
+    full_jars: number;
+    cartons: number;
+    loaded_at: string | null;
+    loading_business_day_id: string | null;
+  }[];
+  carryovers?: {
+    id: string;
+    trip_id: string;
+    trip_number: number;
+    driver_name: string;
+    plate_number: string;
+    reason: string;
+    authorized_at: string;
+    resumed_at: string | null;
+  }[];
+  vehicle_stock?: {
+    location_id: string;
+    product_id: string;
+    stock_kind: StockKind;
+    quantity: number;
+    plate_number: string;
+  }[];
   pending_jars?: import("@/domain/operations/pending-jars").PendingJar[];
   schema_version: number;
   source: "LIVE" | "ARCHIVED" | "LEGACY_RECONSTRUCTED";

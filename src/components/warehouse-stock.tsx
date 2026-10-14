@@ -6,6 +6,7 @@ import {
   stockTotals,
 } from "@/domain/inventory/validation";
 import type { Balance } from "@/data-access/inventory";
+import { Droplets, Package, RotateCcw } from "lucide-react";
 export function WarehouseStock({
   balances,
   available,
@@ -17,24 +18,42 @@ export function WarehouseStock({
   return (
     <LocalizedSection
       aria-label="Warehouse stock"
-      className="grid gap-4 sm:grid-cols-3"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3"
     >
       {stockKinds.map((kind) => (
-        <Card key={kind}>
-          <h2 className="text-sm font-semibold">
-            <Message value={stockLabels[kind]} />
-          </h2>
-          <p className="my-4 text-3xl font-bold">
+        <Card
+          key={kind}
+          className={
+            "min-w-0 p-4 " +
+            (kind === "BOTTLE_CARTON" ? "col-span-2 sm:col-span-1" : "")
+          }
+        >
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              <Message value={stockLabels[kind]} />
+            </h2>
+            {kind === "FULL_JAR" ? (
+              <Droplets
+                className="size-5 shrink-0 text-primary"
+                aria-hidden="true"
+              />
+            ) : kind === "EMPTY_JAR" ? (
+              <RotateCcw
+                className="size-5 shrink-0 text-primary"
+                aria-hidden="true"
+              />
+            ) : (
+              <Package
+                className="size-5 shrink-0 text-primary"
+                aria-hidden="true"
+              />
+            )}
+          </div>
+          <p
+            className="mt-2 break-words text-2xl font-bold tabular-nums text-primary"
+            data-testid={"warehouse-" + kind}
+          >
             {available ? <Value value={totals[kind]} /> : <T k="Unavailable" />}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            <Message
-              value={
-                available
-                  ? "Current warehouse quantity · carries across business days"
-                  : "Apply the reviewed Sprint 1 migration to enable stock."
-              }
-            />
           </p>
         </Card>
       ))}

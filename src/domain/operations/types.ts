@@ -14,6 +14,10 @@ export type Customer = {
   contact_person?: string;
   customer_type?: string;
   delivery_notes?: string;
+  is_one_time?: boolean;
+  supply_type?: "REGULAR" | "HOUSE";
+  house_status?: "NONE" | "PENDING" | "APPROVED" | "SUSPENDED";
+  house_version?: number;
 };
 export type Vehicle = {
   id: string;
@@ -50,6 +54,14 @@ export type Trip = {
   notes: string;
   created_at: string;
   close_reason: string;
+  scheduled_date?: string;
+  posting_date?: string;
+  created_business_day_id?: string;
+  loading_business_day_id?: string | null;
+  loaded_at?: string | null;
+  loaded_by?: string | null;
+  cancelled?: boolean;
+  carryover_pending?: boolean;
 };
 export type Count = {
   product_id: string;
@@ -64,6 +76,9 @@ export type VisitItem = {
   empty_jars: number;
   cartons: number;
   unit_price_snapshot: string;
+  supply_classification?: "SALE" | "FREE_SUPPLY" | "RETURN_ONLY";
+  reference_price_snapshot?: string;
+  free_value_snapshot?: string;
 };
 export type Visit = {
   id: string;
@@ -72,6 +87,7 @@ export type Visit = {
   walk_in_phone: string;
   notes: string;
   created_at: string;
+  offline_occurred_at?: string | null;
   value_snapshot: string;
 };
 export type Workspace = {

@@ -33,7 +33,10 @@ export function DriverStock({
             <h2 className="text-sm font-semibold">
               <Message value={label} />
             </h2>
-            <p className="mt-3 text-4xl font-bold tabular-nums">
+            <p
+              className="mt-3 text-4xl font-bold tabular-nums"
+              data-testid={`driver-${String(label).toLowerCase().replaceAll(" ", "-")}`}
+            >
               <Value value={value} />
             </p>
           </Card>

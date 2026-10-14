@@ -63,7 +63,7 @@ export async function InvoiceDetail({
             />
           </Card>
         )}
-      {admin && day && (
+      {admin && day && sale.supply_classification !== "FREE_SUPPLY" && (
         <Card className="print:hidden">
           <h2 className="mb-4 font-semibold">
             <T k="Audited correction" />

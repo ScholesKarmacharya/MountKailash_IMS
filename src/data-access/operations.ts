@@ -4,27 +4,29 @@ import { emptyWorkspace, type Workspace } from "@/domain/operations/types";
 import type { Command } from "@/domain/operations/commands";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
 import { readProductDeliveries } from "./product-deliveries";
+import { customerDatabaseError } from "@/domain/operations/customer-errors";
+import { confirmedCustomerContext } from "@/domain/operations/confirmed-customer";
 export async function readDeliveryCustomer(
   trip: string,
   customer: string,
 ): Promise<DeliveryCustomerContext> {
   const client = await createClient();
-  const { data, error } = await client.rpc("delivery_customer_context", {
-    p_trip: trip,
-    p_customer: customer,
-  });
+  const { data, error, status } = await client.rpc(
+    "delivery_customer_context",
+    {
+      p_trip: trip,
+      p_customer: customer,
+    },
+  );
   if (error) {
-    if (["42P01", "PGRST202", "PGRST205"].includes(error.code))
-      throw new Error("The driver customer workflow migration is required.");
-    if (
-      ["22023", "42501"].includes(error.code) &&
-      error.message.length < 250 &&
-      !error.message.includes("permission denied")
-    )
-      throw new Error(error.message);
-    throw new Error("Customer details could not be loaded. Please retry.");
+    console.error("customer_lookup_failed", {
+      rpc: "delivery_customer_context",
+      status,
+      databaseCode: error.code,
+    });
+    throw customerDatabaseError(error, status);
   }
-  return data as DeliveryCustomerContext;
+  return confirmedCustomerContext(data, customer);
 }
 export async function readOperations(
   trip: string | null = null,
@@ -42,8 +44,20 @@ export async function readOperations(
 }
 export async function writeOperation(command: Command): Promise<string> {
   const client = await createClient();
-  const { data, error } = await client.rpc(command.rpc, command.args);
+  const { data, error, status } = await client.rpc(command.rpc, command.args);
   if (error) {
+    console.error("operation_save_failed", {
+      rpc: command.rpc,
+      status,
+      databaseCode: error.code,
+    });
+    if (
+      ["schedule_trip", "trip_preparation_command"].includes(command.rpc) &&
+      ["PGRST202", "42883", "42703", "42P01", "PGRST205"].includes(error.code)
+    )
+      throw new Error(
+        "Overnight trips are unavailable in this database. Apply the reviewed migrations 22 and 23, then refresh and retry.",
+      );
     if (
       command.rpc === "post_driver_delivery" &&
       ["PGRST202", "42883"].includes(error.code)
@@ -53,7 +67,9 @@ export async function writeOperation(command: Command): Promise<string> {
       );
     if (error.code === "23505")
       throw new Error(
-        "That assignment, request or verified transaction reference already exists. Refresh and check before retrying.",
+        command.rpc === "save_vehicle"
+          ? "This number plate is already registered. Open the existing vehicle or enter another plate."
+          : "That assignment, request or verified transaction reference already exists. Refresh and check before retrying.",
       );
     if (error.code === "23503")
       throw new Error(
@@ -78,6 +94,9 @@ export async function writeOperation(command: Command): Promise<string> {
   return data;
 }
 export type CustomerDelivery = {
+  supply_classification?: "SALE" | "FREE_SUPPLY" | "MIXED" | "RETURN_ONLY";
+  free_value?: string;
+  driver_name?: string;
   items?: import("@/domain/operations/product-delivery").ProductDelivery[];
   id: string;
   trip_id: string;

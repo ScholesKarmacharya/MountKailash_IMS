@@ -9,6 +9,7 @@ export type Company = {
   version: number;
 };
 export type Sale = {
+  supply_classification?: "SALE" | "FREE_SUPPLY" | "MIXED";
   id: string;
   visit_id: string;
   customer_id: string | null;
@@ -34,6 +35,8 @@ export type Invoice = {
   created_at: string;
 };
 export type SaleItem = {
+  supply_classification?: "SALE" | "FREE_SUPPLY";
+  reference_price_snapshot?: string;
   id: string;
   sale_id: string;
   product_id: string;

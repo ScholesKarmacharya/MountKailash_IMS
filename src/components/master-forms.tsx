@@ -3,19 +3,25 @@ import { randomUUID } from "node:crypto";
 import type { Customer, Vehicle, Workspace } from "@/domain/operations/types";
 import { OperationForm, Field, Select } from "./operation-form";
 import { Card } from "./ui/card";
-function Status({ active = true }: { active?: boolean }) {
-  return (
-    <Select name="active" label="Status" value={String(active)}>
-      <option value="true">
-        <T k="Active" />
-      </option>
-      <option value="false">
-        <T k="Inactive" />
-      </option>
-    </Select>
-  );
+import { HouseCustomerFields } from "./house-customer-fields";
+import { DialogClose } from "./admin-dialog";
+import { MasterStatus } from "./master-select-fields";
+function Status({
+  active = true,
+  lockActive = false,
+}: {
+  active?: boolean;
+  lockActive?: boolean;
+}) {
+  return <MasterStatus active={active} lockActive={lockActive} />;
 }
-export function CustomerForm({ customer }: { customer?: Customer }) {
+export function CustomerForm({
+  customer,
+  dialog = false,
+}: {
+  customer?: Customer;
+  dialog?: boolean;
+}) {
   return (
     <OperationForm
       operation="customer"
@@ -23,34 +29,51 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
       version={customer?.version}
       requestKey={randomUUID()}
       label={customer ? "Save customer" : "Create customer"}
+      preserveFields
+      actions={dialog ? <DialogClose /> : undefined}
+      successActions={dialog ? <DialogClose label="Close" /> : undefined}
     >
-      <Field
-        name="name"
-        label="Customer name"
-        value={customer?.name}
-        required
-        maxLength={120}
-      />
-      <Field
-        name="shop_name"
-        label="Shop / business"
-        value={customer?.shop_name}
-        maxLength={160}
-      />
-      <Field
-        name="phone"
-        label="Phone"
-        value={customer?.phone}
-        maxLength={40}
-      />
-      <Field
-        name="address"
-        label="Address"
-        value={customer?.address}
-        maxLength={500}
-      />
-      <Field name="notes" label="Notes" value={customer?.notes} />
-      <Status active={customer?.is_active} />
+      <p className="text-sm text-muted-foreground">
+        <T k="Customer name and audit reason are required. Other contact fields are optional." />
+      </p>
+      <div className="grid items-start gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <HouseCustomerFields customer={customer} admin compact />
+        </div>
+        <Field
+          name="contact_person"
+          label="Contact person (optional)"
+          value={customer?.contact_person}
+          maxLength={120}
+        />
+        <Field
+          name="name"
+          label="Customer name"
+          value={customer?.name}
+          required
+          maxLength={120}
+        />
+        <Field
+          name="shop_name"
+          label="Shop / business"
+          value={customer?.shop_name}
+          maxLength={160}
+        />
+        <Field
+          name="phone"
+          label="Phone"
+          value={customer?.phone}
+          maxLength={40}
+        />
+        <Field
+          name="address"
+          label="Address"
+          value={customer?.address}
+          maxLength={500}
+        />
+        <Field name="notes" label="Notes" value={customer?.notes} />
+        <Status active={customer?.is_active} />
+      </div>
       <Field
         name="reason"
         label="Reason for this change"
@@ -60,7 +83,15 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
     </OperationForm>
   );
 }
-export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
+export function VehicleForm({
+  vehicle,
+  dialog = false,
+  hasOpenTrip = false,
+}: {
+  vehicle?: Vehicle;
+  dialog?: boolean;
+  hasOpenTrip?: boolean;
+}) {
   return (
     <OperationForm
       operation="vehicle"
@@ -68,7 +99,13 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
       version={vehicle?.version}
       requestKey={randomUUID()}
       label={vehicle ? "Save vehicle" : "Register vehicle"}
+      preserveFields
+      actions={dialog ? <DialogClose /> : undefined}
+      successActions={dialog ? <DialogClose label="Close" /> : undefined}
     >
+      <p className="text-sm text-muted-foreground">
+        <T k="Number plate and audit reason are required." />
+      </p>
       <Field
         name="plate_number"
         label="Number plate"
@@ -82,7 +119,15 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
         value={vehicle?.description}
         maxLength={500}
       />
-      <Status active={vehicle?.is_active} />
+      <Status
+        active={vehicle?.is_active}
+        lockActive={hasOpenTrip && vehicle?.is_active}
+      />
+      {hasOpenTrip && (
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <T k="Complete or cancel the current trip before deactivating this vehicle." />
+        </p>
+      )}
       <Field
         name="reason"
         label="Reason for this change"
@@ -101,7 +146,7 @@ export function CustodyForm({
 }) {
   const day = workspace.days.find((d) => d.status === "OPEN");
   return (
-    <Card>
+    <Card id="customer-custody">
       <h2 className="mb-3 font-semibold">
         <T k="Customer jar custody" />
       </h2>

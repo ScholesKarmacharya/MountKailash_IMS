@@ -11,6 +11,7 @@ import {
   History,
   Truck,
   Droplets,
+  Zap,
 } from "lucide-react";
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
@@ -27,11 +28,12 @@ export function Navigation({ role }: { role: Role }) {
       className={
         role === "ADMIN"
           ? "space-y-2"
-          : "fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 gap-1 border-t border-border bg-card p-2 lg:static lg:grid-cols-6 lg:border-0"
+          : "fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 gap-1 border-t border-border bg-card p-2 lg:static lg:grid-cols-7 lg:border-0"
       }
     >
       <Link
         href={href}
+        prefetch={role === "DRIVER" ? false : undefined}
         aria-current={pathname === href ? "page" : undefined}
         className={cn(
           "flex min-h-11 items-center gap-3 rounded-lg px-4 text-sm font-semibold",
@@ -47,6 +49,7 @@ export function Navigation({ role }: { role: Role }) {
         (
           [
             ["New Sale", "/driver/delivery", PlusCircle],
+            ["Instant Delivery", "/driver/instant-delivery", Zap],
             ["Customers", "/driver/customers", Users],
             ["Unreturned Jars", "/driver/pending-jars", Droplets],
             ["Sales History", "/driver/sales", History],
@@ -56,6 +59,7 @@ export function Navigation({ role }: { role: Role }) {
           <Link
             key={target}
             href={target}
+            prefetch={false}
             aria-current={pathname === target ? "page" : undefined}
             className={cn(
               "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-semibold",
@@ -70,16 +74,20 @@ export function Navigation({ role }: { role: Role }) {
         (
           [
             ["Products", "/admin/products"],
+            ["Pricing & Free Supply", "/admin/pricing"],
             ["Inventory", "/admin/inventory"],
             ["Refilling and damage", "/admin/refilling"],
             ["Trips", "/admin/trips"],
+            ["Instant Deliveries", "/admin/instant-deliveries"],
             ["Customers", "/admin/customers"],
+            ["Unreturned Jars", "/admin/pending-jars"],
             ["Vehicles", "/admin/vehicles"],
             ["Drivers", "/admin/drivers"],
             ["Payments", "/admin/payments"],
             ["Customer credit", "/admin/credit"],
             ["Billing settings", "/admin/billing"],
             ["Daily close", "/admin/daily-close"],
+            ["Driver sync", "/admin/sync"],
             ["Daily history", "/admin/reports"],
           ] as const
         ).map(([label, target]) => (

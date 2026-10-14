@@ -29,7 +29,7 @@ async function save(page: Page, label: string) {
   await page.getByRole("button", { name: label, exact: true }).click();
   expect((await response).ok()).toBe(true);
   await expect(
-    page.getByText("Record saved.", { exact: true }).last(),
+    page.getByText(/^(Record saved\.|Saved to Supabase\.)$/).last(),
   ).toBeVisible();
 }
 test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and isolation use real SQL", async ({
@@ -98,6 +98,15 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
   await signout(page);
   await login(page);
   await page.goto("/driver/trips/" + trip);
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "New Sale", exact: true })
+    .click();
+  await page
+    .getByText("Collect previous credit without a new delivery", {
+      exact: true,
+    })
+    .click();
   await page
     .getByLabel("Collection customer", { exact: true })
     .selectOption(customer);
@@ -168,8 +177,9 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
     .getByRole("button", { name: "Filter history", exact: true })
     .click();
   await expect(
-    page.getByRole("cell", { name: "FONEPAY", exact: true }),
+    page.getByTestId("receipt-list").locator("tbody tr:visible, dl:visible"),
   ).toHaveCount(1);
+  await expect(page.getByTestId("receipt-list")).toContainText("FONEPAY");
   await page.goto("/admin/customers/" + customer);
   const refund = page.locator("form").filter({
     has: page.locator('input[name="operation"][value="finance:REFUND"]'),

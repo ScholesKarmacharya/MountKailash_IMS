@@ -84,7 +84,8 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
     exact: true,
   });
   await expect(amount).toHaveAttribute("inputmode", "decimal");
-  await expect(review).toBeDisabled();
+  await expect(amount).toHaveValue("300.50");
+  await expect(review).toBeEnabled();
   const stock = await admin.workspace(trip);
   for (const wrong of ["300.49", "300.51"]) {
     await amount.fill(wrong);
@@ -175,7 +176,7 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
       .first(),
   ).toBeVisible();
   await page.goto("/admin/dashboard");
-  for (const label of ["Confirmed collections", "All outstanding credit"])
+  for (const label of ["Confirmed Collections", "Total Outstanding Credit"])
     await expect(
       page
         .getByRole("heading", { name: label, exact: true })

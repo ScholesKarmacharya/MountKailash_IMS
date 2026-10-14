@@ -1,6 +1,7 @@
 import { cents, decimal } from "./money";
 import type { PaymentDraft } from "./types";
-export type DriverPaymentStatus = "PAID" | "CREDIT" | "RETURN_ONLY";
+export type DriverPaymentStatus =
+  "PAID" | "CREDIT" | "RETURN_ONLY" | "FREE_SUPPLY";
 /** A driver new sale settles only its current invoice, using exact minor units. */
 export function driverPaymentPlan({
   status,
@@ -13,6 +14,13 @@ export function driverPaymentPlan({
   amount: string;
   customer: string | null;
 }): PaymentDraft[] {
+  if (status === "FREE_SUPPLY") {
+    if (!customer || cents(total) !== 0n || (amount && cents(amount) !== 0n))
+      throw new Error(
+        "Approved HOUSE status and eligible products are required for free delivery.",
+      );
+    return [];
+  }
   if (status === "RETURN_ONLY") return [];
   if (status === "CREDIT") {
     if (!customer) throw new Error("Credit requires a registered customer.");

@@ -25,6 +25,7 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/driver/:path*",
+    "/api/driver/:path*",
     "/account/:path*",
     "/sign-in",
     "/",

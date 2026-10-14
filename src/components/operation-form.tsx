@@ -9,6 +9,7 @@ import { operationAction } from "@/app/operations-actions";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useLocale } from "./localization";
+import { useDriverRuntime } from "./driver-runtime-context";
 export function Field({
   label,
   name,
@@ -76,6 +77,12 @@ export function OperationForm({
   confirm = "Save these details to the database?",
   resultHref,
   showSubmit = true,
+  registeredDeviceRecovery,
+  actions,
+  successActions,
+  submitDisabled = false,
+  onSuccess,
+  preserveFields = false,
 }: {
   operation: string;
   requestKey: string;
@@ -87,13 +94,22 @@ export function OperationForm({
   confirm?: string;
   resultHref?: string;
   showSubmit?: boolean;
+  registeredDeviceRecovery?: React.ReactNode;
+  actions?: React.ReactNode;
+  successActions?: React.ReactNode;
+  submitDisabled?: boolean;
+  onSuccess?: () => void;
+  preserveFields?: boolean;
 }) {
   const { t } = useLocale();
+  const runtime = useDriverRuntime();
   const [state, action, pending] = useActionState(
     async (previous: Parameters<typeof operationAction>[0], form: FormData) => {
       window.dispatchEvent(new Event("operation-saving"));
       try {
-        const result = await operationAction(previous, form);
+        const result = runtime
+          ? await runtime.submit(form)
+          : await operationAction(previous, form);
         if (result?.success) window.dispatchEvent(new Event("operation-saved"));
         return result;
       } finally {
@@ -103,6 +119,9 @@ export function OperationForm({
     null,
   );
   const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (state?.success) onSuccess?.();
+  }, [state?.success, onSuccess]);
   // Preserve the exact request and expected version while an unsaved form is mounted.
   const [stableRequest] = useState(requestKey);
   const [stableId] = useState(id);
@@ -115,9 +134,22 @@ export function OperationForm({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, state?.success]);
+  const submitButton = (
+    <Button
+      type="submit"
+      className="min-h-12 w-full sm:w-auto"
+      disabled={pending || submitDisabled}
+    >
+      <Message value={pending ? "Saving…" : label} />
+    </Button>
+  );
   return (
     <form
       action={action}
+      onReset={(event) => {
+        if (preserveFields) event.preventDefault();
+      }}
+      aria-busy={pending}
       className="space-y-5"
       onChange={() => setDirty(true)}
       onClick={() => setDirty(true)}
@@ -132,23 +164,26 @@ export function OperationForm({
       <input type="hidden" name="version" value={stableVersion} />
       <fieldset disabled={pending || !!state?.success} className="space-y-5">
         {children}
-        {showSubmit && (
-          <Button
-            type="submit"
-            className="min-h-12 w-full sm:w-auto"
-            disabled={pending}
-          >
-            <Message value={pending ? "Saving…" : label} />
-          </Button>
-        )}
+        {showSubmit &&
+          (actions ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {submitButton}
+              {actions}
+            </div>
+          ) : (
+            submitButton
+          ))}
       </fieldset>
       {state?.error && (
-        <p
+        <div
           role="alert"
           className="rounded-lg bg-red-50 p-4 text-sm text-red-800"
         >
           <Message value={state.error} />
-        </p>
+          {state.error ===
+            "Use the registered offline device for this delivery round." &&
+            registeredDeviceRecovery}
+        </div>
       )}
       {state?.success && (
         <div
@@ -156,26 +191,28 @@ export function OperationForm({
           className="space-y-3 rounded-lg bg-teal-50 p-4 text-sm text-teal-900"
         >
           <p>
-            <T k="Record saved." />
+            <Message value={runtime ? state.success : "Record saved."} />
           </p>
-          {resultHref && state.id ? (
-            <Link
-              className="font-semibold underline"
-              href={`${resultHref}/${state.id}`}
-            >
-              <T k="Open saved trip" />
-            </Link>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                window.location.reload();
-              }}
-            >
-              <T k="Continue with updated data" />
-            </Button>
-          )}
+          {successActions ??
+            (resultHref && state.id ? (
+              <Link
+                className="font-semibold underline"
+                href={`${resultHref}/${state.id}`}
+              >
+                <T k="Open saved trip" />
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (runtime) runtime.next();
+                  else window.location.reload();
+                }}
+              >
+                <T k="Continue with updated data" />
+              </Button>
+            ))}
         </div>
       )}
     </form>

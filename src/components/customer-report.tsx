@@ -6,7 +6,7 @@ import {
 import { T, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { getCustomerDeliveries } from "@/services/operations";
-import { npr } from "@/domain/finance/money";
+import { npr, sum } from "@/domain/finance/money";
 
 import { Card } from "./ui/card";
 export async function CustomerReport({ id }: { id: string }) {
@@ -45,6 +45,16 @@ export async function CustomerReport({ id }: { id: string }) {
       <h2 className="mb-4 font-semibold">
         <T k="Customer delivery history" />
       </h2>
+      {visits.some(
+        (v) =>
+          v.supply_classification === "FREE_SUPPLY" ||
+          v.supply_classification === "MIXED",
+      ) && (
+        <p className="mb-4 font-semibold">
+          <T k="Value of Free Supply" />:{" "}
+          <Value value={npr(sum(visits.map((v) => v.free_value ?? "0.00")))} />
+        </p>
+      )}
       {visits.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           <T k="No delivery visits recorded for this customer." />
@@ -93,6 +103,14 @@ export async function CustomerReport({ id }: { id: string }) {
                 <T k="Delivery value" />:{" "}
                 <Value value={npr(v.value_snapshot)} />
               </p>
+              {(v.supply_classification === "FREE_SUPPLY" ||
+                v.supply_classification === "MIXED") && (
+                <p>
+                  <T k="Free Supply" /> · <T k="Value of Free Supply" />:{" "}
+                  <Value value={npr(v.free_value ?? "0.00")} /> ·{" "}
+                  {v.driver_name}
+                </p>
+              )}
             </article>
           ))}
         </>

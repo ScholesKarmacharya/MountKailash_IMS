@@ -28,7 +28,12 @@ export default async function Page({
         description="Changes are audited. A record changed by another user must be reloaded before saving."
       />
       <Card>
-        <VehicleForm vehicle={record} />
+        <VehicleForm
+          vehicle={record}
+          hasOpenTrip={w.trips.some(
+            (t) => t.vehicle_id === id && t.status !== "CLOSED",
+          )}
+        />
       </Card>
     </div>
   );

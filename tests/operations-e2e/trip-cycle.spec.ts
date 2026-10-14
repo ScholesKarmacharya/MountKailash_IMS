@@ -30,7 +30,7 @@ async function save(page: Page, label: string) {
   const response = await action;
   expect(response.ok()).toBe(true);
   await expect(
-    page.getByText("Saved to the database.", { exact: true }),
+    page.getByText(/^(Saved to the database\.|Saved to Supabase\.)$/).first(),
   ).toBeVisible();
 }
 async function updated(page: Page, reload = false) {
@@ -59,6 +59,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
     ).toHaveCount(0);
   }
   await page.goto("/admin/customers");
+  await page.getByRole("button", { name: "Add customer", exact: true }).click();
   await page
     .getByLabel("Customer name", { exact: true })
     .fill("Browser Customer");
@@ -66,14 +67,17 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.getByLabel("Reason for this change").fill("Browser test customer");
   await save(page, "Create customer");
   await page.goto("/admin/vehicles");
+  await page.getByRole("button", { name: "Add vehicle", exact: true }).click();
   await page.getByLabel("Number plate").fill("TEST-BROWSER");
   await page.getByLabel("Reason for this change").fill("Browser test vehicle");
   await save(page, "Register vehicle");
   await page.goto("/admin/trips");
   await page
+    .getByTestId("create-trip-section")
     .getByLabel("Driver", { exact: true })
     .selectOption({ label: "Fixture driver" });
   await page
+    .getByTestId("create-trip-section")
     .getByLabel("Vehicle", { exact: true })
     .selectOption({ label: "TEST-BROWSER" });
   await save(page, "Create draft trip");
@@ -99,6 +103,10 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await save(page, "Start delivering");
   await page
     .getByRole("link", { name: "View round and return history" })
+    .click();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "New Sale", exact: true })
     .click();
   let visitCount = 0;
   for (const [full, empty] of [
@@ -182,9 +190,14 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
     expect(replayed.movements).toHaveLength(saved.movements.length);
     await updated(page, true);
   }
+  await page.goto(tripPath.replace("/admin/", "/driver/"));
   await expect(
     page.getByText("Browser Customer · 2 visits", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "New Sale", exact: true })
+    .click();
   const fullInput = page.getByLabel("Jars Delivered", { exact: true });
   await fullInput.fill("21");
   await expect(fullInput).toHaveValue("21");
@@ -193,6 +206,10 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       .getByRole("alert")
       .filter({ hasText: "exceeds the remaining vehicle stock" }),
   ).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Return to Warehouse", exact: true })
+    .click();
   await expect(
     page.getByLabel("Full jars counted", { exact: true }),
   ).toHaveValue("20");

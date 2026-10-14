@@ -78,9 +78,12 @@ export function PendingJars({
               <T k="No pending jars." />
             </p>
           )}
-          <ul className="divide-y divide-border">
+          <ul className="grid items-start gap-3 xl:grid-cols-2">
             {rows.map((r) => (
-              <li key={r.entry_id} className="space-y-1 py-3 text-sm">
+              <li
+                key={r.entry_id}
+                className="min-w-0 space-y-2 rounded-lg border border-border bg-background p-4 text-sm"
+              >
                 {admin ? (
                   <Link
                     className="font-semibold text-primary underline"

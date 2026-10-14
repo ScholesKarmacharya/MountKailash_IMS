@@ -1,6 +1,7 @@
 import type { DriverAccount } from "@/domain/auth/accounts";
 import { approvalLabels } from "@/domain/auth/roles";
-import { DateValue, T, Message } from "./localization";
+import { DateValue, T } from "./localization";
+import { StatusBadge } from "./ui/status-badge";
 export function DriverAccountSummary({ driver }: { driver: DriverAccount }) {
   return (
     <dl className="grid min-w-0 gap-4 text-sm sm:grid-cols-2">
@@ -21,7 +22,18 @@ export function DriverAccountSummary({ driver }: { driver: DriverAccount }) {
           <T k="Account Status" />
         </dt>
         <dd role="status" className="font-semibold text-primary">
-          <Message value={approvalLabels[driver.approval_status]} />
+          <StatusBadge
+            label={
+              driver.approval_status === "APPROVED" && !driver.is_active
+                ? "Inactive"
+                : approvalLabels[driver.approval_status]
+            }
+            tone={
+              driver.is_active && driver.approval_status === "APPROVED"
+                ? "positive"
+                : "warning"
+            }
+          />
         </dd>
       </div>
       <div>

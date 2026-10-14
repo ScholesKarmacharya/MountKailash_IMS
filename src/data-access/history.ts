@@ -2,6 +2,31 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { DateRange } from "@/domain/localization/calendar";
 import type { Trip } from "@/domain/operations/types";
+import type { Workspace } from "@/domain/operations/types";
+export async function readTripLoads(
+  ids: string[],
+): Promise<Workspace["loads"]> {
+  if (!ids.length) return [];
+  const client = await createClient(),
+    rows: Workspace["loads"] = [];
+  for (let start = 0; start < ids.length; start += 100) {
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await client
+        .from("trip_load_items")
+        .select("trip_id,product_id,stock_kind,quantity")
+        .in("trip_id", ids.slice(start, start + 100))
+        .order("trip_id")
+        .order("product_id")
+        .order("stock_kind")
+        .range(offset, offset + 499);
+      if (error)
+        throw new Error("Trip loads could not be loaded. Please retry.");
+      rows.push(...data);
+      if (data.length < 500) break;
+    }
+  }
+  return rows;
+}
 export type StockHistoryRow = {
   id: string;
   product_id: string;
@@ -41,10 +66,10 @@ export async function readTripHistory(range: DateRange): Promise<Trip[]> {
     const { data, error } = await client
       .from("trips")
       .select(
-        "*,vehicles!inner(plate_number),profiles!trips_driver_id_fkey!inner(name),business_days!inner(date_label)",
+        "*,vehicles!inner(plate_number),profiles!trips_driver_id_fkey!inner(name),business_days!trips_business_day_id_fkey!inner(date_label)",
       )
-      .gte("business_days.date_label", range.from)
-      .lte("business_days.date_label", range.to)
+      .gte("scheduled_date", range.from)
+      .lte("scheduled_date", range.to)
       .order("created_at", { ascending: false })
       .order("id")
       .range(offset, offset + 499);
@@ -54,7 +79,8 @@ export async function readTripHistory(range: DateRange): Promise<Trip[]> {
         ...item,
         plate_number: item.vehicles.plate_number,
         driver_name: item.profiles.name,
-        date_label: item.business_days.date_label,
+        date_label: item.scheduled_date,
+        posting_date: item.business_days.date_label,
       } as Trip);
     if (data.length < 500) return rows;
   }

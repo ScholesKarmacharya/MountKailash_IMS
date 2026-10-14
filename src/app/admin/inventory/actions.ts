@@ -24,7 +24,9 @@ async function perform(
     };
   }
   revalidatePath("/admin/inventory");
+  revalidatePath("/admin/refilling");
   revalidatePath("/admin/products");
+  revalidatePath("/admin/pricing");
   revalidatePath("/admin/dashboard");
   return { success: message };
 }

@@ -1,102 +1,74 @@
-import { BsDateRange } from "@/components/bs-date-picker";
-import { Button } from "@/components/ui/button";
-import { getStockHistory, historyRange } from "@/services/history";
-import {
-  T,
-  Message,
-  DateValue,
-  Value,
-  LocalizedNav,
-} from "@/components/localization";
 import { randomUUID } from "node:crypto";
-import Link from "next/link";
+import { SlidersHorizontal } from "lucide-react";
+import { getInventory } from "@/services/inventory";
+import { getWarehouseActivity } from "@/services/warehouse-ui";
+import { historyRange } from "@/services/history";
+import { inventoryHistoryFilter } from "@/domain/inventory/presentation";
+import { T, DateValue } from "@/components/localization";
 import { Card } from "@/components/ui/card";
+import { AdminDialog } from "@/components/admin-dialog";
 import { AdjustmentForm, OpenDayForm } from "@/components/inventory-forms";
 import { WarehouseStock } from "@/components/warehouse-stock";
-import { getInventory } from "@/services/inventory";
-import { stockLabels } from "@/domain/inventory/validation";
+import { WarehouseProductStock } from "@/components/warehouse-product-stock";
+import { InventoryHistoryFilters } from "@/components/inventory-history-filters";
+import {
+  StockActivityHistory,
+  AdjustmentHistory,
+  HistoryPagination,
+} from "@/components/inventory-history";
+import Link from "next/link";
 
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; from?: string; to?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const page = /^\d{1,4}$/.test(params.page ?? "") ? Number(params.page) : 0;
-  const { available, balances, products, adjustments, businessDay, hasMore } =
-    await getInventory(page, historyRange(params.from, params.to));
-  const journal = available
-    ? await getStockHistory(params.from, params.to, page)
-    : { rows: [], hasMore: false };
-  const pageQuery = (p: number) =>
-    "?" + new URLSearchParams({ ...params, page: String(p) });
-  const productNames = new Map(
-    products.map((p) => [p.id, `${p.name} (${p.sku})`]),
+  let filter, adjustmentFilter;
+  try {
+    filter = inventoryHistoryFilter(params);
+    adjustmentFilter = inventoryHistoryFilter(params, "adjustment_");
+  } catch {
+    return (
+      <Card>
+        <T k="Invalid inventory history filters." />{" "}
+        <Link className="text-primary underline" href="/admin/inventory">
+          <T k="Reset Filters" />
+        </Link>
+      </Card>
+    );
+  }
+  const inventory = await getInventory(
+    adjustmentFilter.page,
+    historyRange(adjustmentFilter.from, adjustmentFilter.to),
+    adjustmentFilter,
   );
+  const { available, products, balances, adjustments, businessDay, hasMore } =
+    inventory;
+  const journal = available
+    ? await getWarehouseActivity(params)
+    : { rows: [], related: [], hasMore: false };
   return (
-    <div className="space-y-7">
-      <div>
-        <h1 className="text-3xl font-bold">
-          <T k="Warehouse inventory" />
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          <T k="Persistent physical stock with permanent, reasoned correction history." />
-        </p>
-      </div>
-      <WarehouseStock balances={balances} available={available} />
-      <form className="space-y-3">
-        <BsDateRange from={params.from} to={params.to} />
-        <Button type="submit">
-          <T k="Filter history" />
-        </Button>
-      </form>
-      {!available ? (
-        <Card>
-          <p role="status">
-            <T k="Sprint 1 database setup is pending. No stock quantities are displayed as zero until the migration is applied." />
+    <div className="min-w-0 space-y-5" data-testid="inventory-workspace">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold sm:text-3xl">
+            <T k="Warehouse inventory" />
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <T k="View usable warehouse stock and track every authorized stock change." />
           </p>
-        </Card>
-      ) : (
-        <>
-          <Card>
-            <h2 className="mb-4 text-xl font-semibold">
-              <T k="Stock by product" />
-            </h2>
-            {!balances.length ? (
-              <p>
-                {" "}
-                <T k="No products yet." />{" "}
-                <Link className="text-primary underline" href="/admin/products">
-                  <T k="Create products" />
-                </Link>{" "}
-                <T k="before posting opening counts." />{" "}
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {balances.map((balance) => (
-                  <li
-                    key={`${balance.product_id}-${balance.stock_kind}`}
-                    className="flex flex-wrap justify-between gap-3 py-3"
-                  >
-                    <span>
-                      {productNames.get(balance.product_id)} ·{" "}
-                      <Message value={stockLabels[balance.stock_kind]} />
-                    </span>
-                    <strong>
-                      <Value value={balance.quantity} />
-                    </strong>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-          <Card>
-            <h2 className="mb-4 text-xl font-semibold">
-              <T k="Manual adjustment" />
-            </h2>
+        </div>
+        {available && (
+          <AdminDialog
+            title="Manual adjustment"
+            triggerLabel="Adjust Stock"
+            primary
+            icon={<SlidersHorizontal className="size-4" aria-hidden="true" />}
+          >
             {!businessDay ? (
               <div className="space-y-4">
-                <p>
+                <p className="text-sm">
                   <T k="No active business day. Open one before posting stock. Opening uses Nepal time and does not reset any balance. Review and close the day from Daily close." />
                 </p>
                 <OpenDayForm requestKey={randomUUID()} />
@@ -106,7 +78,7 @@ export default async function InventoryPage({
                 <T
                   k="Business day {0} is in closing review. Stock changes are blocked."
                   values={[
-                    <DateValue key="v0" value={businessDay.date_label} />,
+                    <DateValue key="date" value={businessDay.date_label} />,
                   ]}
                 />
               </p>
@@ -116,165 +88,98 @@ export default async function InventoryPage({
               </p>
             ) : (
               <div className="space-y-4">
-                <p className="text-sm">
+                <p className="text-sm text-muted-foreground">
                   <T
                     k="Posting to business day {0}, even if operations cross midnight."
                     values={[
-                      <DateValue key="v0" value={businessDay.date_label} />,
+                      <DateValue key="date" value={businessDay.date_label} />,
                     ]}
                   />
                 </p>
                 <AdjustmentForm
                   products={products}
+                  balances={balances}
                   dayId={businessDay.id}
                   requestKey={randomUUID()}
                 />
               </div>
             )}
-          </Card>
-          <Card className="space-y-4">
-            <h2 className="text-xl font-semibold">
-              <T k="Stock movements" />
+          </AdminDialog>
+        )}
+      </div>
+      <WarehouseStock balances={balances} available={available} />
+      <p className="text-xs text-muted-foreground">
+        <T k="Current usable warehouse stock. Vehicle and damaged stock are excluded; history filters do not change these balances." />
+      </p>
+      {!available ? (
+        <Card>
+          <p role="status">
+            <T k="Inventory is unavailable. Contact your administrator or refresh the page." />
+          </p>
+        </Card>
+      ) : (
+        <>
+          <Card className="min-w-0 space-y-3 p-4">
+            <h2 className="text-lg font-bold">
+              <T k="Stock by product" />
             </h2>
-            <p className="text-sm">
-              <T k="Movement dates use Nepal local time. All transfers remain attached to their original business day." />
-            </p>
-            {!journal.rows.length && (
-              <p>
-                <T k="No posted stock movements." />
-              </p>
-            )}
-            {journal.rows.map((row) => (
-              <div key={row.id} className="border-b py-3 text-sm">
-                <p>
-                  {productNames.get(row.product_id)} ?{" "}
-                  <Message value={row.stock_kind} /> ?{" "}
-                  <Value value={row.quantity} />
-                </p>
-                <p>
-                  <Message value={row.movement_type} /> ?{" "}
-                  <DateValue value={row.created_at} time />
-                </p>
-                <p className="break-all">
-                  {row.id} · {row.business_day_id} · {row.actor_user_id}
-                </p>
-              </div>
-            ))}
-            <LocalizedNav
-              className="flex gap-4"
-              aria-label="Stock history pages"
-            >
-              {page > 0 && (
-                <Link
-                  className="text-primary underline"
-                  href={pageQuery(page - 1)}
-                >
-                  <T k="Newer entries" />
-                </Link>
-              )}
-              {journal.hasMore && (
-                <Link
-                  className="text-primary underline"
-                  href={pageQuery(page + 1)}
-                >
-                  <T k="Older entries" />
-                </Link>
-              )}
-            </LocalizedNav>
+            <WarehouseProductStock products={products} balances={balances} />
           </Card>
-          <Card>
-            <h2 className="mb-4 text-xl font-semibold">
+          <Card className="min-w-0 space-y-4 p-4">
+            <h2 className="text-lg font-bold">
+              <T k="Stock Activity History" />
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              <T k="Warehouse history includes only transfers to or from the warehouse. Company-wide history also includes vehicle deliveries, collections and reconciliation." />
+            </p>
+            <InventoryHistoryFilters
+              key={JSON.stringify(filter)}
+              filter={filter}
+              products={products}
+              action="/admin/inventory"
+              params={params}
+            />
+            <p className="text-xs text-muted-foreground">
+              <T k="Activity dates use Nepal local time. Original posting dates and both refill movements remain in View Details." />
+            </p>
+            <StockActivityHistory
+              rows={journal.rows}
+              related={journal.related}
+              scope={filter.scope}
+            />
+            <HistoryPagination
+              page={filter.page}
+              label="Stock history pages"
+              hasMore={journal.hasMore}
+              params={params}
+              action="/admin/inventory"
+            />
+          </Card>
+          <Card className="min-w-0 space-y-4 p-4">
+            <h2 className="text-lg font-bold">
               <T k="Immutable adjustment history" />
             </h2>
-            <p className="mb-5 text-sm text-muted-foreground">
-              <T k="Newest first · 25 entries per page. Corrections require another adjustment; previous entries cannot be edited or deleted." />
+            <p className="text-xs text-muted-foreground">
+              <T k="Corrections create new audited entries. Existing adjustments cannot be edited or deleted." />
             </p>
-            {!adjustments.length ? (
-              <p>
-                <T k="No adjustments on this page." />
-              </p>
-            ) : (
-              <ol className="space-y-4">
-                {adjustments.map((entry) => (
-                  <li
-                    key={entry.id}
-                    className="rounded-lg border border-border p-4 text-sm"
-                  >
-                    <p className="font-semibold">
-                      {productNames.get(entry.stock_movements.product_id)} ·{" "}
-                      <Message
-                        value={stockLabels[entry.stock_movements.stock_kind]}
-                      />
-                    </p>
-                    <p className="mt-2">
-                      <T
-                        k="{0} {1} · Before {2} → After {3}"
-                        values={[
-                          entry.delta > 0 ? "+" : "",
-                          entry.delta,
-                          entry.quantity_before,
-                          entry.quantity_after,
-                        ]}
-                      />
-                    </p>
-                    <p className="mt-2 break-words">
-                      <T k="Reason: {0}" values={[entry.reason]} />
-                    </p>
-                    {entry.notes && (
-                      <p className="mt-1 break-words">
-                        <T k="Notes: {0}" values={[entry.notes]} />
-                      </p>
-                    )}
-                    <p className="mt-3 text-muted-foreground">
-                      <T
-                        k="{0} (Nepal time)"
-                        values={[
-                          <DateValue key="v0" value={entry.created_at} time />,
-                        ]}
-                      />
-                    </p>
-                    <p className="mt-1 break-all text-xs text-muted-foreground">
-                      <T
-                        k="Actor: {0} · Business day: {1} · Reference: {2}"
-                        values={[
-                          entry.stock_movements.profiles?.name ??
-                            entry.stock_movements.actor_user_id,
-                          <DateValue
-                            key="v1"
-                            value={
-                              entry.stock_movements.business_days?.date_label ??
-                              entry.stock_movements.business_day_id
-                            }
-                          />,
-                          entry.id,
-                        ]}
-                      />
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-            <LocalizedNav
-              aria-label="Adjustment history pages"
-              className="mt-5 flex gap-5"
-            >
-              {page > 0 && (
-                <Link
-                  className="text-primary underline"
-                  href={pageQuery(page - 1)}
-                >
-                  <T k="Newer entries" />
-                </Link>
-              )}
-              {hasMore && (
-                <Link
-                  className="text-primary underline"
-                  href={pageQuery(page + 1)}
-                >
-                  <T k="Older entries" />
-                </Link>
-              )}
-            </LocalizedNav>
+            <InventoryHistoryFilters
+              key={JSON.stringify(adjustmentFilter)}
+              filter={adjustmentFilter}
+              products={products}
+              prefix="adjustment_"
+              mode="adjustment"
+              action="/admin/inventory"
+              params={params}
+            />
+            <AdjustmentHistory rows={adjustments} products={products} />
+            <HistoryPagination
+              page={adjustmentFilter.page}
+              label="Adjustment history pages"
+              hasMore={hasMore}
+              params={params}
+              action="/admin/inventory"
+              pageName="adjustment_page"
+            />
           </Card>
         </>
       )}

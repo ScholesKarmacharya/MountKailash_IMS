@@ -24,6 +24,7 @@ export function DriverCustomers({
   const customers = w.customers.filter(
     (c) =>
       c.is_active &&
+      !c.is_one_time &&
       `${c.name} ${c.shop_name} ${c.contact_person ?? ""} ${c.phone} ${c.address} ${c.customer_type ?? ""}`
         .toLowerCase()
         .includes(search.toLowerCase()),

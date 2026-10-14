@@ -7,6 +7,7 @@ import {
   invoiceTotals,
   invoicePaymentStatus,
   invoiceDeliveries,
+  invoiceFreeValue,
 } from "./reports";
 import { deliveryText } from "@/domain/operations/product-delivery";
 import type { Invoice, FinanceWorkspace, Payment, Company } from "./types";
@@ -24,6 +25,9 @@ export function invoiceDocument(
   const totals = invoiceTotals(i, f),
     sale = f.sales.find((s) => s.id === i.sale_id)!;
   const lines = [
+    ...(sale.supply_classification === "FREE_SUPPLY"
+      ? [tr(locale, "Free Supply"), tr(locale, "No Payment Required")]
+      : []),
     tr(locale, "Invoice MK-{0}", [i.number.padStart(8, "0")]),
     tr(locale, "Customer: {0}", [i.customer.name]),
     i.customer.shop_name,
@@ -54,6 +58,21 @@ export function invoiceDocument(
         ]),
       ),
     tr(locale, "Subtotal: {0}", [npr(i.subtotal)]),
+    ...(sale.supply_classification === "FREE_SUPPLY" ||
+    sale.supply_classification === "MIXED"
+      ? [
+          `${tr(locale, "Value of Free Supply")}: ${npr(invoiceFreeValue(i, f))}`,
+        ]
+      : []),
+    ...f.items
+      .filter(
+        (s) =>
+          s.sale_id === i.sale_id && s.supply_classification === "FREE_SUPPLY",
+      )
+      .map(
+        (s) =>
+          `${s.name} · ${tr(locale, "Free Supply")} · ${tr(locale, "Reference Price")}: ${npr(s.reference_price_snapshot ?? "0.00")}`,
+      ),
     i.company.tax_mode === "UNCONFIGURED"
       ? tr(locale, "Tax: UNCONFIGURED - registration requirements pending")
       : `${i.company.tax_label || tr(locale, "Tax")}: ${money(i.tax, locale)} (${digits(i.company.tax_rate, locale)}%)`,

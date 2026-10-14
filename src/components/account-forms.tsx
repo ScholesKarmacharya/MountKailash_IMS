@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { DriverAccount } from "@/domain/auth/accounts";
 import type { Profile } from "@/domain/auth/roles";
-import { Field, OperationForm, Select } from "./operation-form";
+import { Field, OperationForm } from "./operation-form";
+import { DriverCreationApproval } from "./master-select-fields";
 import { T } from "./localization";
 import { DriverStatusForm } from "./driver-status-form";
+import { DialogClose } from "./admin-dialog";
 export function OwnProfileForm({ profile }: { profile: Profile | null }) {
   return (
     <OperationForm
@@ -28,7 +30,13 @@ export function OwnProfileForm({ profile }: { profile: Profile | null }) {
     </OperationForm>
   );
 }
-export function DriverAccountForm({ driver }: { driver?: DriverAccount }) {
+export function DriverAccountForm({
+  driver,
+  dialog = false,
+}: {
+  driver?: DriverAccount;
+  dialog?: boolean;
+}) {
   return (
     <OperationForm
       operation="account:driver"
@@ -36,7 +44,11 @@ export function DriverAccountForm({ driver }: { driver?: DriverAccount }) {
       version={driver?.version}
       requestKey={randomUUID()}
       label={driver ? "Save driver" : "Create pending driver"}
+      preserveFields
+      actions={dialog ? <DialogClose /> : undefined}
+      successActions={dialog ? <DialogClose label="Close" /> : undefined}
     >
+      <input type="hidden" name="create_new" value={String(!driver)} />
       {!driver && (
         <Field
           name="id"
@@ -58,16 +70,7 @@ export function DriverAccountForm({ driver }: { driver?: DriverAccount }) {
         value={driver?.phone}
         maxLength={40}
       />
-      {!driver && (
-        <Select label="Approval on creation" name="approve" value="false">
-          <option value="false">
-            <T k="Pending Approval" />
-          </option>
-          <option value="true">
-            <T k="Approve Driver" />
-          </option>
-        </Select>
-      )}
+      {!driver && <DriverCreationApproval />}
       <Field
         name="reason"
         label="Reason for this change"

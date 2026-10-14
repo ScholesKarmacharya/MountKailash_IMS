@@ -8,6 +8,7 @@ import type {
   Company,
 } from "@/domain/finance/types";
 import type { Workspace } from "@/domain/operations/types";
+import { TaxTreatmentField } from "./finance-filters";
 const Reason = () => (
   <Field label="Reason / evidence" name="reason" required maxLength={500} />
 );
@@ -19,55 +20,64 @@ export function CompanyForm({ company: c }: { company: Company }) {
       version={c.version}
       label="Save confirmed billing settings"
       confirm="Save these company details and confirmed tax treatment? Future invoices use these settings; historical invoices retain their snapshots."
+      preserveFields
     >
-      <Field
-        name="name"
-        label="Company name"
-        value={c.name}
-        required
-        maxLength={120}
-      />
-      <Field
-        name="address"
-        label="Company address"
-        value={c.address}
-        maxLength={500}
-      />
-      <Field name="phone" label="Phone" value={c.phone} maxLength={40} />
-      <Field
-        name="registration"
-        label="Confirmed registration details (optional)"
-        value={c.registration}
-        maxLength={120}
-      />
-      <Select
-        name="tax_mode"
-        label="Confirmed tax treatment"
-        value={c.tax_mode}
-      >
-        <option value="UNCONFIGURED">
-          <T k="Unconfigured - registration requirements pending" />
-        </option>
-        <option value="NO_TAX">
-          <T k="Confirmed no tax" />
-        </option>
-        <option value="EXPLICIT">
-          <T k="Confirmed explicit tax rate" />
-        </option>
-      </Select>
-      <Field
-        name="tax_label"
-        label="Confirmed tax label"
-        value={c.tax_label}
-        maxLength={100}
-      />
-      <Field
-        name="tax_rate"
-        label="Confirmed percentage (0–100, max 2 decimals)"
-        value={c.tax_rate}
-        required
-      />
-      <Reason />
+      <section className="space-y-4 rounded-lg border border-border p-4">
+        <h2 className="text-lg font-semibold">
+          <T k="Company information" />
+        </h2>
+        <div className="grid items-start gap-4 sm:grid-cols-2">
+          <Field
+            name="name"
+            label="Company name"
+            value={c.name}
+            required
+            maxLength={120}
+          />
+          <Field
+            name="address"
+            label="Company address"
+            value={c.address}
+            maxLength={500}
+          />
+          <Field name="phone" label="Phone" value={c.phone} maxLength={40} />
+        </div>
+      </section>
+      <section className="space-y-4 rounded-lg border border-border p-4">
+        <h2 className="text-lg font-semibold">
+          <T k="Registration and tax details" />
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          <T k="Use confirmed registration and tax evidence. No tax status is inferred." />
+        </p>
+        <div className="grid items-start gap-4 sm:grid-cols-2">
+          <Field
+            name="registration"
+            label="Confirmed registration details (optional)"
+            value={c.registration}
+            maxLength={120}
+          />
+          <TaxTreatmentField value={c.tax_mode} />
+          <Field
+            name="tax_label"
+            label="Confirmed tax label"
+            value={c.tax_label}
+            maxLength={100}
+          />
+          <Field
+            name="tax_rate"
+            label="Confirmed percentage (0–100, max 2 decimals)"
+            value={c.tax_rate}
+            required
+          />
+        </div>
+      </section>
+      <section className="space-y-4 rounded-lg border border-border p-4">
+        <h2 className="text-lg font-semibold">
+          <T k="Documentation and evidence" />
+        </h2>
+        <Reason />
+      </section>
     </OperationForm>
   );
 }

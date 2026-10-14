@@ -4,7 +4,8 @@ import { LocalizedSelect } from "@/components/localization";
 import { useState } from "react";
 import { BsDateRange } from "./bs-date-picker";
 import { T, Value, DateValue, Message, useLocale } from "./localization";
-import { Card } from "./ui/card";
+import { ReportPanel, ReportTable, MetricGrid } from "./report-ui";
+import { Button } from "./ui/button";
 import {
   bsMonthRange,
   adToBs,
@@ -20,24 +21,32 @@ import { npr } from "@/domain/finance/money";
 export function CreditStatement({
   finance,
   customers,
+  initialCustomer,
 }: {
   finance: FinanceWorkspace;
   customers: { id: string; name: string }[];
+  initialCustomer?: string;
 }) {
   const { locale, t, number } = useLocale();
   const [bs, setBs] = useState(() => currentBs()),
     [range, setRange] = useState(() => bsMonthRange(bs.year, bs.month)),
-    [customer, setCustomer] = useState(customers[0]?.id ?? "");
+    [customer, setCustomer] = useState(
+      customers.find((c) => c.id === initialCustomer)?.id ??
+        customers[0]?.id ??
+        "",
+    );
   const statement = creditStatement(finance, customer, range);
   const periodBs = adToBs(range.from),
     periodMonth = bsMonthRange(periodBs.year, periodBs.month);
   const query = new URLSearchParams({ from: range.from, to: range.to });
   return (
-    <Card className="space-y-4">
-      <h2 className="text-xl font-semibold">
-        <T k="BS credit statement" />
-      </h2>
-      <p>
+    <ReportPanel title="BS credit statement" testId="credit-statement">
+      <p className="font-semibold">
+        {customers.find((c) => c.id === customer)?.name ?? (
+          <T k="No customers registered." />
+        )}
+      </p>
+      <p className="text-sm text-muted-foreground">
         {range.from === periodMonth.from && range.to === periodMonth.to && (
           <>
             {months[locale][periodBs.month - 1]} {number(periodBs.year)} ·{" "}
@@ -114,57 +123,49 @@ export function CreditStatement({
           }
         }}
       />
-      <p>
-        <T
-          k="Opening credit: {0}"
-          values={[<Value key="opening" value={npr(statement.opening)} />]}
-        />
-      </p>
-      {!statement.rows.length && (
-        <p>
-          <T k="No transactions recorded." />
-        </p>
-      )}
-      <ul className="divide-y">
-        {statement.rows.map((row) => (
-          <li key={row.id} className="flex flex-wrap gap-3 py-3 text-sm">
-            <DateValue value={row.created_at} time />
-            <Message value={row.kind} />
-            <Value value={npr(row.amount)} />
-          </li>
-        ))}
-      </ul>
-      <p>
-        <T
-          k="Period change: {0}"
-          values={[<Value key="change" value={npr(statement.change)} />]}
-        />
-      </p>
-      <p className="font-semibold">
-        <T
-          k="Closing credit: {0}"
-          values={[<Value key="closing" value={npr(statement.closing)} />]}
-        />
-      </p>
+      <MetricGrid
+        items={[
+          { label: "Opening credit", value: npr(statement.opening) },
+          { label: "Period change", value: npr(statement.change) },
+          { label: "Closing credit", value: npr(statement.closing) },
+        ]}
+      />
+      <h3 className="font-semibold">
+        <T k="Transaction ledger" />
+      </h3>
+      <ReportTable
+        columns={["Date", "Kind", "Amount"]}
+        empty="No transactions recorded."
+        rows={statement.rows.map((row) => ({
+          id: row.id,
+          cells: [
+            <DateValue key="date" value={row.created_at} time />,
+            <Message key="kind" value={row.kind} />,
+            <Value key="amount" value={npr(row.amount)} />,
+          ],
+        }))}
+      />
       <p className="text-sm text-muted-foreground">
         <T k="Customer jars and refundable deposits are separate from this credit statement." />
       </p>
       {customer && (
         <div className="flex flex-wrap gap-4">
-          <a
-            className="text-primary underline"
-            href={`/api/customer-statements/${customer}?${query}&format=pdf`}
-          >
-            <T k="Download PDF" />
-          </a>
-          <a
-            className="text-primary underline"
-            href={`/api/customer-statements/${customer}?${query}&format=csv`}
-          >
-            <T k="Download Excel-compatible CSV" />
-          </a>
+          <Button asChild variant="outline">
+            <a
+              href={`/api/customer-statements/${customer}?${query}&format=pdf`}
+            >
+              <T k="Download PDF" />
+            </a>
+          </Button>
+          <Button asChild variant="outline">
+            <a
+              href={`/api/customer-statements/${customer}?${query}&format=csv`}
+            >
+              <T k="Download Excel-compatible CSV" />
+            </a>
+          </Button>
         </div>
       )}
-    </Card>
+    </ReportPanel>
   );
 }

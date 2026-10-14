@@ -3,18 +3,23 @@ import Link from "next/link";
 export function OperationsHeading({
   title,
   description,
+  actions,
 }: {
   title: React.ReactNode;
   description: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-7">
-      <h1 className="text-3xl font-bold">
-        <Message value={title} />
-      </h1>
-      <p className="mt-2 text-muted-foreground">
-        <Message value={description} />
-      </p>
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="min-w-0 sm:flex-1">
+        <h1 className="text-3xl font-bold">
+          <Message value={title} />
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          <Message value={description} />
+        </p>
+      </div>
+      {actions && <div className="sm:shrink-0">{actions}</div>}
     </div>
   );
 }

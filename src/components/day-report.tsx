@@ -3,7 +3,6 @@ import { T, Message, DateValue, Value } from "@/components/localization";
 import Link from "next/link";
 import { Card } from "./ui/card";
 import {
-  amountLabels,
   groupedTrips,
   dayTripDeliveries,
 } from "@/domain/business-days/reports";
@@ -11,6 +10,8 @@ import type { DayReport, AuditRow } from "@/domain/business-days/types";
 import { npr } from "@/domain/finance/money";
 import { stockLabels } from "@/domain/inventory/validation";
 import { PendingJars } from "./pending-jars";
+import { ClosingFinanceSummary } from "./closing-finance-summary";
+import { ReportPanel, ReportTable } from "./report-ui";
 export function DayReportView({ report: r }: { report: DayReport }) {
   const audits: [string, AuditRow[]][] = [
     ["Stock adjustments", r.adjustments],
@@ -22,7 +23,7 @@ export function DayReportView({ report: r }: { report: DayReport }) {
     ["Payment verification", r.events],
   ];
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" data-testid="day-report-workspace">
       {r.pending_jars && (
         <PendingJars
           workspace={{ available: true, rows: r.pending_jars }}
@@ -73,31 +74,20 @@ export function DayReportView({ report: r }: { report: DayReport }) {
         )}
         <div className="mt-4 flex flex-wrap gap-4 print:hidden">
           <Link
-            className="text-primary underline"
+            className="inline-flex min-h-12 items-center rounded-lg border border-border px-4 font-medium text-primary"
             href={`/api/business-days/${r.day.id}/pdf`}
           >
             <T k="Download daily PDF" />
           </Link>
           <Link
-            className="text-primary underline"
+            className="inline-flex min-h-12 items-center rounded-lg border border-border px-4 font-medium text-primary"
             href={`/api/business-days/${r.day.id}/csv`}
           >
             <T k="Download Excel-compatible CSV" />
           </Link>
         </div>
       </Card>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Object.entries(amountLabels).map(([key, label]) => (
-          <Card key={key}>
-            <h3 className="text-sm text-muted-foreground">
-              <Message value={label} />
-            </h3>
-            <p className="mt-3 text-xl font-bold">
-              <Value value={npr(r.totals[key as keyof typeof amountLabels])} />
-            </p>
-          </Card>
-        ))}
-      </div>
+      <ClosingFinanceSummary report={r} />
       <Card>
         <h2 className="mb-4 text-xl font-semibold">
           <T k="Physical and trip totals" />
@@ -107,6 +97,16 @@ export function DayReportView({ report: r }: { report: DayReport }) {
             ["Total trips", r.totals.trips],
             ["Completed trips", r.totals.completed_trips],
             ["Pending trips", r.totals.pending_trips],
+            [
+              "Active trips",
+              r.trips.filter((t) => t.status === "ACTIVE").length,
+            ],
+            [
+              "Pending settlements",
+              r.trips.filter((t) =>
+                ["SUBMITTED", "UNDER_REVIEW", "DISCREPANCY"].includes(t.status),
+              ).length,
+            ],
             ["Full jars delivered", r.totals.full_jars],
             ["Empty jars collected", r.totals.empty_jars],
             ["Cartons sold", r.totals.cartons],
@@ -138,22 +138,26 @@ export function DayReportView({ report: r }: { report: DayReport }) {
             <T k="No catalog stock balances recorded." />
           </p>
         ) : (
-          <ul className="divide-y divide-border">
-            {r.stock.map((s) => (
-              <li
-                key={`${s.location_id}-${s.product_id}-${s.stock_kind}`}
-                className="flex flex-wrap justify-between gap-3 py-3"
-              >
-                <span>
-                  {s.location_name} · {s.name} ·{" "}
-                  <Message value={stockLabels[s.stock_kind]} />
-                </span>
-                <strong>
-                  <Value value={s.opening} /> → <Value value={s.closing} />
-                </strong>
-              </li>
-            ))}
-          </ul>
+          <ReportTable
+            columns={[
+              "Product",
+              "Location",
+              "Stock state",
+              "Opening",
+              "Closing",
+            ]}
+            empty="No catalog stock balances recorded."
+            rows={r.stock.map((s) => ({
+              id: `${s.location_id}-${s.product_id}-${s.stock_kind}`,
+              cells: [
+                s.name,
+                s.location_name,
+                <Message key="state" value={stockLabels[s.stock_kind]} />,
+                <Value key="opening" value={s.opening} />,
+                <Value key="closing" value={s.closing} />,
+              ],
+            }))}
+          />
         )}
       </Card>
       {(["driver", "vehicle"] as const).map((dimension) => (
@@ -254,9 +258,12 @@ export function DayReportView({ report: r }: { report: DayReport }) {
             <T k="No customer visits recorded." />
           </p>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="grid items-start gap-3 xl:grid-cols-2">
             {r.customers.map((c) => (
-              <li key={c.id} className="py-3">
+              <li
+                key={c.id}
+                className="min-w-0 space-y-2 rounded-lg border border-border p-4"
+              >
                 <strong>{c.name}</strong>
                 <p className="mt-1 text-sm">
                   <T k="Trip #{0}" values={[c.trip_number]} /> ·{" "}
@@ -332,10 +339,7 @@ export function DayReportView({ report: r }: { report: DayReport }) {
           </ul>
         )}
       </Card>
-      <Card>
-        <h2 className="mb-4 text-xl font-semibold">
-          <T k="Trip reconciliation records" />
-        </h2>
+      <ReportPanel title="Trip reconciliation records" collapsed>
         {!r.trips.length ? (
           <p>
             <T k="No trips to reconcile." />
@@ -396,11 +400,8 @@ export function DayReportView({ report: r }: { report: DayReport }) {
             </details>
           ))
         )}
-      </Card>
-      <Card>
-        <h2 className="mb-4 text-xl font-semibold">
-          <T k="Refilling and damaged jars" />
-        </h2>
+      </ReportPanel>
+      <ReportPanel title="Refilling and damaged jars" collapsed>
         {!r.processing.length ? (
           <p>
             <T k="No warehouse processing recorded." />
@@ -415,11 +416,8 @@ export function DayReportView({ report: r }: { report: DayReport }) {
             </p>
           ))
         )}
-      </Card>
-      <Card>
-        <h2 className="mb-4 text-xl font-semibold">
-          <T k="Carry-forward balances" />
-        </h2>
+      </ReportPanel>
+      <ReportPanel title="Carry-forward balances" collapsed>
         <p className="mb-4 text-sm text-muted-foreground">
           <T k="Opening the next day preserves these cumulative ledgers and stock; only the next day’s activity counters begin at zero." />
         </p>
@@ -458,7 +456,7 @@ export function DayReportView({ report: r }: { report: DayReport }) {
               <T k="No customer balances recorded." />
             </p>
           )}
-      </Card>
+      </ReportPanel>
       {r.reconciliation && (
         <Card>
           <h2 className="mb-3 text-xl font-semibold">

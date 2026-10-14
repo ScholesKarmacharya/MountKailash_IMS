@@ -9,6 +9,8 @@ import { npr, sum } from "@/domain/finance/money";
 import { dateFilter } from "@/domain/business-days/commands";
 import { getPendingJars } from "@/services/pending-jars";
 import { PendingJars } from "@/components/pending-jars";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ReportPanel, MetricGrid } from "@/components/report-ui";
 export default async function History({
   searchParams,
 }: {
@@ -35,7 +37,7 @@ export default async function History({
   if (from) query.set("from", from);
   if (to) query.set("to", to);
   return (
-    <div className="space-y-7">
+    <div className="space-y-5" data-testid="history-workspace">
       <div>
         <h1 className="text-3xl font-bold">
           <T k="Daily history" />
@@ -44,8 +46,8 @@ export default async function History({
           <T k="Archived closings and current sessions. Filter by Nepal business-date labels, including days that crossed midnight." />
         </p>
       </div>
-      <Card>
-        <p className="text-sm">
+      <ReportPanel title="History filters">
+        <p className="text-sm text-muted-foreground">
           <T k="Date filters apply to archived business-day reports below. Current pending jars are shown separately." />
         </p>
         <form className="flex flex-wrap items-end gap-4">
@@ -62,7 +64,7 @@ export default async function History({
             <Message value={error} />
           </p>
         )}
-      </Card>
+      </ReportPanel>
       {!history.available ? (
         <>
           <PendingJars
@@ -83,35 +85,28 @@ export default async function History({
             admin
             title="Current pending jars (carry-forward)"
           />
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              [
-                "Selected-day sales",
-                sum(history.days.map((d) => d.totals.sales)),
-              ],
-              [
-                "Confirmed collections",
-                sum(history.days.map((d) => d.totals.collections)),
-              ],
-              [
-                "Previous-day credit recovered",
-                sum(history.days.map((d) => d.totals.old_credit_recovered)),
-              ],
-            ].map(([label, value]) => (
-              <Card key={label}>
-                <h2 className="text-sm text-muted-foreground">
-                  <Message value={label} />
-                </h2>
-                <p className="mt-3 text-xl font-bold">
-                  <Value value={npr(value!)} />
-                </p>
-              </Card>
-            ))}
-          </div>
+          <MetricGrid
+            items={[
+              {
+                label: "Selected-day sales",
+                value: npr(sum(history.days.map((d) => d.totals.sales))),
+              },
+              {
+                label: "Confirmed collections",
+                value: npr(sum(history.days.map((d) => d.totals.collections))),
+              },
+              {
+                label: "Previous-day credit recovered",
+                value: npr(
+                  sum(history.days.map((d) => d.totals.old_credit_recovered)),
+                ),
+              },
+            ]}
+          />
           {!error && history.days.length > 0 && (
             <div className="flex flex-wrap gap-4">
               <Link
-                className="text-primary underline"
+                className="inline-flex min-h-12 items-center rounded-lg border border-border px-4 font-medium text-primary"
                 href={`/api/business-days/export?${query}&format=csv`}
               >
                 <T k="Export selected days to Excel-compatible CSV" />
@@ -124,18 +119,22 @@ export default async function History({
               </Link>
             </div>
           )}
-          <Card>
+          <ReportPanel title="Archived daily reports">
             {!history.days.length ? (
               <p>
                 <T k="No business days match this date range." />
               </p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="grid items-start gap-3 xl:grid-cols-2">
                 {history.days.map((d) => (
                   <li
                     key={d.id}
-                    className="flex flex-wrap items-center justify-between gap-4 py-5"
+                    className="min-w-0 space-y-3 rounded-lg border border-border p-4"
                   >
+                    <StatusBadge
+                      label={d.status.replaceAll("_", " ")}
+                      tone={d.status === "CLOSED" ? "neutral" : "positive"}
+                    />
                     <div>
                       <Link
                         href={`/admin/reports/${d.id}`}
@@ -165,22 +164,25 @@ export default async function History({
                           ]}
                         />
                       </p>
-                      <p className="mt-1 text-sm">
-                        <T
-                          k="Sales {0} · collections {1} · prior-credit recovery {2}"
-                          values={[
-                            <Value key="v0" value={npr(d.totals.sales)} />,
-                            <Value
-                              key="v1"
-                              value={npr(d.totals.collections)}
-                            />,
-                            <Value
-                              key="v2"
-                              value={npr(d.totals.old_credit_recovered)}
-                            />,
-                          ]}
-                        />
-                      </p>
+                      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                        {[
+                          ["Sales", d.totals.sales],
+                          ["Collections", d.totals.collections],
+                          [
+                            "Previous-day credit recovered",
+                            d.totals.old_credit_recovered,
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label}>
+                            <dt className="text-muted-foreground">
+                              <Message value={label} />
+                            </dt>
+                            <dd className="mt-1 font-semibold tabular-nums">
+                              <Value value={npr(value!)} />
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
                       {d.closed_by_name && (
                         <p className="mt-1 text-sm text-muted-foreground">
                           <T k="Closed by {0}" values={[d.closed_by_name]} />
@@ -188,7 +190,7 @@ export default async function History({
                       )}
                     </div>
                     <Link
-                      className="text-primary underline"
+                      className="inline-flex min-h-12 items-center rounded-lg border border-border px-4 font-medium text-primary"
                       href={`/admin/reports/${d.id}`}
                     >
                       <T k="View daily report" />
@@ -197,7 +199,7 @@ export default async function History({
                 ))}
               </ul>
             )}
-          </Card>
+          </ReportPanel>
           <Link href="/admin/daily-close" className="text-primary underline">
             <T k="Review current business day" />
           </Link>

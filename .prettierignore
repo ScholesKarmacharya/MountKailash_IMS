@@ -16,3 +16,8 @@ docs/TASKS.md
 docs/TEST_PLAN.md
 CURSOR_START_PROMPT.md
 next-env.d.ts
+
+.next-offline-e2e
+.next-auth-e2e
+.next-scaffold-e2e
+.next-build-check

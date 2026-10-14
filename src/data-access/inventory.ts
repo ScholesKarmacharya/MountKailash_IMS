@@ -9,6 +9,7 @@ export type Balance = {
 };
 export type Adjustment = {
   id: string;
+  stock_movement_id?: string;
   delta: number;
   reason: string;
   notes: string;
@@ -16,6 +17,9 @@ export type Adjustment = {
   quantity_after: number;
   created_at: string;
   stock_movements: {
+    id?: string;
+    idempotency_key?: string;
+    [key: string]: unknown;
     product_id: string;
     stock_kind: StockKind;
     actor_user_id: string;
@@ -33,6 +37,18 @@ export type InventorySnapshot = {
   adjustments: Adjustment[];
   hasMore: boolean;
 };
+export async function readProductIdentity(id: string) {
+  const result = await (
+    await createClient()
+  )
+    .from("products")
+    .select("sku,kind,unit")
+    .eq("id", id)
+    .maybeSingle();
+  if (result.error)
+    throw new Error("Product could not be checked. Refresh and try again.");
+  return result.data as Pick<Product, "sku" | "kind" | "unit"> | null;
+}
 async function readAll<T>(
   fetchPage: (
     offset: number,
@@ -50,6 +66,7 @@ async function readAll<T>(
 export async function readInventory(
   page = 0,
   range?: DateRange,
+  filters?: { product: string; state: StockKind | "" },
 ): Promise<InventorySnapshot> {
   const client = await createClient();
   const location = await client
@@ -72,7 +89,7 @@ export async function readInventory(
   let adjustmentQuery = client
     .from("stock_adjustments")
     .select(
-      "id,delta,reason,notes,quantity_before,quantity_after,created_at,stock_movements!inner(product_id,stock_kind,actor_user_id,business_day_id,from_location_id,to_location_id,profiles!stock_movements_actor_user_id_fkey(name),business_days!stock_movements_business_day_id_fkey(date_label))",
+      "*,stock_movements!inner(*,profiles!stock_movements_actor_user_id_fkey(name),business_days!stock_movements_business_day_id_fkey(date_label))",
     )
     .order("created_at", { ascending: false })
     .order("id");
@@ -80,6 +97,16 @@ export async function readInventory(
     adjustmentQuery = adjustmentQuery
       .gte("created_at", range.start)
       .lt("created_at", range.end);
+  if (filters?.product)
+    adjustmentQuery = adjustmentQuery.eq(
+      "stock_movements.product_id",
+      filters.product,
+    );
+  if (filters?.state)
+    adjustmentQuery = adjustmentQuery.eq(
+      "stock_movements.stock_kind",
+      filters.state,
+    );
   const [products, balances, adjustments] = await Promise.all([
     readAll<
       Omit<Product, "default_price"> & { default_price: string | number }

@@ -9,6 +9,9 @@ import { LocaleProvider, LanguageSwitcher, Message } from "./localization";
 import { getLocale } from "@/lib/i18n/server";
 import { SignOutButton } from "./sign-out-button";
 import { Button } from "./ui/button";
+import { OfflineDeviceBanner } from "./offline/banner";
+import { DriverApplication } from "./driver-application";
+import { NotificationBell } from "./notification-bell";
 export async function AppShell({
   profile,
   children,
@@ -18,6 +21,12 @@ export async function AppShell({
 }) {
   const locale = await getLocale(profile),
     driver = profile.role === "DRIVER";
+  if (driver)
+    return (
+      <DriverApplication profile={profile} locale={locale}>
+        {children}
+      </DriverApplication>
+    );
   const roleLabel = driver ? "Delivery Driver" : "Warehouse Admin";
   const brand = (
     <div className="flex min-w-0 items-center gap-2">
@@ -120,6 +129,7 @@ export async function AppShell({
                 >
                   <LanguageSwitcher />
                 </div>
+                <NotificationBell key={profile.id} profile={profile} />
                 <div
                   className={
                     driver
@@ -127,7 +137,7 @@ export async function AppShell({
                       : undefined
                   }
                 >
-                  <SignOutButton />
+                  <SignOutButton user={profile.id} />
                 </div>
               </div>
             </div>
@@ -144,6 +154,7 @@ export async function AppShell({
               driver && "pb-44 sm:pb-44 lg:pb-10",
             )}
           >
+            <OfflineDeviceBanner user={profile.id} driver={driver} />
             {children}
           </main>
           <footer className="px-8 py-5 text-xs text-muted-foreground">

@@ -2,6 +2,13 @@ import type { Customer, Workspace } from "./types";
 import type { Billing, Credit, Price } from "@/domain/finance/types";
 import type { PendingJar } from "./pending-jars";
 export type DeliveryCustomerContext = {
+  house_products?: {
+    id: string;
+    house_eligible: boolean;
+    reference_price: string;
+    house_version: number;
+  }[];
+  free_deliveries?: import("@/domain/house/types").FreeDelivery[];
   pending_jars?: PendingJar[];
   jar_allocations?: {
     return_entry_id: string;

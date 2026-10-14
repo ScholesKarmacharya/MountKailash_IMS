@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { supabaseConfig } from "@/lib/supabase/env";
 import { readCurrentProfile } from "@/data-access/profiles";
 import { accountHome } from "@/domain/auth/roles";
+import { cookies } from "next/headers";
 export type SignInState = { error: string } | null;
 export async function signIn(
   _previous: SignInState,
@@ -59,5 +60,6 @@ export async function signOut() {
   } catch {
     return { error: "Could not sign out. Please try again." };
   }
+  (await cookies()).delete("mk-driver-device");
   redirect(clearedWithWarning ? "/sign-in?reason=signout" : "/sign-in");
 }

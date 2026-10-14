@@ -57,7 +57,7 @@ test("FIFO pending dates, return-only collection and admin report persist throug
       p_customer: customer,
     });
   await login(page);
-  await page.goto(`/driver/trips/${trip}`);
+  await page.goto(`/driver/delivery?customer=${customer}`);
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
@@ -86,13 +86,13 @@ test("FIFO pending dates, return-only collection and admin report persist throug
     ),
   ).toBeVisible();
   await page.goto("/driver/pending-jars");
-  await expect(page.getByText("3 pending jars", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("driver-pending-total")).toHaveText("3");
   await logout(page);
   await login(page);
   await page.goto("/driver/pending-jars");
-  await expect(page.getByText("3 pending jars", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("driver-pending-total")).toHaveText("3");
   expect((await context()).pending_jars).toEqual(pending);
-  await page.goto(`/driver/trips/${trip}`);
+  await page.goto(`/driver/delivery?customer=${customer}`);
   await page
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
@@ -189,6 +189,16 @@ test("two drivers use independent vehicles simultaneously and cannot enter each 
     await Promise.all([
       page.goto(`/driver/trips/${trip}`),
       second.goto(`/driver/trips/${trip2}`),
+    ]);
+    await Promise.all([
+      page
+        .getByRole("main")
+        .getByRole("link", { name: "New Sale", exact: true })
+        .click(),
+      second
+        .getByRole("main")
+        .getByRole("link", { name: "New Sale", exact: true })
+        .click(),
     ]);
     await Promise.all([
       page

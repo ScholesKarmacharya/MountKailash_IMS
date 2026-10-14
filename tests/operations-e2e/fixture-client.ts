@@ -3,7 +3,10 @@ import { expect, type APIRequestContext } from "@playwright/test";
 import type { Workspace } from "../../src/domain/operations/types";
 
 // Fixed loopback fixture only. Never reads .env.local or contacts Supabase Cloud.
-const provider = "http://127.0.0.1:17777";
+const provider =
+  process.env.OFFLINE_E2E === "1"
+    ? "http://127.0.0.1:17778"
+    : "http://127.0.0.1:17777";
 export const fixtureIds = {
   driver: "00000000-0000-0000-0000-000000000002",
   jar: "00000000-0000-0000-0000-000000000011",
@@ -25,7 +28,10 @@ export async function fixtureClient(
       headers: { authorization: `Bearer ${session.access_token}` },
       data: args,
     });
-    expect(response.ok()).toBe(true);
+    expect(
+      response.ok(),
+      `${name}: ${response.status()} ${await response.text()}`,
+    ).toBe(true);
     return (await response.json()) as T;
   }
   return {

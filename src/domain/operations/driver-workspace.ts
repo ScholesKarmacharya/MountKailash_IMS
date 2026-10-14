@@ -31,6 +31,26 @@ export function currentRound(workspace: Workspace) {
         b.created_at.localeCompare(a.created_at),
     )[0];
 }
+export function tripDayOpen(workspace: Workspace, trip: Trip) {
+  if (trip.carryover_pending) return false;
+  return workspace.days.some(
+    (d) =>
+      d.status === "OPEN" &&
+      (["DRAFT", "LOADED"].includes(trip.status) ||
+        d.id === trip.business_day_id),
+  );
+}
+export function tripCanStart(workspace: Workspace, trip: Trip) {
+  return (
+    trip.status === "LOADED" &&
+    tripDayOpen(workspace, trip) &&
+    workspace.days.some(
+      (d) =>
+        d.status === "OPEN" &&
+        d.date_label >= (trip.scheduled_date ?? trip.date_label),
+    )
+  );
+}
 
 // The caller supplies a trip-scoped RPC snapshot. Never use today's vehicle
 // balance to reconstruct a completed trip after that same vehicle is reloaded.
@@ -100,19 +120,62 @@ export function roundFinance(f: FinanceWorkspace, trip?: string, day?: string) {
       )
       .map((i) => i.id),
   );
+  // The driver finance RPC intentionally withholds the accounting journal.
+  // Its authorized invoices and immutable payment-state events still provide
+  // the same totals, including reversals on their actual posting day.
+  let visibleCash = 0n,
+    visibleFonepay = 0n;
+  for (const receipt of receipts) {
+    const events = f.events
+      .filter((e) => e.payment_id === receipt.id)
+      .sort((a, b) => a.sequence - b.sequence);
+    let confirmed = false;
+    for (const event of events) {
+      const next = event.status === "CONFIRMED";
+      if ((!day || event.business_day_id === day) && next !== confirmed) {
+        const delta = cents(receipt.amount) * (next ? 1n : -1n);
+        if (receipt.method === "CASH") visibleCash += delta;
+        else visibleFonepay += delta;
+      }
+      confirmed = next;
+    }
+    if (
+      !events.length &&
+      receipt.status === "CONFIRMED" &&
+      (!day || receipt.business_day_id === day)
+    ) {
+      if (receipt.method === "CASH") visibleCash += cents(receipt.amount);
+      else visibleFonepay += cents(receipt.amount);
+    }
+  }
+  const visibleSales = !f.journal.length
+    ? f.invoices
+        .filter((i) => issuedIds.has(i.id))
+        .reduce((n, i) => n + cents(i.total), 0n) +
+      f.adjustments
+        .filter(
+          (a) =>
+            invoiceIds.has(a.invoice_id) && (!day || a.business_day_id === day),
+        )
+        .reduce((n, a) => n + cents(a.subtotal_delta) + cents(a.tax_delta), 0n)
+    : 0n;
   return {
     available: f.available,
-    sales: decimal(
-      -journal
-        .filter(
-          (j) =>
-            ["SALES", "TAX_PAYABLE"].includes(j.account) &&
-            saleSources.has(j.source_id),
-        )
-        .reduce((n, j) => n + cents(j.amount), 0n),
-    ),
-    cash: collected("CASH"),
-    fonepayVerified: collected("FONEPAY"),
+    sales: !f.journal.length
+      ? decimal(visibleSales)
+      : decimal(
+          -journal
+            .filter(
+              (j) =>
+                ["SALES", "TAX_PAYABLE"].includes(j.account) &&
+                saleSources.has(j.source_id),
+            )
+            .reduce((n, j) => n + cents(j.amount), 0n),
+        ),
+    cash: !f.journal.length ? decimal(visibleCash) : collected("CASH"),
+    fonepayVerified: !f.journal.length
+      ? decimal(visibleFonepay)
+      : collected("FONEPAY"),
     fonepayPending: sum(
       receipts
         .filter(

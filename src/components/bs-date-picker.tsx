@@ -283,11 +283,13 @@ export function BsDateRange({
   to = "",
   onChange,
   controlled = false,
+  namePrefix = "",
 }: {
   from?: string;
   to?: string;
   onChange?: (from: string, to: string) => void;
   controlled?: boolean;
+  namePrefix?: string;
 }) {
   const { t } = useLocale();
   const [localStart, setStart] = useState(from),
@@ -326,7 +328,7 @@ export function BsDateRange({
           <T k="From date" />
         </span>
         <BsDatePicker
-          name={onChange ? undefined : "from"}
+          name={onChange ? undefined : namePrefix + "from"}
           label="From date"
           required={controlled}
           value={start}
@@ -343,7 +345,7 @@ export function BsDateRange({
           <T k="To date" />
         </span>
         <BsDatePicker
-          name={onChange ? undefined : "to"}
+          name={onChange ? undefined : namePrefix + "to"}
           label="To date"
           required={controlled}
           value={end}

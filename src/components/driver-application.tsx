@@ -36,7 +36,6 @@ import {
   biometricsAvailable,
   requireDeviceSignIn,
   lockDriverApp,
-  validatePin,
   deviceTabId,
   type TrustedDevice,
   type DeviceSecrets,
@@ -94,6 +93,28 @@ export type DriverData = {
   pending: PendingJarWorkspace;
   history: Trip[] | null;
 };
+function validateOfflinePin(pin: string) {
+  if (!/^\d{4}$/.test(pin)) {
+    throw new Error("Choose a 4-digit PIN.");
+  }
+
+  if (/^(\d)\1{3}$/.test(pin)) {
+    throw new Error("Avoid repeated digits in your PIN.");
+  }
+
+  const ascending = "0123456789";
+  const descending = "9876543210";
+  if (ascending.includes(pin) || descending.includes(pin)) {
+    throw new Error("Avoid consecutive digits in your PIN.");
+  }
+}
+
+function validateOfflinePassphrase(passphrase: string) {
+  if (passphrase.length < 6) {
+    throw new Error("Offline passphrase must be at least 6 characters.");
+  }
+}
+
 async function readWorkspace(query: string): Promise<DriverData> {
   const abort = new AbortController(),
     timer = setTimeout(() => abort.abort(), 15000);
@@ -596,8 +617,11 @@ function Application({
         credentials = deviceSecrets;
       }
       const setupPin = !trusted && !!pin;
+      if (!setupPin && !existingVault) {
+        validateOfflinePassphrase(pass);
+      }
       if (setupPin) {
-        validatePin(pin);
+        validateOfflinePin(pin);
         if (pin !== confirmPin) throw new Error("PINs do not match.");
         if (await database.vaults.get(id))
           throw new Error(
@@ -1389,8 +1413,8 @@ function Application({
                         inputMode="numeric"
                         autoComplete="new-password"
                         value={pin}
-                        maxLength={10}
-                        onChange={(e) => setPin(e.target.value)}
+                        maxLength={4}
+                        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                       />
                     </label>
                     <label className="grid gap-2">
@@ -1400,12 +1424,12 @@ function Application({
                         inputMode="numeric"
                         autoComplete="new-password"
                         value={confirmPin}
-                        maxLength={10}
-                        onChange={(e) => setConfirmPin(e.target.value)}
+                        maxLength={4}
+                        onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                       />
                     </label>
                     <p>
-                      <T k="Choose a PIN of 6 to 10 digits; avoid repeated or consecutive digits." />
+                      <T k="Choose a 4-digit PIN; avoid repeated or consecutive digits." />
                     </p>
                   </>
                 )}
@@ -1417,8 +1441,8 @@ function Application({
                       inputMode="numeric"
                       autoComplete="off"
                       value={pin}
-                      maxLength={10}
-                      onChange={(e) => setPin(e.target.value)}
+                      maxLength={4}
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                     />
                   </label>
                 ) : (
@@ -1429,7 +1453,7 @@ function Application({
                       autoComplete="off"
                       value={pass}
                       onChange={(e) => setPass(e.target.value)}
-                      minLength={8}
+                      minLength={6}
                     />
                   </label>
                 )}
@@ -1513,7 +1537,8 @@ function Application({
                     inputMode="numeric"
                     autoComplete="new-password"
                     value={pin}
-                    onChange={(e) => setPin(e.target.value)}
+                    maxLength={4}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                   />
                 </label>
                 <label className="grid gap-2">
@@ -1523,7 +1548,8 @@ function Application({
                     inputMode="numeric"
                     autoComplete="new-password"
                     value={confirmPin}
-                    onChange={(e) => setConfirmPin(e.target.value)}
+                    maxLength={4}
+                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                   />
                 </label>
                 <Button
@@ -1533,7 +1559,7 @@ function Application({
                       setBusy(true);
                       setMessage("");
                       try {
-                        validatePin(pin);
+                        validateOfflinePin(pin);
                         if (pin !== confirmPin)
                           throw new Error("PINs do not match.");
                         const secrets = await deviceRequest<DeviceSecrets>({
@@ -1579,7 +1605,8 @@ function Application({
                     inputMode="numeric"
                     autoComplete="new-password"
                     value={pin}
-                    onChange={(e) => setPin(e.target.value)}
+                    maxLength={4}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                   />
                 </label>
                 <label className="grid gap-2">
@@ -1589,7 +1616,8 @@ function Application({
                     inputMode="numeric"
                     autoComplete="new-password"
                     value={confirmPin}
-                    onChange={(e) => setConfirmPin(e.target.value)}
+                    maxLength={4}
+                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                   />
                 </label>
                 <Button
@@ -1599,7 +1627,7 @@ function Application({
                       setBusy(true);
                       setMessage("");
                       try {
-                        validatePin(pin);
+                        validateOfflinePin(pin);
                         if (pin !== confirmPin)
                           throw new Error("PINs do not match.");
                         const secrets = {

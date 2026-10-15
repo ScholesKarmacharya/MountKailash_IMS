@@ -24,14 +24,15 @@ async function put(db: OfflineDatabase, row: TrustedDevice) {
 }
 export function validatePin(pin: string) {
   if (
-    !/^\d{6,10}$/.test(pin) ||
+    !/^\d{4}$/.test(pin) ||
     /^(.)\1+$/.test(pin) ||
     "01234567890123456789".includes(pin) ||
     "98765432109876543210".includes(pin)
-  )
+  ) {
     throw new Error(
-      "Choose a PIN of 6 to 10 digits; avoid repeated or consecutive digits.",
+      "Choose a 4-digit PIN; avoid repeated or consecutive digits.",
     );
+  }
 }
 async function pinKey(pin: string, salt: number[]) {
   const material = await crypto.subtle.importKey(

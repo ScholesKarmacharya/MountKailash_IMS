@@ -36,6 +36,7 @@ import {
   biometricsAvailable,
   requireDeviceSignIn,
   lockDriverApp,
+  validatePin,
   deviceTabId,
   type TrustedDevice,
   type DeviceSecrets,
@@ -76,6 +77,44 @@ import { Input } from "./ui/input";
 import { Card } from "./ui/card";
 import { NotificationBell, LockedNotificationBell } from "./notification-bell";
 
+function VisibilityIcon({ visible }: { visible: boolean }) {
+  return visible ? (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m2 2 20 20" />
+      <path d="M6.71 6.71C4.84 8.05 3.5 9.88 3 12c1.2 4.5 4.8 7 9 7 1.35 0 2.61-.26 3.74-.74" />
+      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c4.2 0 7.8 2.5 9 7a8.88 8.88 0 0 1-2.2 3.78" />
+      <path d="M14.12 14.12A3 3 0 0 1 9.88 9.88" />
+    </svg>
+  ) : (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2.06 12.35a1 1 0 0 1 0-.7C3.38 7.6 7.1 5 12 5s8.62 2.6 9.94 6.65a1 1 0 0 1 0 .7C20.62 16.4 16.9 19 12 19s-8.62-2.6-9.94-6.65Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export type DriverData = {
   eligibleTrips?: Trip[];
   tripChoiceRequired?: boolean;
@@ -93,28 +132,6 @@ export type DriverData = {
   pending: PendingJarWorkspace;
   history: Trip[] | null;
 };
-function validateOfflinePin(pin: string) {
-  if (!/^\d{4}$/.test(pin)) {
-    throw new Error("Choose a 4-digit PIN.");
-  }
-
-  if (/^(\d)\1{3}$/.test(pin)) {
-    throw new Error("Avoid repeated digits in your PIN.");
-  }
-
-  const ascending = "0123456789";
-  const descending = "9876543210";
-  if (ascending.includes(pin) || descending.includes(pin)) {
-    throw new Error("Avoid consecutive digits in your PIN.");
-  }
-}
-
-function validateOfflinePassphrase(passphrase: string) {
-  if (passphrase.length < 6) {
-    throw new Error("Offline passphrase must be at least 6 characters.");
-  }
-}
-
 async function readWorkspace(query: string): Promise<DriverData> {
   const abort = new AbortController(),
     timer = setTimeout(() => abort.abort(), 15000);
@@ -204,6 +221,9 @@ function Application({
   const [configurePin, setConfigurePin] = useState(false);
   const [pin, setPin] = useState(""),
     [confirmPin, setConfirmPin] = useState("");
+  const [showPin, setShowPin] = useState(false),
+    [showConfirmPin, setShowConfirmPin] = useState(false),
+    [showPassphrase, setShowPassphrase] = useState(false);
   const [recovery, setRecovery] = useState(false),
     [password, setPassword] = useState("");
   const [biometric, setBiometric] = useState(false);
@@ -617,11 +637,10 @@ function Application({
         credentials = deviceSecrets;
       }
       const setupPin = !trusted && !!pin;
-      if (!setupPin && !existingVault) {
-        validateOfflinePassphrase(pass);
-      }
+      if (!trusted && !setupPin && pass.length < 6)
+        throw new Error("Offline passphrase must be at least 6 characters.");
       if (setupPin) {
-        validateOfflinePin(pin);
+        validatePin(pin);
         if (pin !== confirmPin) throw new Error("PINs do not match.");
         if (await database.vaults.get(id))
           throw new Error(
@@ -1408,25 +1427,57 @@ function Application({
                   <>
                     <label className="grid gap-2">
                       <T k="Enter PIN" />
-                      <Input
-                        type="password"
-                        inputMode="numeric"
-                        autoComplete="new-password"
-                        value={pin}
-                        maxLength={4}
-                        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                      />
+                      <div className="relative">
+                        <Input
+                          type={showPin ? "text" : "password"}
+                          inputMode="numeric"
+                          autoComplete="new-password"
+                          value={pin}
+                          maxLength={4}
+                          onChange={(e) =>
+                            setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                          }
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPin((value) => !value)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                        >
+                          <VisibilityIcon visible={showPin} />
+                        </button>
+                      </div>
                     </label>
                     <label className="grid gap-2">
                       <T k="Confirm PIN" />
-                      <Input
-                        type="password"
-                        inputMode="numeric"
-                        autoComplete="new-password"
-                        value={confirmPin}
-                        maxLength={4}
-                        onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                      />
+                      <div className="relative">
+                        <Input
+                          type={showConfirmPin ? "text" : "password"}
+                          inputMode="numeric"
+                          autoComplete="new-password"
+                          value={confirmPin}
+                          maxLength={4}
+                          onChange={(e) =>
+                            setConfirmPin(
+                              e.target.value.replace(/\D/g, "").slice(0, 4),
+                            )
+                          }
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPin((value) => !value)
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={
+                            showConfirmPin ? "Hide PIN" : "Show PIN"
+                          }
+                        >
+                          <VisibilityIcon visible={showConfirmPin} />
+                        </button>
+                      </div>
                     </label>
                     <p>
                       <T k="Choose a 4-digit PIN; avoid repeated or consecutive digits." />
@@ -1436,25 +1487,55 @@ function Application({
                 {trusted ? (
                   <label className="grid gap-2">
                     <T k="Enter PIN" />
-                    <Input
-                      type="password"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      value={pin}
-                      maxLength={4}
-                      onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPin ? "text" : "password"}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        value={pin}
+                        maxLength={4}
+                        onChange={(e) =>
+                          setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                        }
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPin((value) => !value)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                      >
+                        <VisibilityIcon visible={showPin} />
+                      </button>
+                    </div>
                   </label>
                 ) : (
                   <label className="grid gap-2">
                     <T k="Offline passphrase" />
-                    <Input
-                      type="password"
-                      autoComplete="off"
-                      value={pass}
-                      onChange={(e) => setPass(e.target.value)}
-                      minLength={6}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassphrase ? "text" : "password"}
+                        autoComplete="off"
+                        value={pass}
+                        onChange={(e) => setPass(e.target.value)}
+                        minLength={6}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowPassphrase((value) => !value)
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={
+                          showPassphrase
+                            ? "Hide offline passphrase"
+                            : "Show offline passphrase"
+                        }
+                      >
+                        <VisibilityIcon visible={showPassphrase} />
+                      </button>
+                    </div>
                   </label>
                 )}
                 {trusted?.biometric && (
@@ -1476,12 +1557,29 @@ function Application({
                     </p>
                     <label className="grid gap-2">
                       <T k="Offline passphrase" />
-                      <Input
-                        type="password"
-                        autoComplete="off"
-                        value={pass}
-                        onChange={(e) => setPass(e.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          type={showPassphrase ? "text" : "password"}
+                          autoComplete="off"
+                          value={pass}
+                          onChange={(e) => setPass(e.target.value)}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowPassphrase((value) => !value)
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={
+                            showPassphrase
+                              ? "Hide offline passphrase"
+                              : "Show offline passphrase"
+                          }
+                        >
+                          <VisibilityIcon visible={showPassphrase} />
+                        </button>
+                      </div>
                     </label>
                   </details>
                 )}
@@ -1532,25 +1630,55 @@ function Application({
                 </label>
                 <label className="grid gap-2">
                   <T k="New PIN" />
-                  <Input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    value={pin}
-                    maxLength={4}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPin ? "text" : "password"}
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      value={pin}
+                      maxLength={4}
+                      onChange={(e) =>
+                        setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                      }
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPin((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                    >
+                      <VisibilityIcon visible={showPin} />
+                    </button>
+                  </div>
                 </label>
                 <label className="grid gap-2">
                   <T k="Confirm PIN" />
-                  <Input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    value={confirmPin}
-                    maxLength={4}
-                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPin ? "text" : "password"}
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      value={confirmPin}
+                      maxLength={4}
+                      onChange={(e) =>
+                        setConfirmPin(
+                          e.target.value.replace(/\D/g, "").slice(0, 4),
+                        )
+                      }
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowConfirmPin((value) => !value)
+                      }
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showConfirmPin ? "Hide PIN" : "Show PIN"}
+                    >
+                      <VisibilityIcon visible={showConfirmPin} />
+                    </button>
+                  </div>
                 </label>
                 <Button
                   disabled={busy || mode !== "ONLINE"}
@@ -1559,7 +1687,7 @@ function Application({
                       setBusy(true);
                       setMessage("");
                       try {
-                        validateOfflinePin(pin);
+                        validatePin(pin);
                         if (pin !== confirmPin)
                           throw new Error("PINs do not match.");
                         const secrets = await deviceRequest<DeviceSecrets>({
@@ -1600,25 +1728,55 @@ function Application({
                 </h2>
                 <label className="grid gap-2">
                   <T k="Enter PIN" />
-                  <Input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    value={pin}
-                    maxLength={4}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPin ? "text" : "password"}
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      value={pin}
+                      maxLength={4}
+                      onChange={(e) =>
+                        setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                      }
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPin((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                    >
+                      <VisibilityIcon visible={showPin} />
+                    </button>
+                  </div>
                 </label>
                 <label className="grid gap-2">
                   <T k="Confirm PIN" />
-                  <Input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    value={confirmPin}
-                    maxLength={4}
-                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPin ? "text" : "password"}
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      value={confirmPin}
+                      maxLength={4}
+                      onChange={(e) =>
+                        setConfirmPin(
+                          e.target.value.replace(/\D/g, "").slice(0, 4),
+                        )
+                      }
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowConfirmPin((value) => !value)
+                      }
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showConfirmPin ? "Hide PIN" : "Show PIN"}
+                    >
+                      <VisibilityIcon visible={showConfirmPin} />
+                    </button>
+                  </div>
                 </label>
                 <Button
                   disabled={busy || mode !== "ONLINE"}
@@ -1627,7 +1785,7 @@ function Application({
                       setBusy(true);
                       setMessage("");
                       try {
-                        validateOfflinePin(pin);
+                        validatePin(pin);
                         if (pin !== confirmPin)
                           throw new Error("PINs do not match.");
                         const secrets = {

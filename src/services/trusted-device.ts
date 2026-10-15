@@ -1,5 +1,10 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { offlineIdentity } from "./offline";
@@ -9,13 +14,16 @@ import type { DeviceSecrets } from "@/lib/offline/device";
 
 function recoveryKey() {
   const key = process.env.OFFLINE_DEVICE_RECOVERY_KEY;
-  if (!key || !/^[a-f0-9]{64}$/i.test(key))
+
+  if (!key || key.length < 6) {
     throw new OfflineServerError(
       "CONFIGURATION",
       "Secure device recovery is not configured. Contact the admin before setting up a PIN.",
       503,
     );
-  return Buffer.from(key, "hex");
+  }
+
+  return createHash("sha256").update(key, "utf8").digest();
 }
 function wrap(user: string, device: string, value: DeviceSecrets) {
   const iv = randomBytes(12),

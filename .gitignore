@@ -16,3 +16,4 @@ supabase/.temp/
 supabase/.branches/
 
 .next-offline-e2e/
+.vercel

@@ -133,19 +133,31 @@ async function main() {
     if (batch.length < 100) break;
   }
   const accounts = [
-    {
-      email: "admin@mount-kailash.example",
-      name: "DEMO Warehouse Admin",
-      role: "ADMIN",
-      passwordKey: "DEMO_ADMIN_PASSWORD",
-    },
-    {
-      email: "driver@mount-kailash.example",
-      name: "DEMO Delivery Driver",
-      role: "DRIVER",
-      passwordKey: "DEMO_DRIVER_PASSWORD",
-    },
-  ];
+  {
+    email: "scholes@mk.ims",
+    name: "Scholes Warehouse Admin",
+    role: "ADMIN",
+    passwordKey: "SCHOLES_PASSWORD",
+  },
+  {
+    email: "devendra@mk.ims",
+    name: "Devendra Warehouse Admin",
+    role: "ADMIN",
+    passwordKey: "DEVENDRA_PASSWORD",
+  },
+  {
+    email: "rabindra@mk.ims",
+    name: "Rabindra Delivery Driver",
+    role: "DRIVER",
+    passwordKey: "RABINDRA_PASSWORD",
+  },
+  {
+    email: "biddhan@mk.ims",
+    name: "Biddhan Delivery Driver",
+    role: "DRIVER",
+    passwordKey: "BIDDHAN_PASSWORD",
+  },
+];
   // Preflight both identities before any changes; never re-enable or promote an
   // existing user whose profile conflicts with the intended demo identity.
   for (const account of accounts) {
@@ -192,9 +204,9 @@ async function main() {
       env = lines.join("\n");
     }
     const password = process.env[account.passwordKey];
-    if (password && password.length < 12)
+    if (password && password.length < 6)
       throw new Error(
-        `${account.passwordKey} must contain at least 12 characters. No account passwords were changed.`,
+        `${account.passwordKey} must contain at least 6 characters. No account passwords were changed.`,
       );
     if (account.user && !password)
       throw new Error(

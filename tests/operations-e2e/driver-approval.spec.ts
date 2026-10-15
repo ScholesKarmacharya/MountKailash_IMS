@@ -1,6 +1,10 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { activeFixtureTrip, fixtureClient } from "./fixture-client";
+import {
+  activeFixtureTrip,
+  fixtureClient,
+  openAdminMenuForSignOut,
+} from "./fixture-client";
 import { message } from "../../src/lib/i18n/messages";
 import { formatBusinessDate } from "../../src/domain/localization/calendar";
 import type { DriverAccount } from "../../src/domain/auth/accounts";
@@ -231,6 +235,7 @@ test("pending registration, admin approval, actual names, suspension and reactiv
     await expect(adminPage.getByTestId("profile-name")).toHaveText(
       "Sita Adhikari",
     );
+    await openAdminMenuForSignOut(adminPage);
     await adminPage
       .getByRole("button", { name: "Sign Out", exact: true })
       .click();
@@ -277,6 +282,7 @@ test("admin creation defaults pending, rejection is visible and sign-out outages
     "Reject Driver",
     page.getByText("Rejected", { exact: true }),
   );
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "pending", /\/account$/);

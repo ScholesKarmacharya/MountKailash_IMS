@@ -1,7 +1,7 @@
 import { parseCommand } from "../../src/domain/operations/commands";
 import { expect, test, type Page } from "@playwright/test";
 import { vehicleCounts } from "../../src/domain/operations/types";
-import { fixtureClient } from "./fixture-client";
+import { fixtureClient, openAdminMenuForSignOut } from "./fixture-client";
 async function login(page: Page, role = "admin") {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "English", exact: true }).click();
@@ -97,6 +97,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.getByLabel("Test water carton load", { exact: true }).fill("10");
   await save(page, "Confirm warehouse loading");
   await updated(page);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
@@ -280,6 +281,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.goto("/admin/inventory");
   await expect(page.getByText("20", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("65", { exact: true }).first()).toBeVisible();
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page);

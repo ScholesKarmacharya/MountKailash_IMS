@@ -152,7 +152,10 @@ test("finance tables, shared filters, credit analysis, exports and grouped billi
     .getByText("Immutable finance audit journal", { exact: true })
     .click();
   await expect(
-    page.getByText(before.journal[0]!.posting_id, { exact: true }).first(),
+    page
+      .getByText(before.journal[0]!.posting_id, { exact: true })
+      .filter({ visible: true })
+      .first(),
   ).toBeVisible();
   await layout(
     page,

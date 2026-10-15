@@ -2,6 +2,8 @@
 
 Audit only. No application source, business rules, SQL migrations, RLS policies, or production data were changed. The source-tree hash before and after inspection is identical. Screenshots and audit scripts are isolated evidence artifacts.
 
+Follow-up, 15 October 2026: S01 (mobile Admin navigation above content) is resolved by the responsive drawer described in [ADMIN_MOBILE_NAVIGATION.md](./ADMIN_MOBILE_NAVIGATION.md). Parent-route active highlighting from S04 is also implemented; the original findings below retain the baseline evidence. Finance, closing, sync and history improvements are documented in [FINANCE_OPERATIONS_UI.md](./FINANCE_OPERATIONS_UI.md).
+
 **Scope and evidence**
 
 All 14 requested Admin screens and all six Driver screens were reviewed. Driver connection status, device setup/unlock, prepared-online and offline presentation were also inspected. Driver Sync and Daily History received an additional review because they are visible navigation destinations.

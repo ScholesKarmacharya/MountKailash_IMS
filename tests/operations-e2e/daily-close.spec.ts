@@ -1,3 +1,4 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip, fixtureIds } from "./fixture-client";
@@ -242,6 +243,7 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
@@ -256,6 +258,7 @@ test("closing blockers, refill, cash review, archive exports and next-day carry-
     { maxRedirects: 0 },
   );
   expect([303, 307]).toContain(deniedRange.status());
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page);

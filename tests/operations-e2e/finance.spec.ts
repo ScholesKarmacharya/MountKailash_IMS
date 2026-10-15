@@ -1,3 +1,4 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip, fixtureClient } from "./fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
@@ -17,6 +18,7 @@ async function login(page: Page, role = "driver") {
   ).toBeEnabled();
 }
 async function signout(page: Page) {
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
 }

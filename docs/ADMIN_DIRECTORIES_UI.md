@@ -48,7 +48,7 @@ No specific production login failure was reproduced. Repository findings and a c
 
 1. **Database-level vehicle deactivation protection:** the existing `save_vehicle` RPC does not atomically lock/check open-trip assignments before changing active status. This task blocks the normal UI and server-action paths when an open trip is observed, but a concurrent assignment or direct authorized RPC could bypass that preflight. Review an atomic RPC guard using the same locking order as trip creation before relying on the rule across all clients. No inventory/transaction RPC or migration was changed here.
 2. **Driver invitations:** Add Driver still requires a provisioned Auth identity. The separately documented secure invitation workflow is not implemented or deployed.
-3. **Shared mobile Admin navigation:** the retained sidebar still stacks the long Admin menu above content below its desktop breakpoint. This was already recorded in the UI audit and is outside the requested sidebar/navbar scope.
+3. **Shared mobile Admin navigation — resolved in the subsequent 15 October 2026 pass:** the sidebar is now hidden below 1024px and opens from the compact navbar as an accessible modal drawer. See [ADMIN_MOBILE_NAVIGATION.md](./ADMIN_MOBILE_NAVIGATION.md) for the implementation and six tested viewport sizes.
 4. **Real devices and production Auth:** tests use actual emulated viewport sizes at default zoom, not physical devices. Live email delivery, production login failures and real-device keyboard behavior require staging/device checks.
 
 ## Verification

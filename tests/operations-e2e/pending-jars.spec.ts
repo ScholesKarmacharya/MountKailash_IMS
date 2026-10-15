@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
-import { activeFixtureTrip, fixtureClient, fixtureIds } from "./fixture-client";
+import {
+  activeFixtureTrip,
+  fixtureClient,
+  fixtureIds,
+  openAdminMenuForSignOut,
+} from "./fixture-client";
 import type { DeliveryCustomerContext } from "../../src/domain/operations/customer-context";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 async function login(page: Page, role = "driver") {
@@ -43,6 +48,7 @@ async function record(page: Page, full: number, empty: number) {
   expect((await response).ok()).toBe(true);
 }
 async function logout(page: Page) {
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 }

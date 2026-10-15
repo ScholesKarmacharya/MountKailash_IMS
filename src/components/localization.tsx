@@ -108,14 +108,20 @@ export function useLocale() {
       formatBusinessDate(value, context.locale, time),
   };
 }
-export function LanguageSwitcher() {
+export function LanguageSwitcher({
+  compact = false,
+}: { compact?: boolean } = {}) {
   const { locale, setLocale, saving, failed, t } = useLocale();
   return (
     <div className="space-y-1 print:hidden">
       <div
         role="group"
         aria-label={t("Language")}
-        className="inline-flex rounded-lg border border-border bg-card p-1"
+        className={
+          compact
+            ? "inline-flex rounded-lg border border-border bg-card p-0.5 lg:p-1"
+            : "inline-flex rounded-lg border border-border bg-card p-1"
+        }
       >
         {(["en", "ne"] as const).map((option) => (
           <button
@@ -127,7 +133,9 @@ export function LanguageSwitcher() {
             disabled={saving}
             onClick={() => setLocale(option)}
             className={
-              "min-h-11 min-w-12 rounded-md px-3 font-semibold " +
+              (compact
+                ? "min-h-11 min-w-11 rounded-md px-2 text-sm font-semibold lg:min-w-12 lg:px-3 "
+                : "min-h-11 min-w-12 rounded-md px-3 font-semibold ") +
               (locale === option ? "bg-primary text-white" : "hover:bg-muted")
             }
           >

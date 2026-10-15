@@ -16,10 +16,19 @@ import {
 import type { Role } from "@/domain/auth/roles";
 import { cn } from "@/lib/utils";
 import { useLocale } from "./localization";
-export function Navigation({ role }: { role: Role }) {
+export function Navigation({
+  role,
+  onNavigate,
+}: {
+  role: Role;
+  onNavigate?: () => void;
+}) {
   const { t } = useLocale();
   const pathname = usePathname();
   const href = role === "ADMIN" ? "/admin/dashboard" : "/driver/home";
+  const active = (target: string) =>
+    pathname === target ||
+    (role === "ADMIN" && pathname.startsWith(target + "/"));
   return (
     <nav
       aria-label={t(
@@ -33,11 +42,12 @@ export function Navigation({ role }: { role: Role }) {
     >
       <Link
         href={href}
+        onClick={onNavigate}
         prefetch={role === "DRIVER" ? false : undefined}
-        aria-current={pathname === href ? "page" : undefined}
+        aria-current={active(href) ? "page" : undefined}
         className={cn(
           "flex min-h-11 items-center gap-3 rounded-lg px-4 text-sm font-semibold",
-          pathname === href ? "bg-primary text-white" : "hover:bg-muted",
+          active(href) ? "bg-primary text-white" : "hover:bg-muted",
           role === "DRIVER" &&
             "min-h-16 flex-col justify-center gap-1 px-2 py-2 text-center text-xs",
         )}
@@ -59,11 +69,12 @@ export function Navigation({ role }: { role: Role }) {
           <Link
             key={target}
             href={target}
+            onClick={onNavigate}
             prefetch={false}
-            aria-current={pathname === target ? "page" : undefined}
+            aria-current={active(target) ? "page" : undefined}
             className={cn(
               "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-semibold",
-              pathname === target ? "bg-primary text-white" : "hover:bg-muted",
+              active(target) ? "bg-primary text-white" : "hover:bg-muted",
             )}
           >
             <Icon className="size-4" aria-hidden="true" />
@@ -94,10 +105,11 @@ export function Navigation({ role }: { role: Role }) {
           <Link
             key={target}
             href={target}
-            aria-current={pathname === target ? "page" : undefined}
+            onClick={onNavigate}
+            aria-current={active(target) ? "page" : undefined}
             className={cn(
               "flex min-h-11 items-center gap-3 rounded-lg px-4 text-sm font-semibold",
-              pathname === target ? "bg-primary text-white" : "hover:bg-muted",
+              active(target) ? "bg-primary text-white" : "hover:bg-muted",
             )}
           >
             <Package className="size-4" aria-hidden="true" />

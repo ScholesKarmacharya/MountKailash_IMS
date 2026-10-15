@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
-import { fixtureClient } from "./fixture-client";
+import { fixtureClient, openAdminMenuForSignOut } from "./fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 async function login(page: Page, role: string) {
   await page.goto("/sign-in");
@@ -18,6 +18,7 @@ async function login(page: Page, role: string) {
   ).toBeEnabled();
 }
 async function logout(page: Page) {
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
 }

@@ -1,6 +1,10 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { activeFixtureTrip, fixtureIds } from "./fixture-client";
+import {
+  activeFixtureTrip,
+  fixtureIds,
+  openAdminMenuForSignOut,
+} from "./fixture-client";
 import {
   adToBs,
   formatBusinessDate,
@@ -469,6 +473,7 @@ test("driver details isolate sensitive actions, preserve accounts and show audit
     page.getByTestId("driver-details-workspace"),
     `test-results/driver-details-${info.project.name}.png`,
   );
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");

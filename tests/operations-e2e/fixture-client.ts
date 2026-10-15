@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+export async function openAdminMenuForSignOut(page: Page) {
+  const trigger = page.getByTestId("admin-menu-button");
+  if (
+    (await trigger.isVisible()) &&
+    !(await page.getByTestId("admin-mobile-drawer").isVisible())
+  )
+    await trigger.click();
+}
 import type { Workspace } from "../../src/domain/operations/types";
 
 // Fixed loopback fixture only. Never reads .env.local or contacts Supabase Cloud.

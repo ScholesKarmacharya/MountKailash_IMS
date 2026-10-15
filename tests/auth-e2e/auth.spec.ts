@@ -16,7 +16,11 @@ for (const role of ["ADMIN", "DRIVER"] as const) {
     await expect(page).toHaveURL(
       role === "ADMIN" ? /\/admin\/dashboard/ : /\/driver\/home/,
     );
+    const mobileMenu = page.getByTestId("admin-menu-button");
+    if (await mobileMenu.isVisible()) await mobileMenu.click();
     await expect(page.getByRole("navigation")).toBeVisible();
+    if (await page.getByTestId("admin-mobile-drawer").isVisible())
+      await page.keyboard.press("Escape");
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -42,6 +46,7 @@ for (const role of ["ADMIN", "DRIVER"] as const) {
         }),
       ).toBeVisible();
     }
+    if (await mobileMenu.isVisible()) await mobileMenu.click();
     await page
       .getByRole("button", {
         name: new RegExp(`^(Sign out|${message("ne", "Sign out")})$`),

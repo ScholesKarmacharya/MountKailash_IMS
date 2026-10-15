@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { activeFixtureTrip } from "./fixture-client";
+import { activeFixtureTrip, openAdminMenuForSignOut } from "./fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 import type { HouseWorkspace } from "../../src/domain/house/types";
 async function login(page: Page, role: string) {
@@ -45,6 +45,7 @@ test("admin creates approved HOUSE; driver delivers 15/10 free; reports and bili
     (c) => c.name === "Owner's House",
   )!;
   expect(house.house_status).toBe("APPROVED");
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await page.waitForURL("**/sign-in");
   await login(page, "driver");

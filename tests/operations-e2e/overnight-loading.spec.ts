@@ -1,3 +1,4 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { fixtureClient, fixtureIds } from "./fixture-client";
@@ -158,10 +159,14 @@ test("night loads remain prepared through closing and drivers use 85/65 without 
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(page.getByText(/Total prepared jars/)).toContainText("150");
-  await expect(page.getByText(/Warehouse available full jars/)).toContainText(
-    "20",
-  );
+  await expect(
+    page.getByText("Total prepared jars", { exact: true }).locator(".."),
+  ).toContainText("150");
+  await expect(
+    page
+      .getByText("Warehouse available full jars", { exact: true })
+      .locator(".."),
+  ).toContainText("20");
   await expect(page.getByText(/No critical blockers/)).toBeVisible();
   await save(page, "Begin closing review");
   await page.reload();
@@ -198,6 +203,7 @@ test("night loads remain prepared through closing and drivers use 85/65 without 
       })
     ).ok(),
   ).toBe(true);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");

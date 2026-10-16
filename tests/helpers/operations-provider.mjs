@@ -120,6 +120,11 @@ const allowedTables = new Set([
   "driver_offline_rounds",
 ]);
 const allowedRpc = new Set([
+  "offline_preparation_access",
+  "offline_admin_reset_device",
+  "admin_driver_offline_access",
+  "offline_admin_reset_access",
+  "offline_device_journal",
   "post_instant_delivery",
   "convert_instant_customer",
   "instant_workspace",

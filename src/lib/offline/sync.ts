@@ -71,6 +71,8 @@ export type SyncView = {
 export class SyncController {
   running = false;
   stopped = false;
+  private rerun = false;
+  private rerunManual = false;
   constructor(
     readonly vault: OfflineVault,
     readonly notify: (view: SyncView) => void,
@@ -78,7 +80,12 @@ export class SyncController {
     readonly request = offlineRequest,
   ) {}
   async run(manual = false) {
-    if (this.running || this.stopped) return;
+    if (this.stopped) return;
+    if (this.running) {
+      this.rerun = true;
+      this.rerunManual ||= manual;
+      return;
+    }
     this.running = true;
     const lock = async (browserLockHeld = false) => {
       const lease = crypto.randomUUID(),
@@ -135,6 +142,12 @@ export class SyncController {
       });
     } finally {
       this.running = false;
+      if (this.rerun && !this.stopped) {
+        const nextManual = this.rerunManual;
+        this.rerun = false;
+        this.rerunManual = false;
+        void this.run(nextManual);
+      }
     }
   }
   private async synchronize(manual: boolean) {

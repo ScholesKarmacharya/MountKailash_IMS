@@ -3,6 +3,55 @@ import { requirePermission } from "./auth";
 import { offlineRpc, OfflineServerError } from "@/data-access/offline";
 import { uuid } from "@/domain/inventory/validation";
 import type { DeviceRound } from "@/domain/offline/types";
+import type { DriverOfflineAccess } from "@/domain/offline/admin";
+
+export async function getDriverOfflineAccess(
+  driver: string,
+): Promise<DriverOfflineAccess> {
+  await requirePermission("admin:read");
+  try {
+    return {
+      ...(await offlineRpc<Omit<DriverOfflineAccess, "available">>(
+        "admin_driver_offline_access",
+        { p_driver: uuid(driver) },
+      )),
+      available: true,
+    };
+  } catch (e) {
+    if (!(e instanceof OfflineServerError) || e.code !== "MIGRATION_REQUIRED")
+      throw e;
+    return {
+      available: false,
+      trip_id: null,
+      trip_number: null,
+      vehicle: null,
+      status: "Needs update",
+      device_registered: false,
+      registered_at: null,
+      last_synced_at: null,
+      reported_pending: null,
+      review_count: null,
+      retry_count: null,
+      reset_pending: false,
+      can_reset: false,
+    };
+  }
+}
+
+export async function resetDriverOfflineAccess(form: FormData) {
+  await requirePermission("admin:read");
+  const reason =
+    String(form.get("reason") ?? "").trim() ||
+    "Reset offline access from driver management";
+  if (reason.length < 3 || reason.length > 500)
+    throw new Error("Enter a reason between 3 and 500 characters.");
+  return offlineRpc<string>("offline_admin_reset_access", {
+    p_driver: uuid(String(form.get("driver"))),
+    p_trip: form.get("trip") ? uuid(String(form.get("trip"))) : null,
+    p_reason: reason,
+    p_key: uuid(String(form.get("key"))),
+  });
+}
 export type OfflineAdminWorkspace = {
   available: boolean;
   rounds: (DeviceRound & { driver_name: string; trip_number: number })[];
@@ -47,6 +96,12 @@ export async function saveOfflineAdmin(form: FormData) {
     reason = String(form.get("reason") ?? "").trim();
   if (reason.length < 3 || reason.length > 500)
     throw new Error("Enter a reason between 3 and 500 characters.");
+  if (form.get("operation") === "offline:reset-device")
+    return offlineRpc<string>("offline_admin_reset_device", {
+      p_trip: uuid(String(form.get("trip"))),
+      p_reason: reason,
+      p_key: key,
+    });
   if (form.get("operation") === "offline:revoke-device")
     return offlineRpc<string>("trusted_device_revoke", {
       p_device: uuid(String(form.get("id"))),

@@ -21,16 +21,11 @@ test("encrypted notifications survive offline reopening, defer return alerts, an
   await expect(page.getByTestId("notification-badge")).toHaveText("2", {
     timeout: 15000,
   });
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Enter PIN", { exact: true }).fill("582947");
-  await page.getByLabel("Confirm PIN", { exact: true }).fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   // Refresh the feed after vault creation, so history is encrypted there.
@@ -79,14 +74,7 @@ test("encrypted notifications survive offline reopening, defer return alerts, an
   await expect(page.getByTestId("notification-bell")).toBeVisible();
   await expect(page.getByTestId("notification-badge")).toHaveCount(0);
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .locator("#device-unlock")
-    .getByLabel("Enter PIN", { exact: true })
-    .fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock App", exact: true })
-    .click();
+
   await expect(page.getByTestId("notification-badge")).toHaveText("1");
   await page
     .getByRole("navigation")

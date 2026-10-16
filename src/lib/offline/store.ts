@@ -24,7 +24,7 @@ import {
   validateCollection,
 } from "@/domain/offline/operations";
 
-type VaultRow = {
+export type VaultRow = {
   id: string;
   user: string;
   trip: string;
@@ -37,11 +37,26 @@ type VaultRow = {
 };
 type Setting = { key: string; value: string };
 type Lease = { key: string; owner: string; expires: number };
+type ArchivedOfflineData = {
+  id: string;
+  kind: "SETUP" | "RECORDS";
+  row: VaultRow;
+  preservedAt: string;
+};
+export class OfflineLocalDataError extends Error {
+  constructor(
+    readonly kind: "SETUP" | "RECORDS",
+    message: string,
+  ) {
+    super(message);
+  }
+}
 export class OfflineDatabase extends Dexie {
   vaults!: Table<VaultRow>;
   settings!: Table<Setting>;
   leases!: Table<Lease>;
   preparations!: Table<VaultRow>;
+  archives!: Table<ArchivedOfflineData>;
   constructor(name = "mount-kailash-offline") {
     super(name, { chromeTransactionDurability: "strict" });
     this.version(1).stores({
@@ -50,6 +65,7 @@ export class OfflineDatabase extends Dexie {
       leases: "key",
     });
     this.version(2).stores({ preparations: "id,user,trip" });
+    this.version(3).stores({ archives: "id,kind" });
   }
 }
 export function offlineDB() {
@@ -106,7 +122,7 @@ async function decrypt(row: VaultRow, key: CryptoKey): Promise<LocalState> {
     const op = state.operations[i]!;
     validateEnvelope(op);
     if (
-      op.sequence !== i + 1 ||
+      op.sequence !== (state.inheritedReceipts?.length ?? 0) + i + 1 ||
       op.trip !== row.trip ||
       !["PENDING", "SYNCED", "NEEDS_REVIEW"].includes(op.status) ||
       (await fingerprint(op.payload)) !== op.fingerprint
@@ -149,6 +165,7 @@ export class OfflineVault {
     trip: string,
     passphrase: string,
     existing?: { device: string; token: string },
+    replaceUnreadableSetup = false,
   ) {
     if (passphrase.length < 8)
       throw new Error(
@@ -156,6 +173,7 @@ export class OfflineVault {
       );
     const id = `${user}:${trip}`,
       old = await db.preparations.get(id);
+    let unreadable: VaultRow | undefined;
     if (old) {
       try {
         const key = await derive(passphrase, new Uint8Array(old.salt));
@@ -173,9 +191,12 @@ export class OfflineVault {
           token: string;
         };
       } catch {
-        throw new Error(
-          "Unable to unlock. Check your offline passphrase or keep the encrypted backup for recovery.",
-        );
+        if (!replaceUnreadableSetup)
+          throw new OfflineLocalDataError(
+            "SETUP",
+            "Unable to unlock. Check your offline passphrase or keep the encrypted backup for recovery.",
+          );
+        unreadable = old;
       }
     }
     const device = existing?.device ?? crypto.randomUUID(),
@@ -192,7 +213,7 @@ export class OfflineVault {
       key,
       new TextEncoder().encode(JSON.stringify({ device, token })),
     );
-    await db.preparations.add({
+    const prepared: VaultRow = {
       id,
       user,
       trip,
@@ -202,7 +223,38 @@ export class OfflineVault {
       pending: 0,
       review: 0,
       updated: new Date().toISOString(),
-    });
+    };
+    await db.transaction(
+      "rw",
+      db.preparations,
+      db.vaults,
+      db.archives,
+      async () => {
+        const current = await db.preparations.get(id);
+        if (unreadable) {
+          const records = await db.vaults.get(id);
+          if (
+            JSON.stringify(current) !== JSON.stringify(unreadable) ||
+            (records && (records.pending !== 0 || records.review !== 0))
+          )
+            throw new OfflineLocalDataError(
+              "RECORDS",
+              "Keep this phone's saved data until the admin has reviewed it.",
+            );
+          // Setup contains only registration credentials, never delivery records.
+          // Preserve its exact ciphertext before reserving automatic credentials.
+          await db.archives.add({
+            id: crypto.randomUUID(),
+            kind: "SETUP",
+            row: unreadable,
+            preservedAt: new Date().toISOString(),
+          });
+          await db.preparations.put(prepared);
+        } else {
+          await db.preparations.add(prepared);
+        }
+      },
+    );
     return { device, token };
   }
   static async create(
@@ -211,13 +263,15 @@ export class OfflineVault {
     device: string,
     token: string,
     passphrase: string,
+    replaceUnreadable?: VaultRow,
   ) {
     if (passphrase.length < 8)
       throw new Error(
         "Use an offline passphrase of at least eight characters.",
       );
     const id = `${snapshot.profile.id}:${snapshot.round.trip_id}`;
-    if (await db.vaults.get(id))
+    const old = await db.vaults.get(id);
+    if (old && !replaceUnreadable)
       throw new Error(
         "An offline copy already exists. Unlock it to preserve pending records.",
       );
@@ -231,10 +285,51 @@ export class OfflineVault {
       snapshot,
       locale: snapshot.locale,
       operations: [],
+      inheritedReceipts: snapshot.receipts.filter(
+        (r) => r.status === "CONFIRMED",
+      ),
       sealed: ["SEALED", "EXCEPTION"].includes(snapshot.round.phase),
       paused: snapshot.round.phase === "PAUSED",
       recovery: [],
     };
+    // Adopt only exact, server-received envelopes. Unreported old-phone records
+    // remain on that phone for admin review; they can never be invented here.
+    for (const value of snapshot.retainedOperations ?? []) {
+      const op = validateEnvelope(value);
+      const receipt = snapshot.receipts.find((r) => r.id === op.id);
+      if (
+        op.trip !== snapshot.round.trip_id ||
+        op.sequence !==
+          state.inheritedReceipts!.length + state.operations.length + 1 ||
+        (await fingerprint(op.payload)) !== op.fingerprint ||
+        !receipt ||
+        receipt.trip !== op.trip ||
+        receipt.sequence !== op.sequence ||
+        receipt.fingerprint !== op.fingerprint ||
+        receipt.status === "CONFIRMED"
+      )
+        throw new Error(
+          "Server confirmation did not match. The record remains on this device.",
+        );
+      state.operations.push({
+        ...op,
+        status: receipt.status === "RETRYABLE" ? "PENDING" : "NEEDS_REVIEW",
+        attempts: 0,
+        retryAt: 0,
+        message: receipt.message ?? undefined,
+      });
+    }
+    if (
+      snapshot.receipts.some(
+        (r) =>
+          r.status !== "CONFIRMED" &&
+          !state.operations.some((o) => o.id === r.id),
+      )
+    )
+      throw new Error(
+        "Server confirmation did not match. The record remains on this device.",
+      );
+    installConfirmedSnapshot(state, snapshot);
     const row = await encrypt(
       {
         id,
@@ -250,10 +345,39 @@ export class OfflineVault {
       state,
       key,
     );
-    await db.transaction("rw", db.vaults, db.settings, async () => {
-      await db.vaults.add(row);
-      await db.settings.put({ key: "active-user", value: state.user });
-    });
+    await db.transaction(
+      "rw",
+      db.vaults,
+      db.settings,
+      db.archives,
+      async () => {
+        if (replaceUnreadable) {
+          const current = await db.vaults.get(id);
+          if (
+            replaceUnreadable.id !== id ||
+            current?.pending !== 0 ||
+            current.review !== 0 ||
+            JSON.stringify(current) !== JSON.stringify(replaceUnreadable)
+          )
+            throw new OfflineLocalDataError(
+              "RECORDS",
+              "Keep this phone's saved data until the admin has reviewed it.",
+            );
+          // Rebuild only a zero-pending copy from an authorized server snapshot.
+          // The old ciphertext (with its original AAD/id) remains recoverable.
+          await db.archives.add({
+            id: crypto.randomUUID(),
+            kind: "RECORDS",
+            row: current,
+            preservedAt: new Date().toISOString(),
+          });
+          await db.vaults.put(row);
+        } else {
+          await db.vaults.add(row);
+        }
+        await db.settings.put({ key: "active-user", value: state.user });
+      },
+    );
     return new OfflineVault(db, id, key);
   }
   static async unlock(db: OfflineDatabase, id: string, passphrase: string) {
@@ -267,7 +391,8 @@ export class OfflineVault {
       await decrypt(row, key);
       return new OfflineVault(db, id, key);
     } catch {
-      throw new Error(
+      throw new OfflineLocalDataError(
+        "RECORDS",
         "Unable to unlock. Check your offline passphrase or keep the encrypted backup for recovery.",
       );
     }
@@ -403,9 +528,10 @@ export class OfflineVault {
           );
       }
       if (kind === "SUBMIT" || kind === "PAUSE") {
-        (draft as { manifest: unknown }).manifest = state.operations.map(
-          (o) => ({ id: o.id, fingerprint: o.fingerprint }),
-        );
+        (draft as { manifest: unknown }).manifest = [
+          ...(state.inheritedReceipts ?? []),
+          ...state.operations,
+        ].map((o) => ({ id: o.id, fingerprint: o.fingerprint }));
         if (kind === "SUBMIT") state.sealed = true;
         else state.paused = true;
       }
@@ -414,7 +540,8 @@ export class OfflineVault {
         version: 1,
         id,
         trip: state.snapshot.round.trip_id,
-        sequence: state.operations.length + 1,
+        sequence:
+          (state.inheritedReceipts?.length ?? 0) + state.operations.length + 1,
         kind,
         occurredAt,
         payload,

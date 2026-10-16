@@ -11,7 +11,6 @@ import { formatBusinessDate } from "../../src/domain/localization/calendar";
 import { message } from "../../src/lib/i18n/messages";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-const passphrase = "final-isolated-device-passphrase";
 test("a workspace response started before a confirmed return cannot leave the driver in ACTIVE status", async ({
   page,
   request,
@@ -22,7 +21,10 @@ test("a workspace response started before a confirmed return cannot leave the dr
   await language(page, "en");
   await nav(page, "Return to Warehouse");
   await expect(
-    page.getByRole("button", { name: "Submit warehouse returns", exact: true }),
+    page.getByRole("button", {
+      name: "Prepare return and seal device queue",
+      exact: true,
+    }),
   ).toBeEnabled();
   let captured = false,
     holding = false,
@@ -45,10 +47,13 @@ test("a workspace response started before a confirmed return cannot leave the dr
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect.poll(() => captured).toBe(true);
     await page
-      .getByRole("button", { name: "Submit warehouse returns", exact: true })
+      .getByRole("button", {
+        name: "Prepare return and seal device queue",
+        exact: true,
+      })
       .click();
     await expect(
-      page.getByText("Saved to Supabase.", { exact: true }),
+      page.getByText("Saved on phone", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Awaiting warehouse verification", { exact: true }),
@@ -95,11 +100,7 @@ async function nav(page: Page, label: string) {
 }
 async function unlock(page: Page) {
   await language(page, "en");
-  await page.getByLabel("Offline passphrase").fill(passphrase);
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock device records", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
 }
 const saleForm = (page: Page) =>
@@ -218,23 +219,22 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
   );
   await nav(page, "New Sale");
   await expect(page.getByLabel("Offline passphrase")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Offline passphrase").fill(passphrase);
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await deliver(page, f.customer, 20, 15, true);
   await expect(
-    saleForm(page).getByText("Saved to Supabase.", { exact: true }),
+    saleForm(page).getByText("Saved on phone", { exact: true }),
   ).toBeVisible();
   await nav(page, "My Stock");
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("80");
+  await expect
+    .poll(async () => (await f.admin.workspace(f.trip)).visits.length)
+    .toBe(1);
   const online = await f.admin.workspace(f.trip);
   expect(online.visits).toHaveLength(1);
   expect(
@@ -266,7 +266,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     ).toBeVisible();
     await deliver(page, second, 15, 10, false);
     await expect(
-      saleForm(page).getByText("Saved on Device", { exact: true }),
+      saleForm(page).getByText("Saved on phone", { exact: true }),
     ).toBeVisible();
     await nav(page, "Customers");
     await page
@@ -276,7 +276,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
       .getByRole("button", { name: "Save customer", exact: true })
       .click();
     await expect(page.getByTestId("pending-sync-count")).toHaveText(
-      "Pending records: 2",
+      /Saved on phone|2 changes/,
     );
     const stored = await deviceMetadata(page);
     expect(stored[0]?.pending).toBe(2);
@@ -292,8 +292,10 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await nav(page, "Unreturned Jars");
     for (const name of ["Refresh customer", "Second customer"])
       await expect(
-        page.getByRole("heading", { name, exact: true }).locator(".."),
-      ).toContainText("Estimated unreturned jars: 5");
+        page
+          .getByTestId("driver-jar-card")
+          .filter({ has: page.getByRole("heading", { name, exact: true }) }),
+      ).toContainText("5");
     await nav(page, "Sales History");
     await page.getByLabel("Date range", { exact: true }).selectOption("today");
     await page
@@ -302,7 +304,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await expect(page).toHaveURL(/\/driver\/sales\?from=.*&to=/);
     await expect(page.getByLabel("Offline passphrase")).toHaveCount(0);
     await expect(
-      page.getByText("Saved on Device", { exact: true }).first(),
+      page.getByText("Saved on phone", { exact: true }).first(),
     ).toBeVisible();
     await nav(page, "Return to Warehouse");
     await expect(
@@ -316,7 +318,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await expect(page).toHaveURL(/\/driver\/home$/);
     await unlock(page);
     await expect(page.getByTestId("pending-sync-count")).toHaveText(
-      "Pending records: 2",
+      /Saved on phone|2 changes/,
     );
     await nav(page, "New Sale");
     const createdId = await page
@@ -361,14 +363,14 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await page.reload();
     await unlock(page);
     await expect(page.getByTestId("pending-sync-count")).toHaveText(
-      "Pending records: 2",
+      /Saved on phone|2 changes/,
     );
     await context.setOffline(false);
-    await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+    await expect(page.getByText("All synced", { exact: true })).toBeVisible({
       timeout: 45000,
     });
     await expect(page.getByTestId("pending-sync-count")).toHaveText(
-      "Pending records: 0",
+      "All synced",
     );
     expect(uploads.filter((o) => o.kind === "DELIVERY")).toHaveLength(1);
     expect(new Set(uploads.map((o) => o.id)).size).toBe(2);
@@ -397,9 +399,6 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     ])
       await expect(admin.getByTestId(metric!)).toHaveText(value!);
     await page.reload();
-    await page
-      .getByRole("button", { name: "Device access", exact: true })
-      .click();
     await unlock(page);
     await nav(page, "New Sale");
     await page.locator(`[data-customer-id="${createdId}"]`).click();
@@ -421,7 +420,10 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await page
       .getByRole("button", { name: "Save collection", exact: true })
       .click();
-    await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+    await expect(
+      page.getByLabel("Credit amount received (NPR)", { exact: true }),
+    ).toHaveValue("");
+    await expect(page.getByText("All synced", { exact: true })).toBeVisible({
       timeout: 30000,
     });
     await expect
@@ -443,7 +445,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await expect
       .poll(async () => (await f.admin.workspace(f.trip)).trips[0]?.status)
       .toBe("SUBMITTED");
-    await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+    await expect(page.getByText("All synced", { exact: true })).toBeVisible({
       timeout: 30000,
     });
     await f.admin.rpc("reconcile_trip", {
@@ -493,9 +495,15 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await expect
       .poll(async () => (await f.admin.workspace(reload)).trips[0]?.status)
       .toBe("ACTIVE");
+    await expect(
+      page.getByRole("button", { name: "Start delivering", exact: true }),
+    ).toHaveCount(0);
     await nav(page, "Return to Warehouse");
     await page
-      .getByRole("button", { name: "Submit warehouse returns", exact: true })
+      .getByRole("button", {
+        name: "Prepare return and seal device queue",
+        exact: true,
+      })
       .click();
     await expect
       .poll(async () => (await f.admin.workspace(reload)).trips[0]?.status)

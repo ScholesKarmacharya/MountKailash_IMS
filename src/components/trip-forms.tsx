@@ -22,6 +22,7 @@ import { AmountInput, PaymentButtons } from "./finance-payment";
 import { cents, decimal, sum, npr } from "@/domain/finance/money";
 import { paymentPlan } from "@/domain/finance/payment-plan";
 import { driverPaymentPlan } from "@/domain/finance/driver-payment";
+import { canonical } from "@/domain/offline/operations";
 import { DriverPayment } from "./driver-payment";
 import { freeProduct, approvedHouse } from "@/domain/house/pricing";
 import type { FinanceWorkspace, PaymentDraft } from "@/domain/finance/types";
@@ -35,7 +36,10 @@ import { OperationForm, Counter, Field, Select } from "./operation-form";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { useDriverRuntime } from "./driver-runtime-context";
+import {
+  offlinePreparingMessage,
+  useDriverRuntime,
+} from "./driver-runtime-context";
 import {
   DeliveryCustomerForm,
   DeliveryCustomerHistory,
@@ -429,7 +433,9 @@ export function DeliveryForm({
       ? "FREE_SUPPLY"
       : payment === "UNPAID"
         ? "CREDIT"
-        : "PAID"
+        : payment === "FONEPAY"
+          ? "FONEPAY"
+          : "PAID"
     : "RETURN_ONLY";
   let financeProblem = "",
     payments: PaymentDraft[] = [];
@@ -517,11 +523,44 @@ export function DeliveryForm({
     !stockProblem &&
     !financeProblem;
   const canReview = eligible && (!simplifiedPayment || !!f?.available);
-  const reviewContract = JSON.stringify({
-    context,
-    counts,
-    tax: f?.company?.tax_rate,
-    mode: f?.company?.tax_mode,
+  // Online context and local projection can order object keys differently.
+  // Compare canonical business values so that readiness never closes a review.
+  const reviewContract = canonical({
+    // History arriving after an acknowledgement must not close an unchanged
+    // review. Prices, custody, credit, eligibility and physical stock still do.
+    context: context
+      ? {
+          // Workspace contacts omit server audit fields. Those fields do not
+          // affect the reviewed customer or their supply eligibility.
+          customer: {
+            id: context.customer.id,
+            name: context.customer.name,
+            is_active: context.customer.is_active,
+            supply_type: context.customer.supply_type ?? "REGULAR",
+            house_status: context.customer.house_status ?? "NONE",
+            house_version: context.customer.house_version ?? 0,
+          },
+          billing: context.billing ?? null,
+          prices: context.prices,
+          credit: context.credit,
+          // The local projection includes explicit zero balances that the online
+          // context omits. They are the same business state, not a review change.
+          custody: context.custody
+            .filter((c) => c.quantity !== 0)
+            .map(({ product_id, quantity }) => ({ product_id, quantity }))
+            .sort((a, b) => a.product_id.localeCompare(b.product_id)),
+          house_products: context.house_products ?? [],
+        }
+      : null,
+    counts: counts
+      .filter((c) => c.quantity !== 0)
+      .sort((a, b) =>
+        `${a.product_id}:${a.stock_kind}`.localeCompare(
+          `${b.product_id}:${b.stock_kind}`,
+        ),
+      ),
+    tax: f?.company?.tax_rate ?? null,
+    mode: f?.company?.tax_mode ?? null,
   });
   useEffect(() => {
     queueMicrotask(() => setReview(false));
@@ -592,6 +631,23 @@ export function DeliveryForm({
         requestKey={requestKey}
         showSubmit={review && canReview}
         label="Save Delivery"
+        preserveFields
+        submitDisabled={!!runtime && runtime.offlinePrepState !== "READY"}
+        submitBlockedMessage={offlinePreparingMessage}
+        submitHint={
+          runtime &&
+          runtime.offlinePrepState !== "READY" && (
+            <p role="status" className="text-sm text-muted-foreground">
+              <T
+                k={
+                  runtime.offlinePrepState === "FAILED"
+                    ? "Offline data is not ready. Retry above."
+                    : "Preparing offline data..."
+                }
+              />
+            </p>
+          )
+        }
         confirm={
           simplifiedPayment
             ? tr(locale, "Save {0}: {1} · {2} · {3}?", [
@@ -642,7 +698,9 @@ export function DeliveryForm({
             <input
               type="hidden"
               name="received_amount"
-              value={driverStatus === "PAID" ? receivedAmount : ""}
+              value={
+                ["PAID", "FONEPAY"].includes(driverStatus) ? receivedAmount : ""
+              }
             />
           </>
         )}
@@ -1028,19 +1086,47 @@ export function DeliveryForm({
                     <T k="Empty jar return" />
                   </p>
                 ) : (
-                  <DriverPayment
-                    credit={payment === "UNPAID"}
-                    amount={receivedAmount}
-                    onCreditChange={(credit) => {
-                      setPayment(credit ? "UNPAID" : "CASH");
-                      setDriverReceived(null);
-                      setReview(false);
-                    }}
-                    onAmountChange={(value) => {
-                      setDriverReceived(value);
-                      setReview(false);
-                    }}
-                  />
+                  <>
+                    <DriverPayment
+                      credit={payment === "UNPAID"}
+                      amount={receivedAmount}
+                      onCreditChange={(credit) => {
+                        setPayment(credit ? "UNPAID" : "CASH");
+                        setDriverReceived(null);
+                        setReview(false);
+                      }}
+                      onAmountChange={(value) => {
+                        setDriverReceived(value);
+                        setReview(false);
+                      }}
+                    />
+                    {payment !== "UNPAID" && (
+                      <label className="grid gap-2 text-sm font-semibold">
+                        <T k="Payment method" />
+                        <select
+                          aria-label={t("Payment method")}
+                          value={payment}
+                          className="min-h-12 rounded-lg border p-3"
+                          onChange={(e) => {
+                            setPayment(e.target.value);
+                            setReview(false);
+                          }}
+                        >
+                          <option value="CASH">
+                            <T k="Cash" />
+                          </option>
+                          <option value="FONEPAY">
+                            <T k="Fonepay" />
+                          </option>
+                        </select>
+                        {payment === "FONEPAY" && (
+                          <p>
+                            <T k="Fonepay remains pending until verified by admin." />
+                          </p>
+                        )}
+                      </label>
+                    )}
+                  </>
                 )}
                 {financeProblem && (
                   <p role="alert" className="text-sm text-red-700">
@@ -1304,7 +1390,9 @@ export function DeliveryForm({
                         ? "Free Supply"
                         : payment === "UNPAID"
                           ? "Credit"
-                          : "Paid"
+                          : payment === "FONEPAY"
+                            ? "Fonepay"
+                            : "Paid"
                   }
                 />{" "}
                 · <T k="Total Amount" />: <Value value={npr(payable)} />

@@ -4,6 +4,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { beforeAll, afterAll, beforeEach, afterEach, it, expect } from "vitest";
 import { canonical } from "@/domain/offline/operations";
 import type { Receipt } from "@/domain/offline/types";
+import type { DriverOfflineAccess } from "@/domain/offline/admin";
 const admin = randomUUID(),
   driver = randomUUID(),
   other = randomUUID(),
@@ -152,6 +153,655 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await db.exec("rollback;reset role");
+});
+it("driver management reset is admin-only, including metadata and direct SQL calls", async () => {
+  for (const id of [driver, other]) {
+    await actor(id);
+    await denied("admin_driver_offline_access", [driver], /authorized/);
+    await denied(
+      "offline_admin_reset_access",
+      [driver, trip, "Replace phone", randomUUID()],
+      /authorized/,
+    );
+  }
+  await actor(null, "anon");
+  await denied(
+    "offline_admin_reset_access",
+    [driver, trip, "Replace phone", randomUUID()],
+    /permission/,
+  );
+  await db.exec("reset role");
+  await db.query("update public.profiles set is_active=false where id=$1", [
+    admin,
+  ]);
+  await actor(admin);
+  await denied(
+    "offline_admin_reset_access",
+    [driver, trip, "Replace phone", randomUUID()],
+    /authorized/,
+  );
+});
+
+it("driver management reset preserves all history and the ACTIVE trip, fences the writer, audits once and allows one replacement", async () => {
+  await call("trusted_device_register", [
+    device,
+    token,
+    "Old phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+  await post(1, "DELIVERY", draft(2, 1));
+  await post(2, "DELIVERY", draft(101));
+  await call("offline_checkin", [trip, device, token, 4]);
+  await db.exec("reset role");
+  await db.query(
+    "insert into public.driver_offline_reviews(trip_id,actor_id,action,details,reason) values($1,$2,'HISTORICAL_REVIEW',$3,'Existing evidence')",
+    [trip, admin, { evidence: "retain this exact review" }],
+  );
+  await actor(admin);
+  const evidence = async () => ({
+    operations: (
+      await db.query(
+        "select * from public.driver_offline_operations order by id",
+      )
+    ).rows,
+    reviews: (
+      await db.query("select * from public.driver_offline_reviews order by id")
+    ).rows,
+    visits: (await db.query("select * from public.trip_visits order by id"))
+      .rows,
+    customers: (await db.query("select * from public.customers order by id"))
+      .rows,
+    sales: (await db.query("select * from public.sales order by id")).rows,
+    payments: (await db.query("select * from public.payments order by id"))
+      .rows,
+    audits: (
+      await db.query<{ action: string }>(
+        "select * from public.audit_events order by id",
+      )
+    ).rows,
+  });
+  const before = await evidence();
+  const status = await call<DriverOfflineAccess>(
+    "admin_driver_offline_access",
+    [driver],
+  );
+  expect(status).toMatchObject({
+    trip_id: trip,
+    vehicle: "TEST-OFFLINE",
+    status: "Offline access active",
+    device_registered: true,
+    can_reset: true,
+    reported_pending: 4,
+    review_count: 1,
+  });
+  for (const field of ["device_id", "token_hash", "recovery_box"])
+    expect(status).not.toHaveProperty(field);
+  const key = randomUUID();
+  const reset = () =>
+    call("offline_admin_reset_access", [
+      driver,
+      trip,
+      "Replacement phone approved",
+      key,
+    ]);
+  expect(await reset()).toBe(driver);
+  expect(await reset()).toBe(driver);
+  expect(await call("admin_driver_offline_access", [driver])).toMatchObject({
+    status: "Previous device revoked",
+    device_registered: false,
+    reset_pending: true,
+    can_reset: false,
+    review_count: 1,
+  });
+  const after = await evidence();
+  expect(after.operations).toEqual(before.operations);
+  expect(after.visits).toEqual(before.visits);
+  expect(after.customers).toEqual(before.customers);
+  expect(after.sales).toEqual(before.sales);
+  expect(after.payments).toEqual(before.payments);
+  for (const row of before.reviews) expect(after.reviews).toContainEqual(row);
+  for (const row of before.audits) expect(after.audits).toContainEqual(row);
+  expect(
+    after.audits.filter((row) => row.action === "DRIVER_OFFLINE_ACCESS_RESET"),
+  ).toEqual([
+    expect.objectContaining({
+      actor_user_id: admin,
+      entity: "profiles",
+      entity_id: driver,
+      reason: "Replacement phone approved",
+    }),
+  ]);
+  expect(
+    (await db.query("select status from public.trips where id=$1", [trip]))
+      .rows[0],
+  ).toEqual({ status: "ACTIVE" });
+  await db.exec("reset role");
+  expect(
+    (
+      await db.query(
+        "select revoked_at,revoked_by,revoke_reason from public.driver_trusted_devices where device_id=$1",
+        [device],
+      )
+    ).rows[0],
+  ).toMatchObject({
+    revoked_at: expect.any(Date),
+    revoked_by: admin,
+    revoke_reason: "Replacement phone approved",
+  });
+  await actor(driver);
+  await denied("offline_checkin", [trip, device, token, 0]);
+  await denied("offline_register", [trip, device, token]);
+  const replacement = randomUUID(),
+    nextToken = "b".repeat(64);
+  await call("trusted_device_register", [
+    replacement,
+    nextToken,
+    "New phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+  await call("offline_register", [trip, replacement, nextToken]);
+  await denied(
+    "trusted_device_register",
+    [
+      randomUUID(),
+      "c".repeat(64),
+      "Duplicate",
+      "automatic-key-stored-only-on-device",
+    ],
+    /one trusted device/,
+  );
+  await denied("offline_checkin", [trip, device, token, 0]);
+  await actor(admin);
+  // Retrying a lost admin response must not revoke the replacement.
+  await reset();
+  expect(await call("admin_driver_offline_access", [driver])).toMatchObject({
+    status: "Offline access active",
+    reset_pending: false,
+    device_registered: true,
+  });
+});
+
+it("driver management safely resets a legacy round with no trusted device", async () => {
+  await actor(admin);
+  expect(await call("admin_driver_offline_access", [driver])).toMatchObject({
+    status: "Needs update",
+    device_registered: false,
+    registered_at: expect.any(String),
+    can_reset: true,
+  });
+  await call("offline_admin_reset_access", [
+    driver,
+    trip,
+    "Replace legacy phone",
+    randomUUID(),
+  ]);
+  await actor(driver);
+  await denied("offline_checkin", [trip, device, token, 0]);
+});
+
+it("no active trip and no device is a harmless audited no-op with no round created", async () => {
+  await actor(admin);
+  expect(await call("admin_driver_offline_access", [other])).toMatchObject({
+    status: "No active trip",
+    trip_id: null,
+    can_reset: false,
+  });
+  const key = randomUUID();
+  await call("offline_admin_reset_access", [
+    other,
+    null,
+    "Check empty access",
+    key,
+  ]);
+  await call("offline_admin_reset_access", [
+    other,
+    null,
+    "Check empty access",
+    key,
+  ]);
+  expect(
+    (
+      await db.query(
+        "select count(*)::int n from public.driver_offline_rounds where driver_id=$1",
+        [other],
+      )
+    ).rows[0],
+  ).toEqual({ n: 0 });
+  expect(
+    (
+      await db.query(
+        "select count(*)::int n from public.audit_events where entity_id=$1 and action='DRIVER_OFFLINE_ACCESS_RESET'",
+        [other],
+      )
+    ).rows[0],
+  ).toEqual({ n: 1 });
+});
+
+it("admin can revoke a registered phone without an active trip, and fresh credentials can register", async () => {
+  const phone = randomUUID();
+  await actor(other);
+  await call("trusted_device_register", [
+    phone,
+    token,
+    "Old phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+  await actor(admin);
+  expect(await call("admin_driver_offline_access", [other])).toMatchObject({
+    status: "No active trip",
+    device_registered: true,
+    can_reset: true,
+  });
+  await call("offline_admin_reset_access", [
+    other,
+    null,
+    "Replace unused phone",
+    randomUUID(),
+  ]);
+  await actor(other);
+  await denied(
+    "trusted_device_register",
+    [phone, token, "Old phone", "automatic-key-stored-only-on-device"],
+    /revoked/,
+  );
+  await call("trusted_device_register", [
+    randomUUID(),
+    "b".repeat(64),
+    "New phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+});
+
+it("resetting a trip not yet prepared revokes its phone without creating a round, and stale trip confirmation fails safely", async () => {
+  const unprepared = randomUUID(),
+    phone = randomUUID();
+  await actor(other);
+  await call("trusted_device_register", [
+    phone,
+    token,
+    "Old phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+  await actor(admin);
+  await call("adjust_warehouse_stock", [
+    jar,
+    "FULL_JAR",
+    10,
+    "Test replacement",
+    "",
+    day,
+    randomUUID(),
+  ]);
+  // A different vehicle is needed while the first one is on the original trip.
+  const spare = randomUUID();
+  await call("save_vehicle", [
+    spare,
+    "SPARE-OFFLINE",
+    "",
+    true,
+    0,
+    "Test replacement",
+    randomUUID(),
+  ]);
+  await call("create_trip", [
+    unprepared,
+    other,
+    spare,
+    day,
+    [],
+    "",
+    randomUUID(),
+  ]);
+  await call("load_trip", [
+    unprepared,
+    [{ product_id: jar, stock_kind: "FULL_JAR", quantity: 1 }],
+    randomUUID(),
+  ]);
+  await denied(
+    "offline_admin_reset_access",
+    [other, null, "Stale confirmation", randomUUID()],
+    /current trip changed/,
+  );
+  expect(await call("admin_driver_offline_access", [other])).toMatchObject({
+    trip_id: unprepared,
+    device_registered: true,
+    can_reset: true,
+  });
+  await call("offline_admin_reset_access", [
+    other,
+    unprepared,
+    "Replace before preparation",
+    randomUUID(),
+  ]);
+  expect(await call("admin_driver_offline_access", [other])).toMatchObject({
+    trip_id: unprepared,
+    status: "No device registered",
+    can_reset: false,
+  });
+  await actor(other);
+  const replacement = randomUUID(),
+    nextToken = "b".repeat(64);
+  await call("trusted_device_register", [
+    replacement,
+    nextToken,
+    "New phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+  expect(
+    await call("offline_register", [unprepared, replacement, nextToken]),
+  ).toMatchObject({ phase: "PREPARED", device_id: replacement });
+});
+
+it("only an audited admin reset transfers the writer, continuing sequences and preserving old evidence", async () => {
+  const originalId = randomUUID();
+  const receipt = await post(1, "DELIVERY", draft(2, 1), originalId);
+  const replacement = randomUUID(),
+    nextToken = "b".repeat(64),
+    resetKey = randomUUID(),
+    reusedKey = randomUUID();
+  await db.exec("savepoint preparation_access");
+  await expect(
+    call("offline_preparation_access", [trip, replacement, nextToken]),
+  ).rejects.toMatchObject({ code: "MK001" });
+  await db.exec("rollback to savepoint preparation_access");
+  expect(
+    await call("offline_preparation_access", [trip, device, token]),
+  ).toEqual({ allowed: true });
+  // A legacy bound browser may predate trusted-device rows. A replacement can
+  // already have registered its credentials before discovering that binding.
+  await call("trusted_device_register", [
+    replacement,
+    nextToken,
+    "Replacement phone",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+  await denied("offline_register", [trip, replacement, nextToken], /reset/);
+  await denied(
+    "offline_admin_reset_device",
+    [trip, "Replace lost phone", resetKey],
+    /authorized/i,
+  );
+  await actor(admin);
+  const before = (
+    await db.query(
+      "select * from public.driver_offline_operations where id=$1",
+      [originalId],
+    )
+  ).rows[0];
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace lost phone",
+    resetKey,
+  ]);
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace lost phone",
+    reusedKey,
+  ]);
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace lost phone",
+    resetKey,
+  ]);
+  await actor(driver);
+  await denied(
+    "offline_preparation_access",
+    [trip, device, token],
+    /admin device reset/i,
+  );
+  expect(
+    await call("offline_preparation_access", [trip, replacement, nextToken]),
+  ).toEqual({ allowed: true });
+  await denied("offline_checkin", [trip, device, token, 0]);
+  await call("trusted_device_register", [
+    replacement,
+    nextToken,
+    "Replacement phone",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+  expect(
+    await call("offline_register", [trip, replacement, nextToken]),
+  ).toMatchObject({ device_id: replacement, confirmed_sequence: 1 });
+  // A lost registration response may be retried without a second transfer.
+  await call("offline_register", [trip, replacement, nextToken]);
+  await actor(admin);
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace lost phone",
+    reusedKey,
+  ]);
+  await db.exec("reset role");
+  expect(
+    (
+      await db.query<{ offline_device_reset_pending: boolean }>(
+        "select offline_device_reset_pending from public.driver_offline_rounds where trip_id=$1",
+        [trip],
+      )
+    ).rows[0]!.offline_device_reset_pending,
+  ).toBe(false);
+  await actor(driver);
+  const nextPayload = canonical(draft(3, 1, 1)),
+    nextId = randomUUID();
+  const nextHash = createHash("sha256").update(nextPayload).digest("hex"),
+    occurred = new Date().toISOString();
+  const args = [
+    trip,
+    replacement,
+    nextToken,
+    nextId,
+    2,
+    "DELIVERY",
+    occurred,
+    nextPayload,
+    nextHash,
+  ];
+  expect(await call("offline_post", args)).toMatchObject({
+    status: "CONFIRMED",
+    sequence: 2,
+  });
+  expect(await call("offline_post", args)).toMatchObject({
+    status: "CONFIRMED",
+    sequence: 2,
+  });
+  await denied("offline_register", [trip, randomUUID(), "c".repeat(64)]);
+  const submission = canonical({
+    counts: [
+      { product_id: jar, stock_kind: "FULL_JAR", quantity: 95 },
+      { product_id: jar, stock_kind: "EMPTY_JAR", quantity: 2 },
+    ],
+    manifest: [
+      { id: originalId, fingerprint: receipt.fingerprint },
+      { id: nextId, fingerprint: nextHash },
+    ],
+  });
+  expect(
+    await call("offline_post", [
+      trip,
+      replacement,
+      nextToken,
+      randomUUID(),
+      3,
+      "SUBMIT",
+      new Date().toISOString(),
+      submission,
+      createHash("sha256").update(submission).digest("hex"),
+    ]),
+  ).toMatchObject({ status: "CONFIRMED" });
+  await actor(admin);
+  expect(
+    (
+      await db.query(
+        "select * from public.driver_offline_operations where id=$1",
+        [originalId],
+      )
+    ).rows[0],
+  ).toEqual(before);
+  expect(
+    (
+      await db.query<{ action: string }>(
+        "select action from public.driver_offline_reviews where trip_id=$1 and action in ('DEVICE_RESET','DEVICE_TRANSFER')",
+        [trip],
+      )
+    ).rows.map((r) => r.action),
+  ).toEqual(["DEVICE_RESET", "DEVICE_TRANSFER"]);
+});
+it("admin reset revokes an unrelated stale registration so a fresh replacement can register", async () => {
+  const stale = randomUUID(),
+    replacement = randomUUID(),
+    nextToken = "b".repeat(64),
+    key = randomUUID();
+  await call("trusted_device_register", [
+    stale,
+    nextToken,
+    "Stale failed setup",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+  await actor(admin);
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace old binding and stale setup",
+    key,
+  ]);
+  await db.exec("reset role");
+  const registered = (
+    await db.query<{
+      revoked_at: unknown;
+      revoked_by: string | null;
+      offline_reset_id: string | null;
+    }>(
+      "select revoked_at,revoked_by,offline_reset_id from public.driver_trusted_devices where device_id=$1",
+      [stale],
+    )
+  ).rows[0]!;
+  expect(registered.revoked_at).not.toBeNull();
+  expect(registered).toMatchObject({
+    revoked_by: admin,
+    offline_reset_id: key,
+  });
+  const reset = (
+    await db.query<{
+      offline_device_reset_by: string | null;
+      offline_device_reset_at: unknown;
+    }>(
+      "select offline_device_reset_by,offline_device_reset_at from public.driver_offline_rounds where trip_id=$1",
+      [trip],
+    )
+  ).rows[0]!;
+  expect(reset.offline_device_reset_by).toBe(admin);
+  expect(reset.offline_device_reset_at).toEqual(registered.revoked_at);
+  await actor(driver);
+  expect(
+    await call("offline_preparation_access", [trip, replacement, nextToken]),
+  ).toEqual({ allowed: true });
+  await call("trusted_device_register", [
+    replacement,
+    nextToken,
+    "Replacement",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+  await call("offline_register", [trip, replacement, nextToken]);
+  await denied("offline_checkin", [trip, device, token, 0]);
+  await denied("trusted_device_register", [
+    stale,
+    nextToken,
+    "Stale",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+});
+it("never reapproves an independently revoked device during another device's admin reset", async () => {
+  const revoked = randomUUID(),
+    nextToken = "b".repeat(64);
+  await call("trusted_device_register", [
+    revoked,
+    nextToken,
+    "Previously revoked phone",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+  await actor(admin);
+  await call("trusted_device_revoke", [
+    revoked,
+    "Independent prior admin revocation",
+  ]);
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace another phone",
+    randomUUID(),
+  ]);
+  await actor(driver);
+  await denied(
+    "offline_preparation_access",
+    [trip, revoked, nextToken],
+    /admin device reset/i,
+  );
+  await denied("trusted_device_register", [
+    revoked,
+    nextToken,
+    "Revoked",
+    "automatic-device-key-stored-only-on-phone",
+  ]);
+});
+it("does not skip received records needing review during replacement registration", async () => {
+  expect(await post(1, "DELIVERY", draft(101))).toMatchObject({
+    status: "NEEDS_REVIEW",
+  });
+  await actor(admin);
+  await call("offline_admin_reset_device", [
+    trip,
+    "Replace broken phone",
+    randomUUID(),
+  ]);
+  await actor(driver);
+  const replacement = randomUUID(),
+    nextToken = "b".repeat(64);
+  await call("trusted_device_register", [
+    replacement,
+    nextToken,
+    "Phone",
+    "automatic-key-stored-only-on-device",
+  ]);
+  await call("offline_register", [trip, replacement, nextToken]);
+  const journal = await call<
+    { id: string; sequence: number; payload: string }[]
+  >("offline_device_journal", [trip, replacement, nextToken]);
+  expect(journal).toHaveLength(1);
+  expect(journal[0]).toMatchObject({
+    sequence: 1,
+    payload: canonical(draft(101)),
+  });
+  // The original review gate is still present, so a new UUID cannot take its sequence.
+  await db.exec("savepoint occupied_sequence");
+  const nextPayload = canonical(draft(1));
+  await expect(
+    call("offline_post", [
+      trip,
+      replacement,
+      nextToken,
+      randomUUID(),
+      1,
+      "DELIVERY",
+      new Date().toISOString(),
+      nextPayload,
+      createHash("sha256").update(nextPayload).digest("hex"),
+    ]),
+  ).rejects.toThrow(/unique/i);
+  await db.exec("rollback to savepoint occupied_sequence");
+});
+it("synchronizes Fonepay deliveries once, retaining pending payment verification", async () => {
+  const payload = { ...draft(2, 1), status: "FONEPAY" };
+  const id = randomUUID(),
+    occurred = new Date().toISOString();
+  expect(await post(1, "DELIVERY", payload, id, occurred)).toMatchObject({
+    status: "CONFIRMED",
+  });
+  await post(1, "DELIVERY", payload, id, occurred);
+  await actor(admin);
+  const payments = (
+    await db.query(
+      "select p.method,e.status from public.payments p join public.payment_verification_events e on e.payment_id=p.id where p.trip_id=$1",
+      [trip],
+    )
+  ).rows;
+  expect(payments).toEqual([{ method: "FONEPAY", status: "PENDING" }]);
 });
 it("trusts one approved device, registers idempotently and preserves the recovery envelope", async () => {
   const box = "encrypted-recovery-envelope".repeat(3);

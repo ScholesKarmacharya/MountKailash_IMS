@@ -25,15 +25,10 @@ async function prepare(page: Page) {
     page.getByRole("button", { name: "English", exact: true }),
   ).toBeEnabled();
   await expect(page.getByTestId("driver-remaining-full-jars")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page
-    .getByLabel("Offline passphrase")
-    .fill("offline-fixture-passphrase");
-  await page
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText(
     "100",
     {
@@ -41,7 +36,7 @@ async function prepare(page: Page) {
     },
   );
   await expect(
-    page.getByText("All Synced", { exact: false }).first(),
+    page.getByText("All synced", { exact: false }).first(),
   ).toBeVisible();
 }
 async function sale(
@@ -50,7 +45,7 @@ async function sale(
   empty: number,
   customer: string,
   payment = "Paid",
-  expected = "Saved on Device",
+  expected = "Saved on phone",
 ) {
   await page
     .getByRole("navigation")
@@ -93,12 +88,7 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
   );
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .getByLabel("Offline passphrase")
-    .fill("offline-fixture-passphrase");
-  await page
-    .getByRole("button", { name: "Unlock device records", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
   await page
     .getByRole("navigation")
@@ -111,7 +101,7 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
     .getByRole("button", { name: "Save customer", exact: true })
     .click();
   await expect(
-    page.getByText("Saved on Device", { exact: true }).first(),
+    page.getByText("Saved on phone", { exact: true }).first(),
   ).toBeVisible();
   const id = await page.evaluate(async () => {
     const r = indexedDB.open("mount-kailash-offline");
@@ -137,11 +127,9 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
     .getAttribute("data-customer-id");
   await sale(page, 10, 0, newCustomer!, "Credit");
   await context.setOffline(false);
-  await page
-    .getByRole("button", { name: "Retry synchronization", exact: true })
-    .click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(
-    page.getByText("All Synced", { exact: false }).first(),
+    page.getByText("All synced", { exact: false }).first(),
   ).toBeVisible({ timeout: 30000 });
   const w = await f.admin.workspace(f.trip);
   expect(w.visits).toHaveLength(2);
@@ -153,9 +141,7 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
   expect(
     finance.credit.find((c) => c.customer_id === newCustomer)?.outstanding,
   ).toBe("1502.50");
-  await page
-    .getByRole("button", { name: "Retry synchronization", exact: true })
-    .click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   expect((await f.admin.workspace(f.trip)).visits).toHaveLength(2);
   await page
     .getByRole("navigation")
@@ -191,7 +177,7 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
   // becomes the active online round automatically in the same mounted layout.
   const closed = (await f.admin.workspace(f.trip)).trips[0]!,
     next = randomUUID();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await f.admin.rpc("create_trip", {
@@ -228,15 +214,18 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
     .getByRole("navigation")
     .getByRole("link", { name: "New Sale", exact: true })
     .click();
-  await sale(page, 5, 0, f.customer, "Credit", "Saved to Supabase.");
+  await sale(page, 5, 0, f.customer, "Credit", "Saved on phone");
   await expect(
-    page
-      .locator("#add-delivery")
-      .getByText("Saved to Supabase.", { exact: true }),
+    page.locator("#add-delivery").getByText("Saved on phone", { exact: true }),
   ).toBeVisible();
-  expect(
-    (await f.admin.workspace(next)).items.reduce((n, i) => n + i.full_jars, 0),
-  ).toBe(5);
+  await expect
+    .poll(async () =>
+      (await f.admin.workspace(next)).items.reduce(
+        (n, i) => n + i.full_jars,
+        0,
+      ),
+    )
+    .toBe(5);
 });
 test("incorrect paid amount is blocked, carton-only delivery saves offline and Nepali messages fit mobile", async ({
   page,
@@ -282,7 +271,7 @@ test("incorrect paid amount is blocked, carton-only delivery saves offline and N
     .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
   await expect(
-    page.getByText("Saved on Device", { exact: true }).first(),
+    page.getByText("Saved on phone", { exact: true }).first(),
   ).toBeVisible();
   await page.getByRole("button", { name: "नेपाली", exact: true }).click();
   await expect(
@@ -362,9 +351,7 @@ test("online customer selection refreshes encrypted customer prices without losi
       r.request().method() === "POST" &&
       r.request().postDataJSON().action === "snapshot",
   );
-  await page
-    .getByRole("button", { name: "Retry synchronization", exact: true })
-    .click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   expect((await unchanged).status()).toBe(200);
   await expect(
     page.getByRole("button", { name: "Save Delivery", exact: true }),
@@ -388,9 +375,7 @@ test("online customer selection refreshes encrypted customer prices without losi
       r.request().method() === "POST" &&
       r.request().postDataJSON().action === "snapshot",
   );
-  await page
-    .getByRole("button", { name: "Retry synchronization", exact: true })
-    .click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   expect((await changed).status()).toBe(200);
   await expect(
     page.getByRole("button", { name: "Save Delivery", exact: true }),

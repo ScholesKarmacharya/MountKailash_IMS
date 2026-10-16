@@ -23,16 +23,11 @@ test("one-time contact, sale and later returns survive encrypted offline reopeni
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/driver\/home/);
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Enter PIN", { exact: true }).fill("582947");
-  await page.getByLabel("Confirm PIN", { exact: true }).fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await page
@@ -87,14 +82,7 @@ test("one-time contact, sale and later returns survive encrypted offline reopeni
   ).toBe(100);
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .locator("#device-unlock")
-    .getByLabel("Enter PIN", { exact: true })
-    .fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock App", exact: true })
-    .click();
+
   await expect(
     page.getByRole("heading", { name: "Instant Delivery", exact: true }),
   ).toBeVisible();
@@ -135,7 +123,7 @@ test("one-time contact, sale and later returns survive encrypted offline reopeni
     fullPage: true,
   });
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await expect(page.getByTestId("instant-history")).toContainText("Completed");
@@ -209,16 +197,11 @@ test("offline old-credit collection on an existing event is durable and never cr
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/driver\/home/);
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Enter PIN", { exact: true }).fill("582947");
-  await page.getByLabel("Confirm PIN", { exact: true }).fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await page
@@ -253,14 +236,7 @@ test("offline old-credit collection on an existing event is durable and never cr
   ).toHaveLength(0);
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .locator("#device-unlock")
-    .getByLabel("Enter PIN", { exact: true })
-    .fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock App", exact: true })
-    .click();
+
   await page
     .getByTestId("instant-card")
     .getByRole("button", { name: "Open Instant Delivery", exact: true })
@@ -269,7 +245,7 @@ test("offline old-credit collection on an existing event is durable and never cr
     "Saved on Device",
   );
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await expect(page.getByTestId("instant-history")).toContainText(

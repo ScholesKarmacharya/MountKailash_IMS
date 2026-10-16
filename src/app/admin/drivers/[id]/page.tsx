@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
+import { randomUUID } from "node:crypto";
 import { getDriverAccounts, getDriverAudit } from "@/services/accounts";
 import { T, DateValue, Message, LocalizedNav } from "@/components/localization";
 import { AdminDialog } from "@/components/admin-dialog";
@@ -11,6 +12,8 @@ import {
 import { DriverAccountSummary } from "@/components/driver-account-summary";
 import { OperationsHeading } from "@/components/operations-layout";
 import { Card } from "@/components/ui/card";
+import { getDriverOfflineAccess } from "@/services/offline-admin";
+import { AdminDriverOfflineAccess } from "@/components/offline/admin-driver-access";
 export default async function Page({
   params,
   searchParams,
@@ -30,12 +33,16 @@ export default async function Page({
   if (!driver) notFound();
   const q = await searchParams;
   const page = /^\d{1,4}$/.test(q.audit_page ?? "") ? Number(q.audit_page) : 0;
-  const audit = await getDriverAudit(id, page);
+  const [audit, offlineAccess] = await Promise.all([
+    getDriverAudit(id, page),
+    getDriverOfflineAccess(id),
+  ]);
   const actions: Record<string, string> = {
     DRIVER_ACCOUNT_SAVED: "Driver details saved",
     PROFILE_UPDATED: "Profile updated",
     DRIVER_STATUS_CHANGED: "Driver access changed",
     DRIVER_SAVED: "Driver details saved",
+    DRIVER_OFFLINE_ACCESS_RESET: "Offline access reset",
   };
   return (
     <div className="space-y-5" data-testid="driver-details-workspace">
@@ -76,6 +83,12 @@ export default async function Page({
           <T k="Suspension blocks new driver operations immediately. Assigned trips and all historical records remain available to admins." />
         </p>
       </Card>
+      <AdminDriverOfflineAccess
+        key={driver.id}
+        driver={driver}
+        access={offlineAccess}
+        requestKey={randomUUID()}
+      />
       <Card className="space-y-4">
         <h2 className="text-lg font-semibold">
           <T k="Audit history" />

@@ -55,6 +55,7 @@ export type DeviceRound = {
   last_seen_at: string;
   reported_pending: number;
   checkpoint_at: string | null;
+  offline_device_reset_pending?: boolean;
 };
 export type OfflineSnapshot = {
   instant?: InstantWorkspace;
@@ -64,6 +65,8 @@ export type OfflineSnapshot = {
   finance: FinanceWorkspace;
   contexts: DeliveryCustomerContext[];
   receipts: Receipt[];
+  // Server-received, unconfirmed envelopes retained during a device transfer.
+  retainedOperations?: Envelope[];
   round: DeviceRound;
   fetchedAt: string;
   authorizedUntil: string;
@@ -76,6 +79,9 @@ export type LocalState = {
   locale: Locale;
   snapshot: OfflineSnapshot;
   operations: LocalOperation[];
+  // Confirmed history inherited by a replacement installation. Local operation
+  // envelopes always keep their original UUID, sequence, payload and hash.
+  inheritedReceipts?: Receipt[];
   sealed: boolean;
   paused?: boolean;
   lastSynced?: string;
@@ -93,7 +99,7 @@ export type DeliveryDraft = {
     empty_jars: number;
     cartons: number;
   }[];
-  status: "PAID" | "CREDIT" | "RETURN_ONLY" | "FREE_SUPPLY";
+  status: "PAID" | "FONEPAY" | "CREDIT" | "RETURN_ONLY" | "FREE_SUPPLY";
   house?: {
     version: number;
     products: {

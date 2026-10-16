@@ -123,7 +123,7 @@ export default async function DriverSyncPage() {
       </h2>
       {devices === null ? (
         <p>
-          <T k="The reviewed trusted-device migration is required before setting up a PIN." />
+          <T k="The device setup migration is required before preparing offline data." />
         </p>
       ) : (
         devices.map((d) => (
@@ -250,6 +250,40 @@ export default async function DriverSyncPage() {
                     />
                   </details>
                 )}
+                {r.offline_device_reset_pending && (
+                  <p role="status">
+                    <T k="Offline access has been reset. Ask the replacement driver to tap Retry." />
+                  </p>
+                )}
+                {!r.offline_device_reset_pending &&
+                  trip &&
+                  ["LOADED", "ACTIVE"].includes(trip.status) &&
+                  ["PREPARED", "ACTIVE"].includes(r.phase) && (
+                    <details>
+                      <summary className="cursor-pointer py-3">
+                        <T k="Reset Offline Device" />
+                      </summary>
+                      <p role="alert" className="my-3 text-amber-800">
+                        <T k="The old phone may have unsynced changes that the server cannot see. Keep its app data and arrange admin review before replacing it. Reset revokes its access; all accepted records and history stay preserved." />{" "}
+                        <T k="Reset also revokes other currently registered phones for this driver, so one replacement can prepare this trip." />
+                      </p>
+                      <OperationForm
+                        operation="offline:reset-device"
+                        trip={r.trip_id}
+                        requestKey={randomUUID()}
+                        label="Reset Offline Device"
+                        confirm="The old phone may contain unsynced changes. Keep its data for admin review. Revoke its access and allow a replacement phone for this trip?"
+                        preserveFields
+                      >
+                        <Field
+                          name="reason"
+                          label="Reason and evidence"
+                          required
+                          maxLength={500}
+                        />
+                      </OperationForm>
+                    </details>
+                  )}
               </Card>
             );
           })}

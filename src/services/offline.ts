@@ -82,11 +82,14 @@ export async function offlineSnapshot(
   const finance = await readFinance();
   const instant = await readInstantWorkspace();
   const contexts =
-    before.round.phase === "ACTIVE"
+    before.round.phase === "ACTIVE" || before.round.phase === "PREPARED"
       ? await offlineRpc<DeliveryCustomerContext[]>("offline_contexts", {
           p_trip: args.p_trip,
         })
       : [];
+  const retainedOperations = await offlineRpc<
+    import("@/domain/offline/types").Envelope[]
+  >("offline_device_journal", args);
   const after = await offlineRpc<typeof before>("offline_read_state", args);
   // A same-device concurrent upload invalidates the combined snapshot; retry it,
   // rather than acknowledging records against balances from an earlier read.
@@ -109,6 +112,7 @@ export async function offlineSnapshot(
     instant,
     contexts: contexts.map((c) => confirmedCustomerContext(c)),
     receipts: after.receipts,
+    retainedOperations,
     round: after.round,
     locale: await getLocale(profile),
     fetchedAt: new Date().toISOString(),
@@ -122,6 +126,7 @@ export async function offlineCommand(body: Record<string, unknown>) {
   const args = credentials(body);
   switch (body.action) {
     case "register":
+      await offlineRpc("offline_preparation_access", args);
       await offlineRpc("offline_register", args);
       return offlineSnapshot(args);
     case "snapshot":

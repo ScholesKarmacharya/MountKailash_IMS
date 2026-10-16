@@ -231,11 +231,18 @@ export function parseCommand(form: FormData): Command {
     case "driver-visit": {
       const status = str("payment_status", 11),
         received = str("received_amount", 16);
-      if (!["PAID", "CREDIT", "RETURN_ONLY", "FREE_SUPPLY"].includes(status))
+      if (
+        !["PAID", "FONEPAY", "CREDIT", "RETURN_ONLY", "FREE_SUPPLY"].includes(
+          status,
+        )
+      )
         throw new Error("Choose Paid or Credit.");
-      if (status === "PAID" && !/^\d{1,12}(\.\d{1,2})?$/.test(received))
+      if (
+        ["PAID", "FONEPAY"].includes(status) &&
+        !/^\d{1,12}(\.\d{1,2})?$/.test(received)
+      )
         throw new Error("Enter the total amount received.");
-      if (status !== "PAID" && received)
+      if (!["PAID", "FONEPAY"].includes(status) && received)
         throw new Error(
           "Credit or return-only visits cannot collect a new payment.",
         );

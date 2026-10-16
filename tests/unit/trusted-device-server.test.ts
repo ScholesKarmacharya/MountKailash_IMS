@@ -25,6 +25,7 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ set: fake.set, delete: fake.del }),
 }));
 import { trustedDeviceCommand } from "@/services/trusted-device";
+import { OfflineServerError } from "@/data-access/offline";
 const device = crypto.randomUUID(),
   user = "00000000-0000-0000-0000-000000000002",
   secrets = { device, token: "a".repeat(64), secret: "b".repeat(64) };
@@ -36,6 +37,61 @@ beforeEach(() => {
     data: { user: { id: user, email: "driver@fixture.example" } },
   });
   fake.signIn.mockResolvedValue({ data: { user: { id: user } }, error: null });
+});
+it("checks trip ownership before registering automatic credentials", async () => {
+  const trip = crypto.randomUUID();
+  await trustedDeviceCommand({
+    action: "automatic-register",
+    trip,
+    device,
+    token: secrets.token,
+  });
+  expect(fake.rpc.mock.calls.map(([name]) => name)).toEqual([
+    "offline_preparation_access",
+    "trusted_device_register",
+  ]);
+  expect(fake.rpc.mock.calls[0]![1]).toEqual({
+    p_trip: trip,
+    p_device: device,
+    p_token: secrets.token,
+  });
+});
+it("does not create an unrelated registered device or cookie when a legacy round needs admin reset", async () => {
+  fake.rpc.mockRejectedValueOnce(
+    new OfflineServerError(
+      "DEVICE_RESET_REQUIRED",
+      "This trip is linked to another phone.",
+      403,
+    ),
+  );
+  await expect(
+    trustedDeviceCommand({
+      action: "automatic-register",
+      trip: crypto.randomUUID(),
+      device,
+      token: secrets.token,
+    }),
+  ).rejects.toMatchObject({ code: "DEVICE_RESET_REQUIRED" });
+  expect(fake.rpc).toHaveBeenCalledOnce();
+  expect(fake.rpc.mock.calls[0]![0]).toBe("offline_preparation_access");
+  expect(fake.set).not.toHaveBeenCalled();
+});
+it("registers automatic access without uploading its encryption secret or requiring a recovery key", async () => {
+  vi.stubEnv("OFFLINE_DEVICE_RECOVERY_KEY", "");
+  await trustedDeviceCommand({
+    action: "automatic-register",
+    device,
+    token: secrets.token,
+  });
+  expect(fake.rpc).toHaveBeenCalledWith(
+    "trusted_device_register",
+    expect.objectContaining({
+      p_device: device,
+      p_token: secrets.token,
+    }),
+  );
+  expect(fake.rpc.mock.calls[0]![1].p_recovery).not.toContain(secrets.secret);
+  expect(fake.set).toHaveBeenCalled();
 });
 it("encrypts server recovery material with a private key and sets a routing-only cookie after approval", async () => {
   fake.rpc.mockResolvedValue({ registered: true, device });

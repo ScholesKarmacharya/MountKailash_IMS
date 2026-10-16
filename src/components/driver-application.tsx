@@ -26,20 +26,16 @@ import {
   connectivityFailure,
   type Connectivity,
 } from "@/domain/offline/connectivity";
-import { offlineDB, OfflineVault, storageMessage } from "@/lib/offline/store";
 import {
-  trustedDevice,
-  saveTrustedDevice,
-  unlockDevice,
-  unlockBiometric,
-  enableBiometric,
-  biometricsAvailable,
+  offlineDB,
+  OfflineVault,
+  OfflineLocalDataError,
+  storageMessage,
+} from "@/lib/offline/store";
+import {
+  getAutomaticDeviceSecrets,
+  createAutomaticDeviceSecrets,
   requireDeviceSignIn,
-  lockDriverApp,
-  validatePin,
-  deviceTabId,
-  type TrustedDevice,
-  type DeviceSecrets,
 } from "@/lib/offline/device";
 import {
   SyncController,
@@ -54,9 +50,15 @@ import {
   driverOperationAction,
   type OperationState,
 } from "@/app/operations-actions";
-import { DriverRuntimeContext, driverPaths } from "./driver-runtime-context";
+import {
+  DriverRuntimeContext,
+  driverPaths,
+  offlinePreparingMessage,
+  type OfflinePrepState,
+} from "./driver-runtime-context";
 import { LocaleProvider, LanguageSwitcher, T, Message } from "./localization";
 import { Navigation } from "./navigation";
+import { Button } from "./ui/button";
 import { SignOutButton } from "./sign-out-button";
 import { DriverHomeView } from "./driver-home-view";
 import { DriverSalesView } from "./driver-sales-view";
@@ -72,48 +74,8 @@ import { InstantDriver } from "./instant-delivery";
 import type { InstantWorkspace } from "@/domain/instant";
 import { projectedInstants } from "@/domain/offline/instant";
 import { prepareOfflineShell } from "./offline/registration";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Card } from "./ui/card";
 import { NotificationBell, LockedNotificationBell } from "./notification-bell";
-
-function VisibilityIcon({ visible }: { visible: boolean }) {
-  return visible ? (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m2 2 20 20" />
-      <path d="M6.71 6.71C4.84 8.05 3.5 9.88 3 12c1.2 4.5 4.8 7 9 7 1.35 0 2.61-.26 3.74-.74" />
-      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c4.2 0 7.8 2.5 9 7a8.88 8.88 0 0 1-2.2 3.78" />
-      <path d="M14.12 14.12A3 3 0 0 1 9.88 9.88" />
-    </svg>
-  ) : (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2.06 12.35a1 1 0 0 1 0-.7C3.38 7.6 7.1 5 12 5s8.62 2.6 9.94 6.65a1 1 0 0 1 0 .7C20.62 16.4 16.9 19 12 19s-8.62-2.6-9.94-6.65Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
 
 export type DriverData = {
   eligibleTrips?: Trip[];
@@ -205,29 +167,21 @@ function Application({
   const [mode, setMode] = useState<Connectivity>("CHECKING"),
     [message, setMessage] = useState("");
   const [connectionMessage, setConnectionMessage] = useState("");
-  const [pass, setPass] = useState(""),
-    [unlock, setUnlock] = useState(false),
-    [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<
     { id: string; trip: string; pending: number; review: number }[]
   >([]);
-  const [preparations, setPreparations] = useState<string[]>([]);
-  const [trusted, setTrusted] = useState<TrustedDevice>();
   const [deviceChecked, setDeviceChecked] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const lockedRef = useRef(false);
-  const secretsRef = useRef<DeviceSecrets | undefined>(undefined);
-  const legacySecret = useRef("");
-  const [configurePin, setConfigurePin] = useState(false);
-  const [pin, setPin] = useState(""),
-    [confirmPin, setConfirmPin] = useState("");
-  const [showPin, setShowPin] = useState(false),
-    [showConfirmPin, setShowConfirmPin] = useState(false),
-    [showPassphrase, setShowPassphrase] = useState(false);
-  const [recovery, setRecovery] = useState(false),
-    [password, setPassword] = useState("");
-  const [biometric, setBiometric] = useState(false);
-  const [selectedVault, setSelectedVault] = useState("");
+  const [signedOut, setSignedOut] = useState(false);
+  const signedOutRef = useRef(false);
+  const opening = useRef<Promise<void> | undefined>(undefined);
+  const [offlinePrepState, setOfflinePrepState] =
+    useState<OfflinePrepState>("IDLE");
+  const offlinePrepRef = useRef<OfflinePrepState>("IDLE");
+  function updateOfflinePrepState(next: OfflinePrepState) {
+    offlinePrepRef.current = next;
+    setOfflinePrepState(next);
+  }
   const [view, setView] = useState<SyncView>({
     connection: "Online",
     status: "Checking server connectivity",
@@ -264,28 +218,22 @@ function Application({
         if (current === generation.current) setDeviceChecked(true);
         return;
       }
-      const device = await trustedDevice(database, user);
       const values = await database.vaults
         .where("user")
         .equals(user)
         .sortBy("updated");
-      const prepared = await database.preparations
-        .where("user")
-        .equals(user)
-        .primaryKeys();
       if (current === generation.current) {
-        setTrusted(device);
-        lockedRef.current = !!device && !secretsRef.current;
-        setLocked(lockedRef.current);
         setDeviceChecked(true);
         setRows(values);
-        setPreparations(prepared);
       }
     } catch (error) {
       if (current === generation.current) setMessage(storageMessage(error));
     }
   }
   async function probe(force = false): Promise<Connectivity> {
+    // Explicit sign-out stays effective until normal Supabase sign-in mounts a
+    // new workspace. A delayed logout must not let a poll restore local access.
+    if (signedOutRef.current) return "AUTHENTICATION";
     if (querying.current && !force) return querying.current;
     const current = generation.current;
     const sequence = ++probeSequence.current;
@@ -305,9 +253,7 @@ function Application({
             if (controller.current) controller.current.stopped = true;
             controller.current = undefined;
             vault.current = undefined;
-            secretsRef.current = undefined;
-            legacySecret.current = "";
-            setTrusted(undefined);
+            updateOfflinePrepState("IDLE");
             setState(undefined);
             setRows([]);
           }
@@ -328,8 +274,8 @@ function Application({
               if (controller.current) controller.current.stopped = true;
               controller.current = undefined;
               vault.current = undefined;
+              updateOfflinePrepState("IDLE");
               setState(undefined);
-              setSelectedVault("");
               setNotice("");
             }
           } catch (error) {
@@ -343,10 +289,17 @@ function Application({
         modeRef.current = "ONLINE";
         setConnectionMessage("");
         try {
-          await requireDeviceSignIn(database, result.profile.id, false);
-          await database.settings.put({
-            key: "active-user",
-            value: result.profile.id,
+          await database.transaction("rw", database.settings, async () => {
+            if (current !== generation.current) return;
+            await requireDeviceSignIn(database, result.profile.id, false);
+            await database.settings.put({
+              key: "active-user",
+              value: result.profile.id,
+            });
+            if (current !== generation.current)
+              throw new Error(
+                "Sign in online again. Your saved changes are on this phone.",
+              );
           });
         } catch (error) {
           if (current === generation.current) setMessage(storageMessage(error));
@@ -406,9 +359,14 @@ function Application({
     mounted.current = true;
     let disposed = false;
     const refresh = async (event?: Event) => {
-      const connection = await probe(
-        event?.type === "online" || event?.type === "offline",
-      );
+      if (event?.type === "offline") {
+        probeSequence.current++;
+        modeRef.current = "OFFLINE";
+        setMode("OFFLINE");
+        setConnectionMessage("");
+        return;
+      }
+      const connection = await probe(event?.type === "online");
       if (!disposed && connection === "ONLINE") await controller.current?.run();
     };
     const load = () => {
@@ -424,35 +382,22 @@ function Application({
           })
           .catch((e) => setMessage(storageMessage(e)));
     };
-    const lock = (event: Event | MessageEvent) => {
-      if ((event as MessageEvent).data?.source === deviceTabId()) return;
-      const app =
-        (event as CustomEvent).detail?.app || (event as MessageEvent).data?.app;
+    const lock = () => {
       generation.current++;
       if (controller.current) controller.current.stopped = true;
       controller.current = undefined;
       vault.current = undefined;
-      secretsRef.current = undefined;
-      legacySecret.current = "";
-      lockedRef.current = true;
-      setLocked(true);
+      updateOfflinePrepState("IDLE");
+      signedOutRef.current = true;
+      setSignedOut(true);
       setState(undefined);
       setData(undefined);
       dataRef.current = undefined;
-      setPass("");
-      setPin("");
-      setConfirmPin("");
-      setPassword("");
       setRows([]);
-      setPreparations([]);
-      setSelectedVault("");
       selectedLocale.current = false;
-      if (!app) {
-        setMode("AUTHENTICATION");
-        modeRef.current = "AUTHENTICATION";
-        setMessage("Sign in online again. Device records are preserved.");
-      } else setMessage("");
-      setUnlock(true);
+      setMode("AUTHENTICATION");
+      modeRef.current = "AUTHENTICATION";
+      setMessage("Sign in online again. Your saved changes are on this phone.");
       void loadRows();
     };
     const channel = new BroadcastChannel("mk-offline-session");
@@ -497,15 +442,17 @@ function Application({
     const timer = setInterval(visible, 5000);
     // React's development Strict Mode replays effect setup/cleanup. Reopen the
     // same Dexie connection before starting requests after that replay.
-    void biometricsAvailable().then(setBiometric);
     void database
       .open()
       .catch((error) => {
         if (!disposed) setMessage(storageMessage(error));
       })
-      .then(() => {
+      .then(async () => {
         if (!disposed) {
-          void loadRows();
+          await loadRows();
+          // Restore IndexedDB independently of the network probe, including when
+          // the network claims to be online but the workspace request hangs.
+          void prepareOrOpenOfflineTrip(true);
           void refresh();
         }
       });
@@ -516,6 +463,7 @@ function Application({
       // eslint-disable-next-line react-hooks/exhaustive-deps
       generation.current++;
       querying.current = undefined;
+      opening.current = undefined;
       clearInterval(timer);
       if (controller.current) controller.current.stopped = true;
       channel.close();
@@ -552,32 +500,27 @@ function Application({
       shellPrepared.current = false;
       if (current === generation.current)
         setNotice(
-          "Offline reopening could not be prepared. Saved device records are preserved. Reconnect and unlock again before working offline.",
+          "Offline data could not be prepared. Please reconnect and try again.",
         );
     });
   }, [mode, rows.length]);
   useEffect(() => {
-    // An already unlocked, approved phone reuses its device key for the next
-    // confirmed active round. Never replace a round with pending evidence.
     if (
       mode === "ONLINE" &&
-      trusted &&
-      secretsRef.current &&
-      (data?.delivering || data?.trip?.status === "LOADED") &&
+      data?.profile.approval_status === "APPROVED" &&
+      data.profile.is_active &&
       data.trip &&
+      (data.delivering || ["LOADED", "ACTIVE"].includes(data.trip.status)) &&
       !vault.current &&
-      !busy
+      offlinePrepState === "IDLE" &&
+      deviceChecked &&
+      !signedOutRef.current
     )
-      void open();
-    // Refreshes of the same trip must not start concurrent activation requests.
+      void prepareOrOpenOfflineTrip();
+    // Failed preparation waits for Retry; polling must not replace the failure
+    // status or repeatedly register while the driver is editing a draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    mode,
-    data?.trip?.id,
-    data?.trip?.status,
-    data?.delivering,
-    trusted?.device,
-  ]);
+  }, [mode, data, deviceChecked, offlinePrepState]);
   async function refreshSnapshot() {
     const writer = vault.current,
       current = generation.current;
@@ -597,135 +540,141 @@ function Application({
       setState(next);
   }
   async function deviceRequest<T>(body: Record<string, unknown>): Promise<T> {
-    const response = await fetch("/api/driver/device", {
-      method: "POST",
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const value = await response.json();
-    if (!response.ok)
-      throw new SyncError(value.code, value.message, response.status);
-    return value;
-  }
-  async function open(useBiometric = false) {
-    setBusy(true);
-    setMessage("");
-    const current = generation.current;
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 15000);
     try {
+      const response = await fetch("/api/driver/device", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: abort.signal,
+      });
+      const value = await response.json();
+      if (!response.ok)
+        throw new SyncError(value.code, value.message, response.status);
+      return value;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  function prepareOrOpenOfflineTrip(localOnly = false): Promise<void> {
+    if (opening.current) return opening.current;
+    if (vault.current || signedOutRef.current) return Promise.resolve();
+    const current = generation.current;
+    let pendingOnPhone = 0;
+    updateOfflinePrepState("PREPARING");
+    setMessage("");
+    const activate = async () => {
+      if (current !== generation.current || signedOutRef.current) return;
+      const user = (await database.settings.get("active-user"))?.value;
       const d = dataRef.current;
+      if (!user || (profileRef.current && profileRef.current.id !== user))
+        return;
+      const copies = await database.vaults
+        .where("user")
+        .equals(user)
+        .sortBy("updated");
+      pendingOnPhone = copies.reduce((count, row) => count + row.pending, 0);
+      const candidate =
+        copies.find((r) => r.pending > 0) ??
+        copies.find((r) => r.trip === d?.trip?.id) ??
+        copies.at(-1);
       const id =
-        selectedVault ||
-        (d?.trip ? `${d.profile.id}:${d.trip.id}` : rows[rows.length - 1]?.id);
-      if (!id)
-        throw new Error(
-          "Start a confirmed loaded trip online before preparing this device.",
-        );
-      let opened: OfflineVault;
-      let created = false;
-      let secret = pass;
-      let credentials: { device: string; token: string } | undefined;
-      let deviceSecrets = secretsRef.current;
-      if (trusted && !deviceSecrets) {
-        deviceSecrets = useBiometric
-          ? await unlockBiometric(database, trusted.user)
-          : await unlockDevice(database, trusted.user, pin);
-      }
-      if (deviceSecrets) {
-        secret = pass || deviceSecrets.secret;
-        credentials = deviceSecrets;
-      }
-      const setupPin = !trusted && !!pin;
-      if (!trusted && !setupPin && pass.length < 6)
-        throw new Error("Offline passphrase must be at least 6 characters.");
-      if (setupPin) {
-        validatePin(pin);
-        if (pin !== confirmPin) throw new Error("PINs do not match.");
-        if (await database.vaults.get(id))
-          throw new Error(
-            "Unlock the existing passphrase records before changing device setup.",
-          );
-        secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
-          b.toString(16).padStart(2, "0"),
-        ).join("");
-      }
-      if (await database.vaults.get(id))
-        opened = await OfflineVault.unlock(database, id, secret);
-      else {
-        if (
-          modeRef.current !== "ONLINE" ||
-          !d?.trip ||
-          (!d.delivering && d.trip.status !== "LOADED")
-        )
-          throw new Error(
-            "Start a confirmed loaded trip online before preparing this device.",
-          );
-        credentials = await OfflineVault.prepare(
-          database,
-          d.profile.id,
-          d.trip.id,
-          secret,
-          credentials,
-        );
-        if (setupPin) {
-          deviceSecrets = { ...credentials, secret };
-          // Persist the encrypted activation credentials before a request whose
-          // response may be lost. Offline access still requires a server grant.
-          await saveTrustedDevice(database, d.profile.id, pin, deviceSecrets);
+        !localOnly && d?.trip && !candidate?.pending
+          ? `${user}:${d.trip.id}`
+          : candidate?.id;
+      if (!id || (localOnly && !candidate)) return;
+      const tripId = id.slice(user.length + 1);
+      const existing = await database.vaults.get(id);
+      let secrets = await getAutomaticDeviceSecrets(database, user);
+      if (current !== generation.current || signedOutRef.current) return;
+      let opened: OfflineVault | undefined;
+      if (existing && secrets) {
+        try {
+          opened = await OfflineVault.unlock(database, id, secrets.secret);
+        } catch (error) {
+          if (!(error instanceof OfflineLocalDataError)) throw error;
+          if (existing.pending !== 0 || existing.review !== 0) throw error;
         }
-        if (deviceSecrets)
-          await deviceRequest({
-            action: "register",
-            device: credentials.device,
-            secrets: deviceSecrets,
-          });
+      }
+      if (
+        existing &&
+        !opened &&
+        (existing.pending !== 0 || existing.review !== 0)
+      )
+        throw new OfflineLocalDataError(
+          "RECORDS",
+          "Local pending records need admin help.",
+        );
+      if (!opened) {
+        // An old setup cannot be opened with a newly generated automatic key.
+        // Only a zero-pending copy can be rebuilt online, after server approval;
+        // create() archives the old bytes atomically instead of discarding them.
+        if (localOnly) return;
+        if (modeRef.current !== "ONLINE")
+          throw new SyncError("NETWORK", "Offline preparation needs internet.");
+        if (
+          !d?.trip ||
+          d.profile.id !== user ||
+          d.profile.approval_status !== "APPROVED" ||
+          !d.profile.is_active ||
+          !["LOADED", "ACTIVE"].includes(d.trip.status)
+        )
+          return;
+        secrets ??= await createAutomaticDeviceSecrets(database, user);
+        // Persist credentials before any request whose response can be lost.
+        const credentials = await OfflineVault.prepare(
+          database,
+          user,
+          tripId,
+          secrets.secret,
+          secrets,
+          true,
+        );
+        await deviceRequest({
+          action: "automatic-register",
+          trip: tripId,
+          ...credentials,
+        });
         await prepareOfflineShell();
         shellPrepared.current = true;
         const snapshot = await offlineRequest<OfflineSnapshot>({
           action: "register",
-          trip: d.trip.id,
+          trip: tripId,
           ...credentials,
         });
-        // The driver may have changed the display language since the last
-        // confirmed snapshot. Keep that preference in the new encrypted vault.
+        if (current !== generation.current) return;
         snapshot.locale = localeRef.current;
         opened = await OfflineVault.create(
           database,
           snapshot,
           credentials.device,
           credentials.token,
-          secret,
+          secrets.secret,
+          existing,
         );
-        created = true;
-        if (!(await navigator.storage?.persist?.()))
-          setNotice(
-            "Persistent storage was not granted. Sync regularly and keep an encrypted backup. Browser data removal can erase device records.",
-          );
+        void navigator.storage?.persist?.().catch(() => false);
       }
+      if (current !== generation.current) return;
       const local = selectedLocale.current
         ? await opened.mutate((s) => {
             s.locale = localeRef.current;
           })
         : await opened.read();
       if (current !== generation.current) return;
-      if (d && local.user !== d.profile.id)
-        throw new Error(
-          "Sign in as the owner of these device records before synchronization.",
-        );
+      if (
+        local.user !== user ||
+        (dataRef.current && dataRef.current.profile.id !== user)
+      )
+        throw new Error("Sign in as the driver who saved these changes.");
       vault.current = opened;
-      secretsRef.current = deviceSecrets;
-      legacySecret.current = deviceSecrets ? "" : secret;
-      lockedRef.current = false;
-      setLocked(false);
       setState(local);
+      updateOfflinePrepState("READY");
       window.dispatchEvent(
         new CustomEvent("mk-locale-restored", { detail: local.locale }),
       );
-      setPass("");
-      setPin("");
-      setConfirmPin("");
-      setUnlock(false);
       if (controller.current) controller.current.stopped = true;
       controller.current = new SyncController(
         opened,
@@ -739,28 +688,50 @@ function Application({
         },
       );
       await loadRows();
-      if (modeRef.current === "ONLINE") {
-        void prepareOfflineShell().catch(() =>
-          setNotice(
-            "Offline reopening could not be prepared. Saved device records are preserved. Reconnect and unlock again before working offline.",
-          ),
-        );
-        if (created) {
-          // Registration already returned an authenticated, confirmed snapshot
-          // and its empty journal is durable. There is no operation to upload.
-          // The status renderer still checks pending records in every round.
-          setView({ connection: "Online", status: "All Synced" });
-        } else {
-          await controller.current.run();
-          await probe(true);
+      if (modeRef.current === "ONLINE") void controller.current.run();
+      else if (!navigator.onLine) {
+        modeRef.current = "OFFLINE";
+        setMode("OFFLINE");
+      }
+    };
+    const task = (async () => {
+      try {
+        // One activation across tabs; the second tab re-reads the durable copy.
+        if (navigator.locks)
+          await navigator.locks.request("mk:offline-prepare", activate);
+        else await activate();
+      } catch (error) {
+        if (current === generation.current) {
+          updateOfflinePrepState("FAILED");
+          setMessage(
+            error instanceof SyncError
+              ? error.code === "DEVICE_RESET_REQUIRED"
+                ? "This trip is linked to another phone. Ask the warehouse admin to reset offline access."
+                : error.code === "MIGRATION_REQUIRED"
+                  ? "Offline access needs an update. Ask the warehouse admin."
+                  : error.code === "NETWORK"
+                    ? "Offline data could not be prepared. Please reconnect and try again."
+                    : "Offline data could not be prepared. Please contact the admin if this continues."
+              : error instanceof OfflineLocalDataError
+                ? pendingOnPhone > 0
+                  ? "Saved records on this phone need help from the admin. Keep this app's data."
+                  : "Offline data could not be prepared. Please reconnect and try again."
+                : storageMessage(error),
+          );
         }
       }
-    } catch (error) {
-      setMessage(storageMessage(error));
-      await loadRows();
-    } finally {
-      setBusy(false);
-    }
+    })().finally(() => {
+      if (opening.current === task) opening.current = undefined;
+      // A local-only restore with no saved trip leaves startup free to prepare
+      // the online trip, even if its probe finished during this same promise.
+      if (
+        current === generation.current &&
+        offlinePrepRef.current === "PREPARING"
+      )
+        updateOfflinePrepState("IDLE");
+    });
+    opening.current = task;
+    return task;
   }
   async function record(
     kind: Parameters<OfflineVault["record"]>[0],
@@ -770,15 +741,14 @@ function Application({
     if (saving.current) throw new Error("Saving…");
     saving.current = true;
     setBusy(true);
+    setNotice("");
+    setMessage("");
     const writer = vault.current,
       current = generation.current,
       synchronizer = controller.current;
     try {
       if (!writer) {
-        setUnlock(true);
-        throw new Error(
-          "Unlock device records before saving. Your draft is preserved.",
-        );
+        throw new Error(offlinePreparingMessage);
       }
       if (
         ["AUTHENTICATION", "AUTHORIZATION", "DATABASE"].includes(
@@ -794,39 +764,19 @@ function Application({
         local = await writer.record(kind, draft, id);
       if (current === generation.current && vault.current === writer)
         setState(local);
-      if (current === generation.current && modeRef.current === "ONLINE") {
-        // A background run may already own the lease. Wait for it, then flush this
-        // exact outbox operation; never issue an independent second sale.
-        const deadline = Date.now() + 45000;
-        while (
-          synchronizer?.running &&
-          !synchronizer.stopped &&
-          Date.now() < deadline
-        )
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        if (current === generation.current) await synchronizer?.run(true);
-        local = await writer.read();
-        if (current === generation.current && vault.current === writer)
-          setState(local);
-        if (local.operations.find((o) => o.id === id)?.status === "SYNCED") {
-          if (current === generation.current) setNotice("Saved to Supabase.");
-          return "Saved to Supabase.";
-        }
-        if (current === generation.current) await probe();
-      }
-      const saved = local.operations.find((o) => o.id === id)!;
-      const result =
-        saved.status === "NEEDS_REVIEW"
-          ? "Saved on Device. Admin review required."
-          : "Saved on Device";
-      if (current === generation.current) setNotice(result);
-      return result;
+      // The durable journal commit is the success boundary. Upload happens
+      // independently and always reuses this operation's UUID and payload.
+      if (current === generation.current && modeRef.current === "ONLINE")
+        void synchronizer?.run();
+      if (current === generation.current) setNotice("Saved on phone");
+      return "Saved on phone";
     } finally {
       saving.current = false;
       if (current === generation.current) setBusy(false);
     }
   }
   const runtime = {
+    offlinePrepState,
     revision: JSON.stringify(
       state
         ? [
@@ -849,15 +799,18 @@ function Application({
       }
     },
     async customer(trip: string, id: string, signal: AbortSignal) {
-      if (modeRef.current === "OFFLINE") {
-        if (!vault.current) {
-          setUnlock(true);
-          throw new Error(
-            "Unlock device records before saving. Your draft is preserved.",
-          );
+      if (vault.current) {
+        const local = await vault.current.read();
+        try {
+          if (modeRef.current === "ONLINE")
+            void refreshSnapshot().catch(() => {});
+          return projectedCustomer(local, id);
+        } catch {
+          /* fetch missing context online */
         }
-        return projectedCustomer(await vault.current.read(), id);
       }
+      if (modeRef.current === "OFFLINE")
+        throw new Error("Connect to internet once before starting this trip.");
       try {
         const local = vault.current ? await vault.current.read() : undefined;
         const resolved = local ? resolvedCustomer(local, id)! : id;
@@ -885,26 +838,31 @@ function Application({
     },
     async submit(form: FormData): Promise<OperationState> {
       try {
-        if (lockedRef.current)
+        if (signedOutRef.current)
           throw new Error(
-            "Unlock device records before saving. Your draft is preserved.",
+            "Sign in online again. Your saved changes are on this phone.",
           );
         const operation = String(form.get("operation")),
           id = String(form.get("key"));
+        // UI gating is also enforced here for stale/programmatic submissions.
+        // Never wait for preparation inside a delivery save or touch its draft.
+        if (
+          ["driver-visit", "instant"].includes(operation) &&
+          (offlinePrepRef.current !== "READY" || !vault.current)
+        )
+          return { error: offlinePreparingMessage };
         if (!vault.current) {
-          if (dataRef.current?.round || modeRef.current !== "ONLINE") {
-            setUnlock(true);
-            throw new Error(
-              "Unlock device records before saving. Your draft is preserved.",
-            );
-          }
+          if (!["start", "continue"].includes(operation))
+            return { error: offlinePreparingMessage };
+          if (modeRef.current !== "ONLINE")
+            throw new Error("Connect to internet to start this trip.");
           let result: OperationState;
           try {
             result = await driverOperationAction(null, form);
           } catch (error) {
             if ((await probe(true)) === "OFFLINE")
               throw new Error(
-                "Unlock device records to use your confirmed offline stock.",
+                "Connect to internet once before starting this trip.",
               );
             throw error;
           }
@@ -913,34 +871,28 @@ function Application({
             "Use the registered offline device for this delivery round."
           ) {
             await probe(true);
-            setUnlock(true);
             return {
-              error:
-                "Unlock device records before saving. Your draft is preserved.",
+              error: offlinePreparingMessage,
             };
           }
           if (result?.error && (await probe(true)) === "OFFLINE") {
-            setUnlock(true);
             return {
-              error:
-                "Unlock device records to use your confirmed offline stock.",
+              error: "Connect to internet once before starting this trip.",
             };
           }
           if (result?.success) {
             if (operation === "start" || operation === "submit")
-              setNotice("Saved to Supabase.");
+              setNotice("Record saved.");
             // A request begun before this write can contain stale inventory or
             // ACTIVE status. Fetch a newer version before presenting success.
             await probe(true);
-            return { ...result, success: "Saved to Supabase." };
+            return { ...result, success: "Record saved." };
           }
           return result;
         }
         const local = await vault.current.read();
         if (String(form.get("trip")) !== local.snapshot.round.trip_id)
-          throw new Error(
-            "Unlock the device records for the selected delivery round.",
-          );
+          throw new Error("Open the trip that is saved on this phone.");
         let success: string;
         if (operation === "driver-visit" || operation === "instant") {
           const items = JSON.parse(
@@ -979,7 +931,7 @@ function Application({
               items,
               walk_name: String(form.get("walk_name") ?? ""),
               walk_phone: String(form.get("walk_phone") ?? ""),
-              notes: String(form.get("notes") ?? ""),
+              notes: instant ? String(form.get("notes") ?? "") : "",
               status: String(form.get("payment_status")),
               received: String(form.get("received_amount") ?? "") || null,
               total: invoiceTotal(
@@ -1037,6 +989,15 @@ function Application({
           );
         } else if (operation === "pause") {
           success = await record("PAUSE", { manifest: [] }, id);
+        } else if (operation === "submit") {
+          success = await record(
+            "SUBMIT",
+            {
+              counts: JSON.parse(String(form.get("counts"))),
+              manifest: [],
+            },
+            id,
+          );
         } else {
           if (modeRef.current !== "ONLINE")
             throw new Error(
@@ -1044,13 +1005,15 @@ function Application({
             );
           const result = await driverOperationAction(null, form);
           if (result?.success) {
-            if (["start", "continue"].includes(operation))
-              setNotice("Saved to Supabase.");
             await controller.current?.run(true);
+            if (["start", "continue"].includes(operation))
+              await refreshSnapshot();
             await probe(true);
+            if (["start", "continue"].includes(operation))
+              setNotice("Record saved.");
           }
           return result?.success
-            ? { ...result, success: "Saved to Supabase." }
+            ? { ...result, success: "Record saved." }
             : result;
         }
         return { success, id: String(form.get("id") || id) };
@@ -1069,7 +1032,7 @@ function Application({
   };
   const projected = state ? projectedWorkspace(state) : undefined;
   const shown =
-    !deviceChecked || locked
+    !deviceChecked || signedOut
       ? undefined
       : data && !state
         ? data
@@ -1119,14 +1082,6 @@ function Application({
       .reduce((n, r) => n + r.pending, 0) +
     (state ? state.operations.filter((o) => o.status !== "SYNCED").length : 0);
   const trip = shown?.trip;
-  const selectedId =
-    selectedVault ||
-    (data?.trip
-      ? `${data.profile.id}:${data.trip.id}`
-      : rows[rows.length - 1]?.id);
-  const existingVault = rows.some((r) => r.id === selectedId);
-  const otherDevice =
-    !!data?.round && !existingVault && !preparations.includes(selectedId ?? "");
   return (
     <LocaleProvider
       initialLocale={state?.locale ?? data?.locale ?? initialLocale}
@@ -1187,7 +1142,7 @@ function Application({
                   online={mode === "ONLINE"}
                   unlocked={
                     deviceChecked &&
-                    !locked &&
+                    !signedOut &&
                     mode !== "AUTHORIZATION" &&
                     (mode === "ONLINE" ||
                       !state ||
@@ -1198,7 +1153,7 @@ function Application({
                     state
                       ? async (notifications) => {
                           const active = vault.current;
-                          if (!active || locked) return;
+                          if (!active || signedOut) return;
                           await active.mutate((local) => {
                             if (local.user === profile.id)
                               local.notifications = notifications;
@@ -1210,88 +1165,7 @@ function Application({
               ) : (
                 <LockedNotificationBell />
               )}
-              {state && !trusted && mode === "ONLINE" && (
-                <Button variant="outline" onClick={() => setConfigurePin(true)}>
-                  <T k="Set unlock PIN" />
-                </Button>
-              )}
-              {trusted && !locked && (
-                <Button variant="outline" onClick={() => void lockDriverApp()}>
-                  <T k="Lock App" />
-                </Button>
-              )}
               {profile && <SignOutButton user={profile.id} driver />}
-              {trusted && (
-                <details className="relative">
-                  <summary className="cursor-pointer">
-                    <T k="Device access" />
-                  </summary>
-                  <div className="space-y-3 rounded-lg border bg-card p-3">
-                    <Button variant="outline" onClick={() => setRecovery(true)}>
-                      <T k="Recover PIN online" />
-                    </Button>
-                    {biometric && !locked && (
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          void enableBiometric(
-                            database,
-                            trusted.user,
-                            secretsRef.current!,
-                          )
-                            .then(loadRows)
-                            .catch((e) => setMessage(storageMessage(e)));
-                        }}
-                      >
-                        <T k="Enable device biometric unlock" />
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      disabled={
-                        busy ||
-                        pending > 0 ||
-                        !state?.sealed ||
-                        mode !== "ONLINE"
-                      }
-                      onClick={() => {
-                        void (async () => {
-                          try {
-                            if (
-                              (
-                                await database.vaults
-                                  .where("user")
-                                  .equals(trusted.user)
-                                  .toArray()
-                              ).some((r) => r.pending)
-                            )
-                              throw new Error(
-                                "Sync all pending records before removing this device.",
-                              );
-                            await deviceRequest({
-                              action: "remove",
-                              device: trusted.device,
-                            });
-                            await requireDeviceSignIn(
-                              database,
-                              trusted.user,
-                              true,
-                            );
-                            await lockDriverApp();
-                            setMessage(
-                              "Device access removed. Encrypted records are preserved.",
-                            );
-                          } catch (e) {
-                            setMessage(storageMessage(e));
-                          }
-                        })();
-                      }}
-                    >
-                      <T k="Remove Device" />
-                    </Button>
-                  </div>
-                </details>
-              )}
             </div>
             <div className="mx-auto max-w-7xl">
               <Navigation role="DRIVER" />
@@ -1302,538 +1176,81 @@ function Application({
             className="mx-auto max-w-3xl space-y-5 p-5 sm:p-8"
           >
             <Card className="space-y-2" data-testid="driver-sync-status">
-              {trusted &&
-                state &&
-                Date.now() < Date.parse(state.snapshot.authorizedUntil) && (
-                  <p>
-                    <T k="Device Ready" />
-                  </p>
-                )}
               <p>
-                <Message
-                  value={
-                    mode === "ONLINE"
-                      ? "Online"
-                      : mode === "OFFLINE"
-                        ? "Offline"
-                        : mode === "CHECKING"
-                          ? "Checking server connectivity"
-                          : mode === "SERVER_UNAVAILABLE"
-                            ? "Server unavailable. Device records are preserved."
-                            : mode === "AUTHENTICATION"
-                              ? "Sign in online again. Device records are preserved."
-                              : mode === "AUTHORIZATION"
-                                ? "Driver authorization is unavailable. Saved records need review."
-                                : "Database update required. Contact the admin."
-                  }
-                />
+                <T k={mode === "OFFLINE" ? "Offline" : "Online"} />
               </p>
-              <p data-testid="pending-sync-count">
-                <T k="Pending records: {0}" values={[pending]} />
-              </p>
-              <p role="status">
-                <Message
-                  value={
-                    state &&
-                    !pending &&
-                    view.status === "All Synced" &&
-                    mode === "ONLINE"
-                      ? "All Synced"
-                      : state
-                        ? view.status === "All Synced"
-                          ? "Waiting to Sync"
-                          : view.status
-                        : pending
-                          ? "Unlock device records to synchronize pending transactions."
-                          : "Device records are locked"
-                  }
-                />
-              </p>
-              {view.message && (
-                <p>
-                  <Message value={view.message} />
+              {(offlinePrepState === "READY" || pending > 0) && (
+                <p role="status" data-testid="pending-sync-count">
+                  {mode === "OFFLINE" ? (
+                    <T k="{0} changes saved on this phone" values={[pending]} />
+                  ) : view.status === "Sync Failed" ||
+                    view.status === "Needs Review" ? (
+                    <T k="Saved on phone" />
+                  ) : pending ? (
+                    <T k="Syncing {0} changes..." values={[pending]} />
+                  ) : (
+                    <T k="All synced" />
+                  )}
                 </p>
               )}
-              <Button
-                variant="outline"
-                disabled={!!state}
-                onClick={() => setUnlock((v) => !v)}
-              >
-                <Message
-                  value={
-                    state
-                      ? "Device records unlocked"
-                      : existingVault || pending
-                        ? "Device access"
-                        : "Set up offline access"
-                  }
-                />
-              </Button>
-              {state && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void probe().then((m) => {
-                      if (m === "ONLINE") void controller.current?.run(true);
-                    });
-                  }}
-                >
-                  <T k="Retry synchronization" />
-                </Button>
+              {mode === "OFFLINE" && (
+                <p>
+                  <T k="They will sync automatically when internet returns." />
+                </p>
+              )}
+              {mode !== "OFFLINE" &&
+                (view.status === "Sync Failed" ||
+                  view.status === "Needs Review") && (
+                  <p>
+                    <T k="We'll try again when internet is available." />
+                  </p>
+                )}
+              {offlinePrepState === "PREPARING" && (
+                <p role="status">
+                  <T k="Preparing trip for offline use..." />
+                </p>
+              )}
+              {offlinePrepState === "FAILED" && (
+                <div role="alert" className="space-y-2">
+                  <p>
+                    <T k="Could not prepare offline data." />
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void prepareOrOpenOfflineTrip()}
+                  >
+                    <T k="Retry" />
+                  </Button>
+                </div>
+              )}
+              {offlinePrepState === "READY" && (
+                <>
+                  <p>
+                    <span>
+                      <T k="Offline ready" />
+                    </span>{" "}
+                    <span aria-hidden="true">✓</span>
+                  </p>
+                  <p>
+                    <T k="You can continue deliveries without internet." />
+                  </p>
+                </>
               )}
             </Card>
-            {(unlock ||
-              (locked && !!trusted) ||
-              (!shown && mode !== "CHECKING" && rows.length > 0)) && (
-              <Card className="space-y-4" id="device-unlock">
-                <p>
-                  <Message
-                    value={
-                      trusted
-                        ? "Unlock App"
-                        : existingVault
-                          ? "Unlock your device records using your offline passphrase. Supabase passwords are never stored here."
-                          : "Set a PIN for this approved phone, or keep using an offline passphrase."
-                    }
-                  />
-                </p>
-                {rows.some((r) => r.id !== selectedId) && (
-                  <label className="grid gap-2">
-                    <T k="Delivery round" />
-                    <select
-                      value={selectedId}
-                      onChange={(e) => setSelectedVault(e.target.value)}
-                    >
-                      {rows.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.trip} · {r.pending}
-                        </option>
-                      ))}
-                      {data?.trip &&
-                        !rows.some((r) => r.trip === data.trip!.id) && (
-                          <option value={`${data.profile.id}:${data.trip.id}`}>
-                            {data.trip.id}
-                          </option>
-                        )}
-                    </select>
-                  </label>
-                )}
-                {otherDevice && (
-                  <p role="alert">
-                    <T k="Unlock this round on the browser and device where it was prepared. Contact the warehouse admin if those records are unavailable." />
-                  </p>
-                )}
-                {!trusted && !existingVault && (
-                  <>
-                    <label className="grid gap-2">
-                      <T k="Enter PIN" />
-                      <div className="relative">
-                        <Input
-                          type={showPin ? "text" : "password"}
-                          inputMode="numeric"
-                          autoComplete="new-password"
-                          value={pin}
-                          maxLength={4}
-                          onChange={(e) =>
-                            setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                          }
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPin((value) => !value)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          aria-label={showPin ? "Hide PIN" : "Show PIN"}
-                        >
-                          <VisibilityIcon visible={showPin} />
-                        </button>
-                      </div>
-                    </label>
-                    <label className="grid gap-2">
-                      <T k="Confirm PIN" />
-                      <div className="relative">
-                        <Input
-                          type={showConfirmPin ? "text" : "password"}
-                          inputMode="numeric"
-                          autoComplete="new-password"
-                          value={confirmPin}
-                          maxLength={4}
-                          onChange={(e) =>
-                            setConfirmPin(
-                              e.target.value.replace(/\D/g, "").slice(0, 4),
-                            )
-                          }
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowConfirmPin((value) => !value)
-                          }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          aria-label={
-                            showConfirmPin ? "Hide PIN" : "Show PIN"
-                          }
-                        >
-                          <VisibilityIcon visible={showConfirmPin} />
-                        </button>
-                      </div>
-                    </label>
-                    <p>
-                      <T k="Choose a 4-digit PIN; avoid repeated or consecutive digits." />
-                    </p>
-                  </>
-                )}
-                {trusted ? (
-                  <label className="grid gap-2">
-                    <T k="Enter PIN" />
-                    <div className="relative">
-                      <Input
-                        type={showPin ? "text" : "password"}
-                        inputMode="numeric"
-                        autoComplete="off"
-                        value={pin}
-                        maxLength={4}
-                        onChange={(e) =>
-                          setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                        }
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPin((value) => !value)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        aria-label={showPin ? "Hide PIN" : "Show PIN"}
-                      >
-                        <VisibilityIcon visible={showPin} />
-                      </button>
-                    </div>
-                  </label>
-                ) : (
-                  <label className="grid gap-2">
-                    <T k="Offline passphrase" />
-                    <div className="relative">
-                      <Input
-                        type={showPassphrase ? "text" : "password"}
-                        autoComplete="off"
-                        value={pass}
-                        onChange={(e) => setPass(e.target.value)}
-                        minLength={6}
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowPassphrase((value) => !value)
-                        }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        aria-label={
-                          showPassphrase
-                            ? "Hide offline passphrase"
-                            : "Show offline passphrase"
-                        }
-                      >
-                        <VisibilityIcon visible={showPassphrase} />
-                      </button>
-                    </div>
-                  </label>
-                )}
-                {trusted?.biometric && (
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => void open(true)}
-                  >
-                    <T k="Unlock with device biometrics" />
-                  </Button>
-                )}
-                {trusted && existingVault && (
-                  <details>
-                    <summary className="cursor-pointer">
-                      <T k="Older passphrase records" />
-                    </summary>
-                    <p>
-                      <T k="Use the original passphrase for an older delivery round. Its saved records are preserved." />
-                    </p>
-                    <label className="grid gap-2">
-                      <T k="Offline passphrase" />
-                      <div className="relative">
-                        <Input
-                          type={showPassphrase ? "text" : "password"}
-                          autoComplete="off"
-                          value={pass}
-                          onChange={(e) => setPass(e.target.value)}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowPassphrase((value) => !value)
-                          }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          aria-label={
-                            showPassphrase
-                              ? "Hide offline passphrase"
-                              : "Show offline passphrase"
-                          }
-                        >
-                          <VisibilityIcon visible={showPassphrase} />
-                        </button>
-                      </div>
-                    </label>
-                  </details>
-                )}
-                <Button
-                  disabled={
-                    busy ||
-                    mode === "CHECKING" ||
-                    otherDevice ||
-                    (!existingVault &&
-                      ((!data?.delivering && data?.trip?.status !== "LOADED") ||
-                        mode !== "ONLINE"))
-                  }
-                  onClick={() => void open()}
-                >
-                  <Message
-                    value={
-                      busy
-                        ? "Saving…"
-                        : trusted && existingVault
-                          ? "Unlock App"
-                          : existingVault
-                            ? "Unlock device records"
-                            : "Prepare this device online"
-                    }
-                  />
-                </Button>
-              </Card>
-            )}
-            {trusted && recovery && (
-              <Card className="space-y-3">
-                <h2>
-                  <T k="Recover PIN online" />
-                </h2>
-                <p>
-                  <T k="Reauthenticate online to reset your PIN. Saved transactions are preserved." />
-                </p>
-                <a className="underline" href="/sign-in?reauth=1">
-                  <T k="Sign in online" />
-                </a>
-                <label className="grid gap-2">
-                  <T k="Password" />
-                  <Input
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </label>
-                <label className="grid gap-2">
-                  <T k="New PIN" />
-                  <div className="relative">
-                    <Input
-                      type={showPin ? "text" : "password"}
-                      inputMode="numeric"
-                      autoComplete="new-password"
-                      value={pin}
-                      maxLength={4}
-                      onChange={(e) =>
-                        setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                      }
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPin((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showPin ? "Hide PIN" : "Show PIN"}
-                    >
-                      <VisibilityIcon visible={showPin} />
-                    </button>
-                  </div>
-                </label>
-                <label className="grid gap-2">
-                  <T k="Confirm PIN" />
-                  <div className="relative">
-                    <Input
-                      type={showConfirmPin ? "text" : "password"}
-                      inputMode="numeric"
-                      autoComplete="new-password"
-                      value={confirmPin}
-                      maxLength={4}
-                      onChange={(e) =>
-                        setConfirmPin(
-                          e.target.value.replace(/\D/g, "").slice(0, 4),
-                        )
-                      }
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowConfirmPin((value) => !value)
-                      }
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showConfirmPin ? "Hide PIN" : "Show PIN"}
-                    >
-                      <VisibilityIcon visible={showConfirmPin} />
-                    </button>
-                  </div>
-                </label>
-                <Button
-                  disabled={busy || mode !== "ONLINE"}
-                  onClick={() => {
-                    void (async () => {
-                      setBusy(true);
-                      setMessage("");
-                      try {
-                        validatePin(pin);
-                        if (pin !== confirmPin)
-                          throw new Error("PINs do not match.");
-                        const secrets = await deviceRequest<DeviceSecrets>({
-                          action: "recover",
-                          device: trusted.device,
-                          password,
-                        });
-                        await saveTrustedDevice(
-                          database,
-                          trusted.user,
-                          pin,
-                          secrets,
-                        );
-                        setPassword("");
-                        setPin("");
-                        setConfirmPin("");
-                        setRecovery(false);
-                        await loadRows();
-                        setNotice(
-                          "PIN updated. Your saved records are preserved.",
-                        );
-                      } catch (e) {
-                        setMessage(storageMessage(e));
-                      } finally {
-                        setBusy(false);
-                      }
-                    })();
-                  }}
-                >
-                  <T k="Reset PIN" />
-                </Button>
-              </Card>
-            )}
-            {state && !trusted && configurePin && (
-              <Card className="space-y-3">
-                <h2>
-                  <T k="Set unlock PIN" />
-                </h2>
-                <label className="grid gap-2">
-                  <T k="Enter PIN" />
-                  <div className="relative">
-                    <Input
-                      type={showPin ? "text" : "password"}
-                      inputMode="numeric"
-                      autoComplete="new-password"
-                      value={pin}
-                      maxLength={4}
-                      onChange={(e) =>
-                        setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                      }
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPin((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showPin ? "Hide PIN" : "Show PIN"}
-                    >
-                      <VisibilityIcon visible={showPin} />
-                    </button>
-                  </div>
-                </label>
-                <label className="grid gap-2">
-                  <T k="Confirm PIN" />
-                  <div className="relative">
-                    <Input
-                      type={showConfirmPin ? "text" : "password"}
-                      inputMode="numeric"
-                      autoComplete="new-password"
-                      value={confirmPin}
-                      maxLength={4}
-                      onChange={(e) =>
-                        setConfirmPin(
-                          e.target.value.replace(/\D/g, "").slice(0, 4),
-                        )
-                      }
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowConfirmPin((value) => !value)
-                      }
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showConfirmPin ? "Hide PIN" : "Show PIN"}
-                    >
-                      <VisibilityIcon visible={showConfirmPin} />
-                    </button>
-                  </div>
-                </label>
-                <Button
-                  disabled={busy || mode !== "ONLINE"}
-                  onClick={() => {
-                    void (async () => {
-                      setBusy(true);
-                      setMessage("");
-                      try {
-                        validatePin(pin);
-                        if (pin !== confirmPin)
-                          throw new Error("PINs do not match.");
-                        const secrets = {
-                          secret: legacySecret.current,
-                          device: state.device,
-                          token: state.token,
-                        };
-                        await deviceRequest({
-                          action: "register",
-                          device: state.device,
-                          secrets,
-                        });
-                        await saveTrustedDevice(
-                          database,
-                          state.user,
-                          pin,
-                          secrets,
-                        );
-                        secretsRef.current = secrets;
-                        setPin("");
-                        setConfirmPin("");
-                        setConfigurePin(false);
-                        await loadRows();
-                        setNotice(
-                          "PIN updated. Your saved records are preserved.",
-                        );
-                      } catch (e) {
-                        setMessage(storageMessage(e));
-                      } finally {
-                        setBusy(false);
-                      }
-                    })();
-                  }}
-                >
-                  <T k="Save PIN" />
-                </Button>
-              </Card>
-            )}
             {message && (
               <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">
                 <Message value={message} />
               </p>
             )}
-            {connectionMessage && (
-              <p role="alert" className="rounded-lg bg-amber-50 p-4">
-                <Message value={connectionMessage} />
-              </p>
-            )}
+            {connectionMessage &&
+              ["AUTHENTICATION", "AUTHORIZATION", "DATABASE"].includes(
+                mode,
+              ) && (
+                <p role="alert" className="rounded-lg bg-amber-50 p-4">
+                  <Message value={connectionMessage} />
+                </p>
+              )}
             {state?.sealed && (
               <p role="status">
                 <T k="This delivery round is sealed. No new sales can be recorded." />
@@ -1861,6 +1278,8 @@ function Application({
                       <>
                         <Card id="add-delivery">
                           <DeliveryForm
+                            // Preparation and sync never change this key. Only a
+                            // confirmed save followed by Continue resets a draft.
                             key={`${trip.id}:${epoch}`}
                             simplifiedPayment
                             workspace={shown.workspace}
@@ -2033,9 +1452,7 @@ function Application({
                   value={
                     mode === "CHECKING"
                       ? "Loading workspace…"
-                      : rows.length
-                        ? "Unlock device records to use your confirmed offline stock."
-                        : "Activate this device online before using offline access."
+                      : "Connect to internet once before starting this trip."
                   }
                 />
               </p>
@@ -2046,25 +1463,6 @@ function Application({
               <a className="inline-block underline" href="/sign-in?reauth=1">
                 <T k="Sign in online" />
               </a>
-            )}
-            {state && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void vault.current!.exportBackup().then((value) => {
-                    const url = URL.createObjectURL(
-                      new Blob([value], { type: "application/json" }),
-                    );
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `kailash-encrypted-${state.snapshot.round.trip_id}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  });
-                }}
-              >
-                <T k="Export encrypted backup" />
-              </Button>
             )}
           </main>
           <footer className="p-5 text-xs text-muted-foreground">

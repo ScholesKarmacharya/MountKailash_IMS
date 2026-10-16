@@ -1,6 +1,74 @@
 import type { OfflineDatabase } from "./store";
 
 export type DeviceSecrets = { secret: string; device: string; token: string };
+type AutomaticDevice = DeviceSecrets & { requiresSignIn: boolean };
+const automaticKey = (user: string) => `automatic-device:${user}`;
+export async function getAutomaticDeviceSecrets(
+  db: OfflineDatabase,
+  user: string,
+) {
+  const row = await db.settings.get(automaticKey(user));
+  if (!row) return undefined;
+  const value = JSON.parse(row.value) as AutomaticDevice;
+  if (value.requiresSignIn)
+    throw new Error(
+      "Sign in online again. Your saved changes are on this phone.",
+    );
+  return { secret: value.secret, device: value.device, token: value.token };
+}
+export async function saveAutomaticDeviceSecrets(
+  db: OfflineDatabase,
+  user: string,
+  secrets: DeviceSecrets,
+) {
+  // Insert once, including across tabs. Never replace a key that encrypts history.
+  return db.transaction("rw", db.settings, async () => {
+    const existing = await getAutomaticDeviceSecrets(db, user);
+    if (existing) return existing;
+    await db.settings.add({
+      key: automaticKey(user),
+      value: JSON.stringify({ ...secrets, requiresSignIn: false }),
+    });
+    return secrets;
+  });
+}
+export async function createAutomaticDeviceSecrets(
+  db: OfflineDatabase,
+  user: string,
+) {
+  const hex = () =>
+    Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+  return saveAutomaticDeviceSecrets(db, user, {
+    secret: hex(),
+    device: crypto.randomUUID(),
+    token: hex(),
+  });
+}
+export async function clearAutomaticDeviceSecrets(
+  db: OfflineDatabase,
+  user: string,
+) {
+  await db.transaction(
+    "rw",
+    db.settings,
+    db.vaults,
+    db.preparations,
+    db.archives,
+    async () => {
+      if (
+        (await db.vaults.where("user").equals(user).count()) ||
+        (await db.preparations.where("user").equals(user).count()) ||
+        (await db.archives.filter((entry) => entry.row.user === user).count())
+      )
+        throw new Error(
+          "Keep this phone's saved data until the admin has reviewed it.",
+        );
+      await db.settings.delete(automaticKey(user));
+    },
+  );
+}
 type Box = { iv: number[]; cipher: number[] };
 export type TrustedDevice = {
   user: string;
@@ -160,6 +228,15 @@ export async function requireDeviceSignIn(
   required: boolean,
 ) {
   await db.transaction("rw", db.settings, async () => {
+    const automatic = await db.settings.get(automaticKey(user));
+    if (automatic)
+      await db.settings.put({
+        ...automatic,
+        value: JSON.stringify({
+          ...JSON.parse(automatic.value),
+          requiresSignIn: required,
+        }),
+      });
     const row = await trustedDevice(db, user);
     if (row) await put(db, { ...row, requiresSignIn: required });
   });

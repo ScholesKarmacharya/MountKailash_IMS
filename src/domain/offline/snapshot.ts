@@ -2,6 +2,7 @@ import type { LocalState, OfflineSnapshot } from "./types";
 import { confirmAcknowledgement } from "./operations";
 import { confirmedCustomerContext } from "@/domain/operations/confirmed-customer";
 import { can } from "@/domain/auth/roles";
+import { uuid } from "@/domain/inventory/validation";
 const mismatch =
   "Server confirmation did not match. The record remains on this device.";
 export function installConfirmedSnapshot(
@@ -27,23 +28,55 @@ export function installConfirmedSnapshot(
     ) ||
     !Number.isFinite(Date.parse(snapshot.fetchedAt)) ||
     !Number.isFinite(Date.parse(snapshot.authorizedUntil)) ||
+    Date.parse(snapshot.fetchedAt) < Date.parse(state.snapshot.fetchedAt) ||
+    (snapshot.round.phase === "PREPARED" &&
+      state.snapshot.round.phase !== "PREPARED") ||
     !Number.isSafeInteger(snapshot.round.confirmed_sequence) ||
     snapshot.round.confirmed_sequence < state.snapshot.round.confirmed_sequence
   )
     throw new Error(mismatch);
   const receipts = snapshot.receipts.filter((r) => r.status === "CONFIRMED");
+  const inherited = state.inheritedReceipts ?? [];
+  for (const receipt of inherited) {
+    uuid(receipt.id);
+    if (!receipt.result || !Number.isFinite(Date.parse(receipt.processedAt)))
+      throw new Error(mismatch);
+    uuid(receipt.result);
+  }
   if (
     new Set(receipts.map((r) => r.id)).size !== receipts.length ||
     new Set(receipts.map((r) => r.sequence)).size !== receipts.length ||
-    receipts.length !== snapshot.round.confirmed_sequence
+    receipts.length !== snapshot.round.confirmed_sequence ||
+    inherited.some(
+      (r, i) =>
+        r.status !== "CONFIRMED" ||
+        r.sequence !== i + 1 ||
+        r.trip !== snapshot.round.trip_id ||
+        !/^[a-f0-9]{64}$/.test(r.fingerprint),
+    )
   )
     throw new Error(mismatch);
   for (const receipt of receipts) {
+    const previous = inherited.find((r) => r.id === receipt.id);
+    if (previous) {
+      if (
+        previous.sequence !== receipt.sequence ||
+        previous.trip !== receipt.trip ||
+        previous.fingerprint !== receipt.fingerprint ||
+        previous.result !== receipt.result ||
+        previous.processedAt !== receipt.processedAt ||
+        (previous.customer ?? null) !== (receipt.customer ?? null)
+      )
+        throw new Error(mismatch);
+      continue;
+    }
     const op = state.operations.find((o) => o.id === receipt.id);
     if (!op || receipt.sequence > snapshot.round.confirmed_sequence)
       throw new Error(mismatch);
     confirmAcknowledgement(op, receipt);
   }
+  if (inherited.some((r) => !receipts.some((next) => next.id === r.id)))
+    throw new Error(mismatch);
   for (const op of state.operations) {
     const receipt = receipts.find((r) => r.id === op.id);
     if (
@@ -68,7 +101,8 @@ export function installConfirmedSnapshot(
   // Validate EVERYTHING before replacing any confirmed state. Queued payloads,
   // stable IDs, sequences and fingerprints are never rewritten by a download.
   for (const receipt of receipts) {
-    const op = state.operations.find((o) => o.id === receipt.id)!;
+    const op = state.operations.find((o) => o.id === receipt.id);
+    if (!op) continue; // Validated inherited history has no local draft to replay.
     op.status = "SYNCED";
     op.acknowledgement = receipt;
     op.message = undefined;

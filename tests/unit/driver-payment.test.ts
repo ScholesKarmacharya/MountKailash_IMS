@@ -4,6 +4,25 @@ import { parseCommand } from "@/domain/operations/commands";
 const id = "00000000-0000-0000-0000-000000000001";
 const paid = (amount: string) =>
   driverPaymentPlan({ status: "PAID", total: "300.50", amount, customer: id });
+it("records a Fonepay delivery as pending digital payment rather than cash", () => {
+  expect(
+    driverPaymentPlan({
+      status: "FONEPAY",
+      total: "300.50",
+      amount: "300.50",
+      customer: id,
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      method: "FONEPAY",
+      amount: "300.50",
+      current_amount: "300.50",
+    }),
+  ]);
+  expect(parseCommand(form("FONEPAY"))).toMatchObject({
+    args: { p_status: "FONEPAY", p_received: "300.50" },
+  });
+});
 it("requires an explicit exact Paid amount and creates only the current cash receipt", () => {
   expect(paid("300.5")).toEqual([
     {

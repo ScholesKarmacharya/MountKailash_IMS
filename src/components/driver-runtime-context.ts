@@ -3,7 +3,12 @@ import { createContext, useContext } from "react";
 import type { OperationState } from "@/app/operations-actions";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
 
+export type OfflinePrepState = "IDLE" | "PREPARING" | "READY" | "FAILED";
+export const offlinePreparingMessage =
+  "Offline data is still being prepared. Please wait a moment.";
+
 export type DriverRuntime = {
+  offlinePrepState: OfflinePrepState;
   revision: string;
   cachedCustomer: (customer: string) => DeliveryCustomerContext | undefined;
   customer: (

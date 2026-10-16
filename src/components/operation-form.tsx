@@ -81,6 +81,8 @@ export function OperationForm({
   actions,
   successActions,
   submitDisabled = false,
+  submitHint,
+  submitBlockedMessage,
   onSuccess,
   preserveFields = false,
 }: {
@@ -98,13 +100,17 @@ export function OperationForm({
   actions?: React.ReactNode;
   successActions?: React.ReactNode;
   submitDisabled?: boolean;
+  submitHint?: React.ReactNode;
+  submitBlockedMessage?: string;
   onSuccess?: () => void;
   preserveFields?: boolean;
 }) {
   const { t } = useLocale();
   const runtime = useDriverRuntime();
+  const [blockedMessage, setBlockedMessage] = useState("");
   const [state, action, pending] = useActionState(
     async (previous: Parameters<typeof operationAction>[0], form: FormData) => {
+      if (submitDisabled) return { error: submitBlockedMessage };
       window.dispatchEvent(new Event("operation-saving"));
       try {
         const result = runtime
@@ -154,6 +160,11 @@ export function OperationForm({
       onChange={() => setDirty(true)}
       onClick={() => setDirty(true)}
       onSubmit={(e) => {
+        if (submitDisabled) {
+          e.preventDefault();
+          setBlockedMessage(submitBlockedMessage ?? "");
+          return;
+        }
         if (!showSubmit || !window.confirm(t(confirm))) e.preventDefault();
       }}
     >
@@ -173,7 +184,13 @@ export function OperationForm({
           ) : (
             submitButton
           ))}
+        {showSubmit && submitHint}
       </fieldset>
+      {submitDisabled && blockedMessage && (
+        <p role="alert">
+          <Message value={blockedMessage} />
+        </p>
+      )}
       {state?.error && (
         <div
           role="alert"

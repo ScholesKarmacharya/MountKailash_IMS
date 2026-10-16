@@ -3,8 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fixtureClient, fixtureIds } from "../operations-e2e/fixture-client";
 import { shiftDate } from "../../src/domain/localization/calendar";
 import type { DayDetail } from "../../src/domain/business-days/types";
-const provider = "http://127.0.0.1:17778",
-  pin = "582947";
+const provider = "http://127.0.0.1:17778";
 async function en(page: Page) {
   await page.getByRole("button", { name: "English", exact: true }).click();
 }
@@ -93,29 +92,17 @@ test("a next-day night load survives offline reopening and reconnects exactly on
   // can show assigned stock, but cannot start or deliver before authorization.
   await login(page);
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Enter PIN", { exact: true }).fill(pin);
-  await page.getByLabel("Confirm PIN", { exact: true }).fill(pin);
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await context.setOffline(true);
   await page.reload();
   await en(page);
-  await page
-    .locator("#device-unlock")
-    .getByLabel("Enter PIN", { exact: true })
-    .fill(pin);
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock App", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
   await expect(
     page.getByRole("button", { name: "Start delivering", exact: true }),
@@ -180,9 +167,9 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     .getByRole("button", { name: "Start delivering", exact: true })
     .click();
   await expect(
-    page.getByText("Saved to Supabase.", { exact: true }).first(),
+    page.getByText("Record saved.", { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await context.setOffline(true);
@@ -199,20 +186,13 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
   await expect(
-    page.getByText("Saved on Device", { exact: true }).first(),
+    page.getByText("Saved on phone", { exact: true }).first(),
   ).toBeVisible();
   await nav(page, "My Stock");
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("35");
   await page.reload();
   await en(page);
-  await page
-    .locator("#device-unlock")
-    .getByLabel("Enter PIN", { exact: true })
-    .fill(pin);
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock App", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("35");
   // Lose the reply only AFTER the durable server commit; the automatic retry
   // must recognize the original ID instead of inserting another delivery.
@@ -228,7 +208,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
   });
   await context.setOffline(false);
   await expect.poll(() => committed, { timeout: 30000 }).toBe(true);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   const w = await admin.workspace(trips[1]);
@@ -262,7 +242,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
       )
       .first(),
   ).toBeVisible();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   for (const trip of trips)
@@ -340,10 +320,10 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
   await expect(
-    page.getByText("Saved on Device", { exact: true }).first(),
+    page.getByText("Saved on phone", { exact: true }).first(),
   ).toBeVisible();
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   expect(

@@ -1,6 +1,6 @@
 // Only public shell/static assets. Never cache authenticated HTML, API data,
 // Supabase responses, POST requests, invoices or administrative pages.
-const CACHE = "mount-kailash-shell-v2";
+const CACHE = "mount-kailash-shell-v3";
 async function prepare(resources = []) {
   const cache = await caches.open(CACHE);
   const shell = await fetch(new Request("/offline", { cache: "reload" }));
@@ -86,7 +86,7 @@ self.addEventListener("fetch", (event) => {
           return response;
         } catch {
           // Older application caches may still exist for open tabs. Always
-          // reopen with this worker's shell, which understands trusted PINs.
+          // reopen with this worker's shell, which restores automatic access.
           return (
             (await (await caches.open(CACHE)).match("/offline")) ??
             Response.error()

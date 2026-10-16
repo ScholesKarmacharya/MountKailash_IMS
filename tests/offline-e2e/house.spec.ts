@@ -33,11 +33,10 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
   await expect(
     page.getByRole("button", { name: "English", exact: true }),
   ).toBeEnabled();
-  const onlineLookup = page.waitForResponse((r) =>
-    r.url().includes(`/customers/${f.customer}/context`),
-  );
   await page.goto(`/driver/delivery?customer=${f.customer}`);
-  expect((await onlineLookup).status()).toBe(200);
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
   const onlineSale = page.locator("form").filter({
     has: page.locator('input[name="operation"][value="driver-visit"]'),
   });
@@ -53,7 +52,9 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
     .click();
   const savedResponse = page.waitForResponse(
     (r) =>
-      r.url().includes("/driver/delivery") && r.request().method() === "POST",
+      r.url().includes("/api/driver/offline") &&
+      r.request().method() === "POST" &&
+      r.request().postDataJSON()?.action === "post",
   );
   await onlineSale
     .getByRole("button", { name: "Save Delivery", exact: true })
@@ -65,20 +66,17 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
     .toBe(1);
   await page.goto("/offline");
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Offline passphrase").fill("house-offline-passphrase");
-  await page
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText(
     "85",
     {
       timeout: 30000,
     },
   );
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await context.setOffline(true);
@@ -102,7 +100,7 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
     .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
   await expect(
-    page.getByText("Saved on Device", { exact: true }).first(),
+    page.getByText("Saved on phone", { exact: true }).first(),
   ).toBeVisible();
   await page
     .getByRole("navigation")
@@ -111,18 +109,13 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("80");
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page.getByLabel("Offline passphrase").fill("house-offline-passphrase");
-  await page
-    .getByRole("button", { name: "Unlock device records", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("80");
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
-  await page
-    .getByRole("button", { name: "Retry synchronization", exact: true })
-    .click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   const finances = await f.admin.rpc<FinanceWorkspace>("finance_workspace", {});
   expect(finances.sales).toHaveLength(2);
   expect(finances.sales[0]?.supply_classification).toBe("FREE_SUPPLY");
@@ -163,13 +156,9 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
   await page.getByRole("button", { name: "English", exact: true }).click();
   await page.goto("/admin/pricing");
   const deliveries = page
-    .getByRole("article")
-    .filter({ hasText: "Offline House" });
+    .getByTestId("free-delivery-history")
+    .locator('[data-testid^="free-delivery-"]');
   await expect(deliveries).toHaveCount(2);
-  await expect(
-    deliveries.filter({ hasText: "Jars Delivered: 15" }),
-  ).toHaveCount(1);
-  await expect(deliveries.filter({ hasText: "Jars Delivered: 5" })).toHaveCount(
-    1,
-  );
+  await expect(deliveries.filter({ hasText: "15 jars" })).toHaveCount(1);
+  await expect(deliveries.getByText(/(?:^|\s)5 jars$/)).toHaveCount(1);
 });

@@ -33,6 +33,8 @@ export function AdminDialog({
   triggerLabel,
   context,
   primary = false,
+  destructive = false,
+  disabled = false,
   icon,
   languageSwitch = false,
   children,
@@ -41,6 +43,8 @@ export function AdminDialog({
   triggerLabel: string;
   context?: string;
   primary?: boolean;
+  destructive?: boolean;
+  disabled?: boolean;
   icon?: ReactNode;
   languageSwitch?: boolean;
   children: ReactNode;
@@ -75,6 +79,12 @@ export function AdminDialog({
         ref={trigger}
         type="button"
         variant={primary ? "default" : "outline"}
+        className={
+          destructive
+            ? "border-red-700 text-red-800 hover:bg-red-50"
+            : undefined
+        }
+        disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}

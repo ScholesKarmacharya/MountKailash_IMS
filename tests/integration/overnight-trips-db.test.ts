@@ -243,6 +243,37 @@ afterEach(async () => {
   await db.exec("rollback;reset role");
 });
 
+it("prepares all customer contexts for an assigned LOADED trip without permitting deliveries", async () => {
+  const trip = await prepare();
+  await who(driverA);
+  const contexts = await rpc<
+    { customer: { id: string }; pending_jars: unknown[]; credit: unknown[] }[]
+  >("offline_contexts", [trip]);
+  expect(contexts.map((c) => c.customer.id)).toEqual(
+    expect.arrayContaining([customerA, customerB]),
+  );
+  expect(contexts[0]!.credit).toEqual([]);
+  expect(contexts[0]!.pending_jars).toEqual([]);
+  await rejected(
+    "post_driver_delivery",
+    [
+      trip,
+      customerA,
+      "",
+      "",
+      JSON.stringify([
+        { product_id: jar, full_jars: 1, empty_jars: 0, cartons: 0 },
+      ]),
+      "CREDIT",
+      null,
+      "",
+      randomUUID(),
+    ],
+    /active|start/i,
+  );
+  await who(driverB);
+  await rejected("offline_contexts", [trip], /Assigned trip/);
+});
 it("reproduces the old closing conflict and completes 170 -> 85/65/20, next-day 50/30 deliveries and verified returns", async () => {
   const a = await prepare(),
     b = await prepare(65, driverB, vehicleB),

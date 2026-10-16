@@ -69,6 +69,31 @@ async function markDevice() {
 export async function trustedDeviceCommand(body: Record<string, unknown>) {
   const profile = await offlineIdentity(),
     device = uuid(String(body.device));
+  if (body.action === "automatic-register") {
+    if (typeof body.token !== "string" || !/^[a-f0-9]{64}$/.test(body.token))
+      throw new OfflineServerError("INVALID", "Invalid offline record.", 400);
+    // Check the trip BEFORE registering this installation. Otherwise a failed
+    // legacy-round transfer leaves an unrelated approved device behind.
+    if (body.trip !== undefined)
+      await offlineRpc("offline_preparation_access", {
+        p_trip: uuid(String(body.trip)),
+        p_device: device,
+        p_token: body.token,
+      });
+    const result = await offlineRpc("trusted_device_register", {
+      p_device: device,
+      p_token: body.token,
+      p_name: "Driver phone",
+      // Automatic keys stay on the installation; no user password or key upload.
+      p_recovery: JSON.stringify({
+        version: 2,
+        automatic: true,
+        keyStoredOnDevice: true,
+      }),
+    });
+    await markDevice();
+    return result;
+  }
   if (body.action === "register") {
     const value = body.secrets as DeviceSecrets | undefined;
     if (

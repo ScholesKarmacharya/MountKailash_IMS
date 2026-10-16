@@ -1,7 +1,7 @@
 import { cents, decimal } from "./money";
 import type { PaymentDraft } from "./types";
 export type DriverPaymentStatus =
-  "PAID" | "CREDIT" | "RETURN_ONLY" | "FREE_SUPPLY";
+  "PAID" | "FONEPAY" | "CREDIT" | "RETURN_ONLY" | "FREE_SUPPLY";
 /** A driver new sale settles only its current invoice, using exact minor units. */
 export function driverPaymentPlan({
   status,
@@ -35,7 +35,7 @@ export function driverPaymentPlan({
     ? []
     : [
         {
-          method: "CASH",
+          method: status === "FONEPAY" ? "FONEPAY" : "CASH",
           amount: decimal(cents(amount)),
           current_amount: decimal(cents(amount)),
           deposit_amount: "0.00",

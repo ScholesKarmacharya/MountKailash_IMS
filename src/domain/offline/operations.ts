@@ -107,6 +107,9 @@ export function localStock(state: LocalState) {
         ["EMPTY_JAR", i.empty_jars],
         ["BOTTLE_CARTON", -i.cartons],
       ] as const) {
+        // Zero quantities do not introduce another stock kind for this product.
+        // A jar delivery must never fabricate a carton row in return counts.
+        if (delta === 0) continue;
         let row = balances.find(
           (b) => b.product_id === i.product_id && b.stock_kind === kind,
         );

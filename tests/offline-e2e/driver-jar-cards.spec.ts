@@ -50,16 +50,11 @@ test("same customer cards survive offline reopening, keep device estimates and r
   await expect(page).toHaveURL(/driver\/home/);
   await page.getByRole("button", { name: "English", exact: true }).click();
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("92");
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page.getByLabel("Enter PIN", { exact: true }).fill("582947");
-  await page.getByLabel("Confirm PIN", { exact: true }).fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await nav(page, "Unreturned Jars");
@@ -112,14 +107,7 @@ test("same customer cards survive offline reopening, keep device estimates and r
     .click();
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .locator("#device-unlock")
-    .getByLabel("Enter PIN", { exact: true })
-    .fill("582947");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock App", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-pending-total")).toHaveText("8");
   await expect(
     card.getByText("Saved on Device", { exact: true }),
@@ -134,7 +122,7 @@ test("same customer cards survive offline reopening, keep device estimates and r
     fullPage: true,
   });
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   await expect(card.getByText("Saved on Device", { exact: true })).toHaveCount(

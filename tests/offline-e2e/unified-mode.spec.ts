@@ -1,6 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip } from "../operations-e2e/fixture-client";
-import { customerErrorMessages } from "../../src/domain/operations/customer-errors";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 import { randomUUID } from "node:crypto";
 async function login(page: Page, role = "driver") {
@@ -15,17 +14,11 @@ async function login(page: Page, role = "driver") {
   await page.getByRole("button", { name: "English", exact: true }).click();
 }
 async function prepare(page: Page) {
-  await page
-    .getByRole("button", { name: "Set up offline access", exact: true })
-    .click();
-  await page
-    .getByLabel("Offline passphrase")
-    .fill("unified-fixture-passphrase");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Prepare this device online", exact: true })
-    .click();
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
+
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
 }
@@ -53,7 +46,7 @@ test("a second browser keeps the online form but cannot replace the registered w
   ).toBeVisible();
   await sale(page, 3, false);
   await expect(
-    formFor(page).getByText("Saved on Device", { exact: true }),
+    formFor(page).getByText("Saved on phone", { exact: true }),
   ).toBeVisible();
   const secondContext = await browser.newContext({
     baseURL: new URL(page.url()).origin,
@@ -66,16 +59,19 @@ test("a second browser keeps the online form but cannot replace the registered w
     await nav(second, "New Sale");
     await expect(second).toHaveURL(/\/driver\/delivery$/);
     await expect(second.getByLabel("Offline passphrase")).toHaveCount(0);
-    await sale(second, 2);
+    await sale(second, 2, true, false);
     await expect(
-      second.locator("#device-unlock").getByRole("alert"),
-    ).toContainText("browser and device where it was prepared");
-    await expect(
-      second.locator("#device-unlock").getByRole("button", {
-        name: "Prepare this device online",
-        exact: true,
-      }),
+      second.getByRole("button", { name: "Save Delivery", exact: true }),
     ).toBeDisabled();
+    await expect(
+      second
+        .getByRole("alert")
+        .filter({
+          hasText:
+            "This trip is linked to another phone. Ask the warehouse admin to reset offline access.",
+        })
+        .first(),
+    ).toBeVisible();
     await expect(
       formFor(second)
         .getByRole("region", { name: "20L test jar" })
@@ -94,23 +90,21 @@ test("a second browser keeps the online form but cannot replace the registered w
       },
     });
     expect(denied.status()).toBe(403);
-    expect((await denied.json()).code).toBe("AUTHORIZATION");
+    expect((await denied.json()).code).toBe("DEVICE_RESET_REQUIRED");
     expect((await f.admin.workspace(f.trip)).visits).toHaveLength(0);
   } finally {
     await secondContext.close();
     await context.setOffline(false);
   }
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
   const confirmed = await f.admin.workspace(f.trip);
   expect(confirmed.visits).toHaveLength(1);
   expect(confirmed.items.reduce((n, i) => n + i.full_jars, 0)).toBe(3);
-  await expect(page.getByTestId("pending-sync-count")).toHaveText(
-    "Pending records: 0",
-  );
+  await expect(page.getByTestId("pending-sync-count")).toHaveText("All synced");
 });
-async function sale(page: Page, full: number, paid = true) {
+async function sale(page: Page, full: number, paid = true, submit = true) {
   const form = formFor(page);
   await form
     .getByRole("button", { name: "Refresh customer", exact: true })
@@ -124,6 +118,7 @@ async function sale(page: Page, full: number, paid = true) {
   await form
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
+  if (!submit) return;
   await form
     .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
@@ -155,9 +150,11 @@ test("one interface: 100 loaded, 20 online, 15 offline, reopen, automatic confir
   await prepare(page);
   await sale(page, 20);
   await expect(
-    formFor(page).getByText("Saved to Supabase.", { exact: true }),
+    formFor(page).getByText("Saved on phone", { exact: true }),
   ).toBeVisible();
-  expect((await f.admin.workspace(f.trip)).visits).toHaveLength(1);
+  await expect
+    .poll(async () => (await f.admin.workspace(f.trip)).visits.length)
+    .toBe(1);
   await nav(page, "My Stock");
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("80");
   await nav(page, "New Sale");
@@ -169,34 +166,26 @@ test("one interface: 100 loaded, 20 online, 15 offline, reopen, automatic confir
   ).toBeVisible();
   await sale(page, 15, false);
   await expect(
-    formFor(page).getByText("Saved on Device", { exact: true }),
+    formFor(page).getByText("Saved on phone", { exact: true }),
   ).toBeVisible();
   await nav(page, "My Stock");
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
-  expect((await f.admin.workspace(f.trip)).visits).toHaveLength(1);
+  await expect
+    .poll(async () => (await f.admin.workspace(f.trip)).visits.length)
+    .toBe(1);
   await page.reload();
   await expect(page).toHaveURL(/\/driver\/home$/);
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .getByLabel("Offline passphrase")
-    .fill("unified-fixture-passphrase");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock device records", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
   await nav(page, "Sales History");
   await expect(page.getByText(/Saved on Device/).first()).toBeVisible();
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 45000,
   });
-  await expect(page.getByTestId("pending-sync-count")).toHaveText(
-    "Pending records: 0",
-  );
-  await page
-    .getByRole("button", { name: "Retry synchronization", exact: true })
-    .click();
+  await expect(page.getByTestId("pending-sync-count")).toHaveText("All synced");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   const w = await f.admin.workspace(f.trip);
   expect(w.visits).toHaveLength(2);
   expect(w.items.reduce((n, i) => n + i.full_jars, 0)).toBe(35);
@@ -230,86 +219,24 @@ test("one interface: 100 loaded, 20 online, 15 offline, reopen, automatic confir
     await adminContext.close();
   }
 });
-test("customer database and permission responses do not switch to offline or erase the draft", async ({
+test("cached customer details remain usable when online refresh requests fail", async ({
   page,
   request,
 }) => {
-  page.on("dialog", (d) => d.accept());
-  await activeFixtureTrip(request);
-  await login(page);
-  await nav(page, "New Sale");
-  const form = formFor(page);
-  await form.getByLabel("Jars Delivered", { exact: true }).fill("3");
-  for (const [status, code, message] of [
-    [503, "SCHEMA", customerErrorMessages.SCHEMA],
-    [403, "AUTHORIZATION", customerErrorMessages.AUTHORIZATION],
-    [401, "AUTHENTICATION", customerErrorMessages.AUTHENTICATION],
-  ] as const) {
-    await page.route("**/api/driver/customers/*/context*", (route) =>
-      route.fulfill({ status, json: { code, message } }),
-    );
-    await form
-      .getByRole("button", { name: "Refresh customer", exact: true })
-      .click();
-    await expect(
-      form.getByRole("alert").filter({ hasText: message }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByTestId("driver-sync-status")
-        .getByText("Online", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      form.getByLabel("Jars Delivered", { exact: true }),
-    ).toHaveValue("3");
-    await expect(
-      form.getByRole("button", { name: "Review delivery", exact: true }),
-    ).toBeDisabled();
-    await page.unroute("**/api/driver/customers/*/context*");
-  }
-});
-test("online locked registered device keeps the normal sales form and unlocks inline", async ({
-  page,
-  request,
-}) => {
-  page.on("dialog", (d) => d.accept());
   await activeFixtureTrip(request);
   await login(page);
   await prepare(page);
-  await page.goto("/driver/delivery");
-  await expect(page).toHaveURL(/\/driver\/delivery$/);
-  await expect(page.getByLabel("Offline passphrase")).toHaveCount(0);
-  await sale(page, 2);
-  await expect(formFor(page).getByRole("alert")).toContainText(
-    "Unlock device records before saving",
-  );
-  await page
-    .getByLabel("Offline passphrase")
-    .fill("unified-fixture-passphrase");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock device records", exact: true })
-    .click();
-  await expect(
-    formFor(page).getByLabel("Jars Delivered", { exact: true }),
-  ).toHaveValue("2");
-  await expect(
-    formFor(page).getByLabel("Total Amount Received (NPR)", { exact: true }),
-  ).toHaveValue("300.50");
-  await formFor(page)
-    .getByRole("button", { name: "Review delivery", exact: true })
-    .click();
-  await formFor(page)
-    .getByRole("button", { name: "Save Delivery", exact: true })
-    .click();
-  await expect(
-    formFor(page).getByText("Saved to Supabase.", { exact: true }),
-  ).toBeVisible();
-  await nav(page, "Customers");
-  await nav(page, "Unreturned Jars");
-  await nav(page, "Return to Warehouse");
   await nav(page, "New Sale");
-  await expect(page.getByLabel("Offline passphrase")).toHaveCount(0);
+  await page.route("**/api/driver/customers/*/context*", (route) =>
+    route.fulfill({ status: 503, json: { code: "SCHEMA" } }),
+  );
+  await formFor(page)
+    .getByRole("button", { name: "Refresh customer", exact: true })
+    .click();
+  await formFor(page).getByLabel("Jars Delivered", { exact: true }).fill("3");
+  await expect(
+    formFor(page).getByRole("button", { name: "Review delivery", exact: true }),
+  ).toBeEnabled();
 });
 
 test("a lost online acknowledgement is reconciled after reopening without posting the sale or payment twice", async ({
@@ -341,23 +268,21 @@ test("a lost online acknowledgement is reconciled after reopening without postin
   const key = await formFor(page).locator('input[name="key"]').inputValue();
   await sale(page, 2);
   await expect(
-    formFor(page).getByText("Saved on Device", { exact: true }),
+    formFor(page).getByText("Saved on phone", { exact: true }),
   ).toBeVisible();
-  expect((await fixture.admin.workspace(fixture.trip)).visits).toHaveLength(1);
+  await expect
+    .poll(
+      async () => (await fixture.admin.workspace(fixture.trip)).visits.length,
+    )
+    .toBe(1);
   await page.unroute("**/api/driver/offline");
   await nav(page, "My Stock");
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await page
-    .getByLabel("Offline passphrase")
-    .fill("unified-fixture-passphrase");
-  await page
-    .locator("#device-unlock")
-    .getByRole("button", { name: "Unlock device records", exact: true })
-    .click();
+
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("98");
   await context.setOffline(false);
-  await expect(page.getByText("All Synced", { exact: true })).toBeVisible({
+  await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 45000,
   });
   expect(keys).toEqual([key]);
@@ -369,7 +294,5 @@ test("a lost online acknowledgement is reconciled after reopening without postin
   expect(finance.payments).toHaveLength(1);
   expect(finance.invoices).toHaveLength(1);
   expect((await fixture.admin.workspace(fixture.trip)).items).toHaveLength(1);
-  await expect(page.getByTestId("pending-sync-count")).toHaveText(
-    "Pending records: 0",
-  );
+  await expect(page.getByTestId("pending-sync-count")).toHaveText("All synced");
 });

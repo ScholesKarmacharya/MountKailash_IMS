@@ -57,6 +57,23 @@ export async function offlineRpc<T>(
 ): Promise<T> {
   const { data, error } = await (await createClient()).rpc(name, args);
   if (error) {
+    // Preserve a specific ownership diagnosis, including races after preflight
+    // and older registration RPCs. Never expose arbitrary database messages.
+    if (
+      error.code === "MK001" ||
+      (error.code === "42501" &&
+        [
+          "Only one trusted device is allowed. Ask the admin to review the existing device.",
+          "Use the approved trusted device for this driver.",
+          "An explicit admin device reset is required for this trip.",
+          "Use the registered offline device for this delivery round.",
+        ].includes(error.message))
+    )
+      throw new OfflineServerError(
+        "DEVICE_RESET_REQUIRED",
+        "This trip is linked to another phone. Ask the warehouse admin to reset offline access.",
+        403,
+      );
     if (
       [
         "PGRST202",

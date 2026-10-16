@@ -210,6 +210,246 @@ afterEach(async () => {
   await db.delete();
 });
 describe("encrypted offline durability", () => {
+  it("preserves an unreadable legacy setup before reserving automatic credentials, without claiming it contains deliveries", async () => {
+    await OfflineVault.prepare(db, user, trip, "old-setup-passphrase");
+    const original = await db.preparations.get(vault.id);
+    const credentials = { device: crypto.randomUUID(), token: "b".repeat(64) };
+    expect(
+      await OfflineVault.prepare(
+        db,
+        user,
+        trip,
+        "new-automatic-secret",
+        credentials,
+        true,
+      ),
+    ).toEqual(credentials);
+    expect(
+      await OfflineVault.prepare(
+        db,
+        user,
+        trip,
+        "new-automatic-secret",
+        credentials,
+        true,
+      ),
+    ).toEqual(credentials);
+    const archives = await db.archives.toArray();
+    expect(archives).toHaveLength(1);
+    expect(archives[0]).toMatchObject({ kind: "SETUP", row: original });
+    expect((await vault.read()).operations).toHaveLength(0);
+  });
+  it("never replaces a legacy setup or local journal with pending deliveries", async () => {
+    await OfflineVault.prepare(db, user, trip, "old-setup-passphrase");
+    await vault.record("DELIVERY", sale(1, 0));
+    const original = await db.vaults.get(vault.id),
+      preparation = await db.preparations.get(vault.id);
+    await expect(
+      OfflineVault.prepare(
+        db,
+        user,
+        trip,
+        "new-automatic-secret",
+        undefined,
+        true,
+      ),
+    ).rejects.toThrow("admin");
+    await expect(
+      OfflineVault.create(
+        db,
+        snapshot(),
+        device,
+        "a".repeat(64),
+        "new-automatic-secret",
+        original,
+      ),
+    ).rejects.toThrow("admin");
+    expect(await db.vaults.get(vault.id)).toEqual(original);
+    expect(await db.preparations.get(vault.id)).toEqual(preparation);
+    expect(await db.archives.count()).toBe(0);
+  });
+  it("archives a zero-pending journal byte-for-byte before rebuilding from confirmed receipts", async () => {
+    const op = (await vault.record("DELIVERY", sale(1, 0))).operations[0]!;
+    const receipt: Receipt = {
+      id: op.id,
+      trip,
+      sequence: 1,
+      fingerprint: op.fingerprint,
+      status: "CONFIRMED",
+      result: crypto.randomUUID(),
+      message: null,
+      processedAt: new Date().toISOString(),
+    };
+    await vault.acknowledge(op, receipt);
+    const original = (await db.vaults.get(vault.id))!;
+    const fresh = snapshot();
+    fresh.round.confirmed_sequence = 1;
+    fresh.receipts = [receipt];
+    const rebuilt = await OfflineVault.create(
+      db,
+      fresh,
+      device,
+      "a".repeat(64),
+      "new-automatic-secret",
+      original,
+    );
+    expect((await rebuilt.read()).inheritedReceipts).toEqual([receipt]);
+    expect((await rebuilt.read()).operations).toHaveLength(0);
+    const archive = (await db.archives.toArray())[0]!;
+    expect(archive).toMatchObject({ kind: "RECORDS", row: original });
+    const recovery = new OfflineDatabase(
+      `archive-recovery-${crypto.randomUUID()}`,
+    );
+    try {
+      await recovery.vaults.add(archive.row);
+      const saved = await OfflineVault.unlock(
+        recovery,
+        vault.id,
+        "offline-test-passphrase",
+      );
+      expect((await saved.read()).operations[0]).toMatchObject({
+        ...op,
+        status: "SYNCED",
+        acknowledgement: receipt,
+      });
+    } finally {
+      await recovery.delete();
+    }
+  });
+  it("upgrades the existing IndexedDB schema without changing stored ciphertext", async () => {
+    const name = `legacy-schema-${crypto.randomUUID()}`,
+      original = (await db.vaults.get(vault.id))!;
+    const legacy = new Dexie(name);
+    legacy.version(2).stores({
+      vaults: "id,user,trip",
+      settings: "key",
+      leases: "key",
+      preparations: "id,user,trip",
+    });
+    await legacy.table("vaults").add(original);
+    legacy.close();
+    const upgraded = new OfflineDatabase(name);
+    try {
+      expect(await upgraded.vaults.get(vault.id)).toEqual(original);
+      expect(await upgraded.archives.count()).toBe(0);
+    } finally {
+      await upgraded.delete();
+    }
+  });
+  it("keeps return counts limited to assigned product and stock kinds during pending deliveries", async () => {
+    const saved = await vault.record("DELIVERY", sale(5, 2));
+    expect(localStock(saved).map((c) => [c.product_id, c.stock_kind])).toEqual([
+      [jar, "FULL_JAR"],
+      [jar, "EMPTY_JAR"],
+      [carton, "BOTTLE_CARTON"],
+    ]);
+    expect(
+      localStock(saved).find(
+        (c) => c.product_id === jar && c.stock_kind === "FULL_JAR",
+      )!.quantity,
+    ).toBe(95);
+  });
+  it("retains server-received review envelopes on a replacement without skipping or changing them", async () => {
+    const original = (await vault.record("DELIVERY", sale(5, 0)))
+      .operations[0]!;
+    const replacementDB = new OfflineDatabase(
+      `review-replacement-${crypto.randomUUID()}`,
+    );
+    try {
+      const fresh = snapshot();
+      fresh.retainedOperations = [original];
+      fresh.receipts = [
+        {
+          id: original.id,
+          trip,
+          sequence: 1,
+          fingerprint: original.fingerprint,
+          status: "NEEDS_REVIEW",
+          result: null,
+          message: "Review original delivery",
+          processedAt: new Date().toISOString(),
+        },
+      ];
+      const replacement = await OfflineVault.create(
+        replacementDB,
+        fresh,
+        device,
+        "a".repeat(64),
+        "random-installation-secret",
+      );
+      const retained = (await replacement.read()).operations[0]!;
+      expect(retained).toMatchObject({
+        id: original.id,
+        sequence: original.sequence,
+        payload: original.payload,
+        fingerprint: original.fingerprint,
+        status: "NEEDS_REVIEW",
+      });
+      await expect(replacement.record("DELIVERY", sale(1, 0))).rejects.toThrow(
+        "Resolve records needing review",
+      );
+    } finally {
+      await replacementDB.delete();
+    }
+  });
+  it("reopens a replacement journal at the confirmed sequence and seals with inherited receipts without replaying them", async () => {
+    const replacementDB = new OfflineDatabase(
+      `replacement-${crypto.randomUUID()}`,
+    );
+    try {
+      const fresh = snapshot();
+      fresh.round.confirmed_sequence = 1;
+      fresh.workspace.balances[0]!.quantity = 90;
+      const receipt: Receipt = {
+        id: crypto.randomUUID(),
+        trip,
+        sequence: 1,
+        fingerprint: "a".repeat(64),
+        status: "CONFIRMED",
+        result: crypto.randomUUID(),
+        message: null,
+        processedAt: new Date().toISOString(),
+      };
+      fresh.receipts = [receipt];
+      const replacement = await OfflineVault.create(
+        replacementDB,
+        fresh,
+        device,
+        "a".repeat(64),
+        "random-installation-secret",
+      );
+      const local = await replacement.record("DELIVERY", sale(5, 0));
+      expect(local.operations[0]!.sequence).toBe(2);
+      expect(
+        localStock(local).find((c) => c.stock_kind === "FULL_JAR")!.quantity,
+      ).toBe(85);
+      const reopened = await OfflineVault.unlock(
+        replacementDB,
+        replacement.id,
+        "random-installation-secret",
+      );
+      expect((await reopened.read()).inheritedReceipts).toEqual([receipt]);
+      const tampered = structuredClone(fresh);
+      tampered.receipts[0]!.fingerprint = "b".repeat(64);
+      await expect(reopened.installSnapshot(tampered)).rejects.toThrow(
+        "Server confirmation did not match",
+      );
+      const sealed = await reopened.record("SUBMIT", {
+        counts: [],
+        manifest: [],
+      });
+      expect(sealed.operations[1]!.sequence).toBe(3);
+      expect(JSON.parse(sealed.operations[1]!.payload).manifest).toEqual([
+        { id: receipt.id, fingerprint: receipt.fingerprint },
+        {
+          id: local.operations[0]!.id,
+          fingerprint: local.operations[0]!.fingerprint,
+        },
+      ]);
+    } finally {
+      await replacementDB.delete();
+    }
+  });
   it("records a one-time reference and sale atomically, then collects empties without duplicating a sale", async () => {
     // Legacy vaults must refresh their authorized snapshot before this new UI
     // advertises entry; the operation data itself remains backward compatible.
@@ -487,6 +727,22 @@ describe("encrypted offline durability", () => {
       expect(await vault.read()).toEqual(before);
     },
   );
+  it("rejects delayed prepared and older snapshots after the trip has become active", async () => {
+    const current = await vault.read();
+    const prepared = snapshot();
+    prepared.round.phase = "PREPARED";
+    await expect(vault.installSnapshot(prepared)).rejects.toThrow(
+      "Server confirmation did not match",
+    );
+    const stale = snapshot();
+    stale.fetchedAt = new Date(
+      Date.parse(current.snapshot.fetchedAt) - 1000,
+    ).toISOString();
+    await expect(vault.installSnapshot(stale)).rejects.toThrow(
+      "Server confirmation did not match",
+    );
+    expect(await vault.read()).toEqual(current);
+  });
   it("rejects regressing server snapshots and never announces success for a malformed snapshot", async () => {
     await vault.record("DELIVERY", sale());
     const op = (await vault.read()).operations[0]!,
@@ -657,6 +913,65 @@ describe("encrypted offline durability", () => {
     ]);
     expect(posts).toBe(1);
     expect((await vault.read()).operations[0]!.status).toBe("SYNCED");
+  });
+  it("automatically runs again when a journal commit arrives during the final snapshot download", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let downloading = false,
+      downloads = 0,
+      posts = 0;
+    const receipts: Receipt[] = [];
+    const request = async <T>(body?: Record<string, unknown>): Promise<T> => {
+      if (!body) return { profile: { id: user } } as T;
+      const fresh = snapshot();
+      fresh.round.confirmed_sequence = receipts.length;
+      fresh.receipts = [...receipts];
+      if (body.action === "checkin")
+        return { round: fresh.round, receipts: fresh.receipts } as T;
+      if (body.action === "snapshot") {
+        if (++downloads === 1) {
+          downloading = true;
+          await held;
+        }
+        return fresh as T;
+      }
+      if (body.action === "post") {
+        posts++;
+        const op = body.operation as import("@/domain/offline/types").Envelope;
+        const receipt: Receipt = {
+          id: op.id,
+          trip,
+          sequence: op.sequence,
+          fingerprint: op.fingerprint,
+          status: "CONFIRMED",
+          result: crypto.randomUUID(),
+          message: null,
+          processedAt: new Date().toISOString(),
+        };
+        receipts.push(receipt);
+        return receipt as T;
+      }
+      throw new Error("Unexpected request");
+    };
+    const controller = new SyncController(
+      vault,
+      () => {},
+      () => {},
+      request,
+    );
+    const initial = controller.run();
+    await vi.waitFor(() => expect(downloading).toBe(true));
+    await vault.record("DELIVERY", sale(1, 0));
+    await controller.run(); // Queued while the first run owns the lease.
+    release();
+    await initial;
+    await vi.waitFor(async () =>
+      expect((await vault.read()).operations[0]!.status).toBe("SYNCED"),
+    );
+    await vi.waitFor(() => expect(controller.running).toBe(false));
+    expect(posts).toBe(1);
   });
   it.each(["native acquired", "native busy", "fallback"])(
     "recovers an orphaned lease only after exclusive browser ownership: %s",

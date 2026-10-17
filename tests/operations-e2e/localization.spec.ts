@@ -1,3 +1,4 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { activeFixtureTrip, fixtureClient } from "./fixture-client";
@@ -17,12 +18,15 @@ async function login(page: Page, role = "driver") {
   await expect(page).toHaveURL(
     role === "admin" ? /admin\/dashboard/ : /driver\/home/,
   );
-  const title = role === "admin" ? "Operations dashboard" : "My day";
-  await expect(
-    page.getByRole("heading", {
-      name: new RegExp(`^(${title}|${message("ne", title)})$`),
-    }),
-  ).toBeVisible();
+  if (role === "admin")
+    await expect(
+      page.getByRole("heading", {
+        name: new RegExp(
+          `^(Operations dashboard|${message("ne", "Operations dashboard")})$`,
+        ),
+      }),
+    ).toBeVisible();
+  else await expect(page.getByTestId("profile-name")).toBeVisible();
 }
 async function language(page: Page, locale: "en" | "ne") {
   const button = page.getByRole("button", {
@@ -50,7 +54,7 @@ test("Nepali driver delivery preserves drafts during language switches and downl
   });
   await login(page);
   await expect(
-    page.getByRole("heading", { name: "मेरो दिन", exact: true }),
+    page.getByText(message("ne", "My Stock"), { exact: true }).first(),
   ).toBeVisible();
   await page
     .getByRole("link", { name: "नयाँ डेलिभरी", exact: true })
@@ -85,11 +89,18 @@ test("Nepali driver delivery preserves drafts during language switches and downl
     .click();
   await page.getByRole("button", { name: "डेलिभरी बचत", exact: true }).click();
   await expect(
-    page.getByText(message("ne", "Saved to Supabase."), { exact: true }),
+    page.getByText(message("ne", "Saved on phone"), { exact: true }),
   ).toBeVisible();
   expect(confirmation).toContain("३५");
   expect(confirmation).toContain("Refresh customer");
   expect(confirmation).not.toContain(" full,");
+  await expect
+    .poll(
+      async () =>
+        (await fixture.driver.rpc<FinanceWorkspace>("finance_workspace", {}))
+          .invoices.length,
+    )
+    .toBe(1);
   const finance = await fixture.driver.rpc<FinanceWorkspace>(
     "finance_workspace",
     {},
@@ -134,10 +145,8 @@ test("Nepali driver delivery preserves drafts during language switches and downl
   expect(lines.join(" ")).toContain("५,२५८.७५");
   await loadingTask.destroy();
   await page.goto("/driver/pending-jars");
-  await expect(page.locator("#pending-jars")).toContainText(
-    "५ फिर्ता आउन बाँकी जार",
-  );
-  await expect(page.locator("#pending-jars")).toContainText(
+  await expect(page.getByTestId("driver-pending-total")).toHaveText("५");
+  await expect(page.getByTestId("driver-jar-card")).toContainText(
     formatBusinessDate(pending[0]!.original_date, "ne"),
   );
   expect(
@@ -148,18 +157,20 @@ test("Nepali driver delivery preserves drafts during language switches and downl
   await page.goto("/driver/return");
   await page
     .getByRole("button", {
-      name: message("ne", "Submit warehouse returns"),
+      name: message("ne", "Review Return"),
       exact: true,
     })
     .click();
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: message("ne", "Saved to Supabase.") }),
-  ).toBeVisible();
-  expect((await fixture.driver.workspace(fixture.trip)).trips[0]!.status).toBe(
-    "SUBMITTED",
-  );
+  await page
+    .getByRole("button", { name: message("ne", "Confirm Return"), exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await fixture.driver.workspace(fixture.trip)).trips[0]!.status,
+    )
+    .toBe("SUBMITTED");
+  await openAdminMenuForSignOut(page);
   await page
     .getByRole("button", { name: message("ne", "Sign Out"), exact: true })
     .click();
@@ -266,13 +277,13 @@ test("independent user preferences persist through navigation, refresh and login
     const driverPage = await other.newPage();
     await login(driverPage);
     await expect(
-      driverPage.getByRole("heading", { name: "मेरो दिन", exact: true }),
+      driverPage.getByText(message("ne", "My Stock"), { exact: true }).first(),
     ).toBeVisible();
     await language(driverPage, "en");
     await driverPage.goto("/admin/inventory");
     await expect(driverPage).toHaveURL(/driver\/home/);
     await expect(
-      driverPage.getByRole("heading", { name: "My day", exact: true }),
+      driverPage.getByText("My Stock", { exact: true }).first(),
     ).toBeVisible();
     await page.reload();
     await expect(
@@ -286,13 +297,14 @@ test("independent user preferences persist through navigation, refresh and login
     });
     expect(bad.status()).toBe(400);
     expect((await client.workspace()).balances).toEqual(before.balances);
+    await openAdminMenuForSignOut(driverPage);
     await driverPage
       .getByRole("button", { name: "Sign Out", exact: true })
       .click();
     await expect(driverPage).toHaveURL(/\/sign-in/);
     await login(driverPage);
     await expect(
-      driverPage.getByRole("heading", { name: "My day", exact: true }),
+      driverPage.getByText("My Stock", { exact: true }).first(),
     ).toBeVisible();
   } finally {
     await other.close();

@@ -243,6 +243,55 @@ afterEach(async () => {
   await db.exec("rollback;reset role");
 });
 
+it("a returned trip still owns the driver assignment until warehouse confirmation; confirmation permits the next load", async () => {
+  const trip = randomUUID();
+  await rpc("create_trip", [
+    trip,
+    driverA,
+    vehicleA,
+    day,
+    [],
+    "",
+    randomUUID(),
+  ]);
+  await rpc("load_trip", [trip, loadItems(85), randomUUID()]);
+  await who(driverA);
+  await action(trip, "START");
+  await rpc("submit_trip", [trip, counts(85), randomUUID()]);
+  await who();
+  expect((await workspace(trip)).trips.find((t) => t.id === trip)?.status).toBe(
+    "SUBMITTED",
+  );
+  await rejected(
+    "create_trip",
+    [randomUUID(), driverA, vehicleB, day, [], "", randomUUID()],
+    /one_live_trip_per_driver|unique/i,
+  );
+  await rpc("reconcile_trip", [
+    trip,
+    counts(85),
+    "Warehouse confirmed all returns",
+    false,
+    randomUUID(),
+  ]);
+  const next = randomUUID();
+  await rpc("create_trip", [
+    next,
+    driverA,
+    vehicleB,
+    day,
+    [],
+    "",
+    randomUUID(),
+  ]);
+  await rpc("load_trip", [next, loadItems(40), randomUUID()]);
+  await who(driverA);
+  await action(next, "START");
+  expect((await workspace(next)).trips.find((t) => t.id === next)?.status).toBe(
+    "ACTIVE",
+  );
+});
+
 it("prepares all customer contexts for an assigned LOADED trip without permitting deliveries", async () => {
   const trip = await prepare();
   await who(driverA);

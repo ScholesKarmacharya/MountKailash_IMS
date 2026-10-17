@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useMemo, Suspense } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Dexie from "dexie";
 import type { Profile } from "@/domain/auth/roles";
 import type { Locale } from "@/domain/localization/locale";
@@ -35,6 +35,7 @@ import {
 import {
   getAutomaticDeviceSecrets,
   createAutomaticDeviceSecrets,
+  replaceRevokedAutomaticDevice,
   requireDeviceSignIn,
 } from "@/lib/offline/device";
 import {
@@ -56,26 +57,21 @@ import {
   offlinePreparingMessage,
   type OfflinePrepState,
 } from "./driver-runtime-context";
-import { LocaleProvider, LanguageSwitcher, T, Message } from "./localization";
-import { Navigation } from "./navigation";
-import { Button } from "./ui/button";
-import { SignOutButton } from "./sign-out-button";
-import { DriverHomeView } from "./driver-home-view";
-import { DriverSalesView } from "./driver-sales-view";
-import { DriverCustomers } from "./driver-customers";
-import { DeliveryForm, ReturnForm } from "./trip-forms";
-import { CollectCreditForm } from "./finance-payment";
-import { DriverStock } from "./driver-stock";
-import { OfflineCustomers, OfflineReturnForm } from "./offline/workspace";
-import { OfflineHistory } from "./offline/views";
-import { OfflineCollection } from "./offline/collection";
-import { DriverPendingJars } from "./driver-pending-jars";
-import { InstantDriver } from "./instant-delivery";
+import { LocaleProvider, T, Message } from "./localization";
+
 import type { InstantWorkspace } from "@/domain/instant";
 import { projectedInstants } from "@/domain/offline/instant";
 import { prepareOfflineShell } from "./offline/registration";
-import { Card } from "./ui/card";
+
 import { NotificationBell, LockedNotificationBell } from "./notification-bell";
+import {
+  DriverPageContainer,
+  DriverMobileHeader,
+  DriverBottomNav,
+} from "./driver-mobile-layout";
+import { DriverConnectivityStatus } from "./driver-connectivity-status";
+import { DriverWorkspaceScreens } from "./driver-workspace-screens";
+import { currentRound } from "@/domain/operations/driver-workspace";
 
 export type DriverData = {
   eligibleTrips?: Trip[];
@@ -162,12 +158,14 @@ function Application({
 }) {
   const pathname = usePathname(),
     params = useSearchParams();
+  const router = useRouter();
   const [data, setData] = useState<DriverData>(),
     [state, setState] = useState<LocalState>();
   const [mode, setMode] = useState<Connectivity>("CHECKING"),
     [message, setMessage] = useState("");
   const [connectionMessage, setConnectionMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [authorizationTime, setAuthorizationTime] = useState(() => Date.now());
   const [rows, setRows] = useState<
     { id: string; trip: string; pending: number; review: number }[]
   >([]);
@@ -178,6 +176,8 @@ function Application({
   const [offlinePrepState, setOfflinePrepState] =
     useState<OfflinePrepState>("IDLE");
   const offlinePrepRef = useRef<OfflinePrepState>("IDLE");
+  const preparationError = useRef("");
+  const [offlinePrepError, setOfflinePrepError] = useState("");
   function updateOfflinePrepState(next: OfflinePrepState) {
     offlinePrepRef.current = next;
     setOfflinePrepState(next);
@@ -187,7 +187,7 @@ function Application({
     status: "Checking server connectivity",
   });
   const [notice, setNotice] = useState(""),
-    [epoch, setEpoch] = useState(0);
+    [epochs, setEpochs] = useState<Record<string, number>>({});
   const database = useMemo(() => offlineDB(), []);
   const vault = useRef<OfflineVault | undefined>(undefined),
     controller = useRef<SyncController | undefined>(undefined);
@@ -196,7 +196,13 @@ function Application({
     generation = useRef(0),
     querying = useRef<Promise<Connectivity> | undefined>(undefined);
   const probeSequence = useRef(0);
+  const probeAgain = useRef(false);
+  const starting = useRef<
+    | { trip: string; action: string; request: Promise<OperationState> }
+    | undefined
+  >(undefined);
   const saving = useRef(false);
+  const completedScreens = useRef(new Set<string>());
   const queryRef = useRef(params.toString());
   const localeRef = useRef(initialLocale);
   const selectedLocale = useRef(false);
@@ -230,11 +236,10 @@ function Application({
       if (current === generation.current) setMessage(storageMessage(error));
     }
   }
-  async function probe(force = false): Promise<Connectivity> {
+  async function probeOnce(): Promise<Connectivity> {
     // Explicit sign-out stays effective until normal Supabase sign-in mounts a
     // new workspace. A delayed logout must not let a poll restore local access.
     if (signedOutRef.current) return "AUTHENTICATION";
-    if (querying.current && !force) return querying.current;
     const current = generation.current;
     const sequence = ++probeSequence.current;
     const request = (async () => {
@@ -245,44 +250,58 @@ function Application({
           sequence !== probeSequence.current
         )
           return modeRef.current;
-        // Device storage failures do not change a successful connectivity check.
-        // Release a fully acknowledged, sealed round when the next load arrives.
+        // The authoritative selection owns the session, even when a previous
+        // unsealed vault still exists. Preserve its exact evidence separately.
         const writer = vault.current;
+        if (
+          dataRef.current?.trip?.id !== result.trip?.id &&
+          (!writer || writer.id !== `${result.profile.id}:${result.trip?.id}`)
+        ) {
+          preparationError.current = "";
+          setOfflinePrepError("");
+          updateOfflinePrepState("IDLE");
+        }
         if (writer) {
-          if (!writer.id.startsWith(result.profile.id + ":")) {
+          const writerTrip = writer.id.slice(writer.id.indexOf(":") + 1);
+          if (
+            !writer.id.startsWith(result.profile.id + ":") ||
+            result.trip?.id !== writerTrip
+          ) {
             if (controller.current) controller.current.stopped = true;
             controller.current = undefined;
             vault.current = undefined;
             updateOfflinePrepState("IDLE");
             setState(undefined);
-            setRows([]);
-          }
-          try {
-            const local = await writer.read();
-            if (
-              current !== generation.current ||
-              sequence !== probeSequence.current
-            )
-              return modeRef.current;
-            if (
-              local.user !== result.profile.id ||
-              (local.sealed &&
-                local.operations.every((o) => o.status === "SYNCED") &&
-                result.trip &&
-                result.trip.id !== local.snapshot.round.trip_id)
-            ) {
-              if (controller.current) controller.current.stopped = true;
-              controller.current = undefined;
-              vault.current = undefined;
-              updateOfflinePrepState("IDLE");
-              setState(undefined);
-              setNotice("");
+            setNotice("");
+            completedScreens.current.clear();
+            if (writer.id.startsWith(result.profile.id + ":")) {
+              try {
+                const observed = result.overview.trips.find(
+                  (t) => t.id === writerTrip,
+                );
+                await writer.mutate((local) => {
+                  const previous =
+                    observed ??
+                    local.snapshot.workspace.trips.find(
+                      (t) => t.id === writerTrip,
+                    )!;
+                  local.retired = {
+                    status: previous.status,
+                    cancelled: !!previous.cancelled,
+                    at: new Date().toISOString(),
+                  };
+                });
+              } catch (error) {
+                setMessage(storageMessage(error));
+              }
             }
-          } catch (error) {
-            if (current === generation.current)
-              setMessage(storageMessage(error));
           }
         }
+        if (
+          current !== generation.current ||
+          sequence !== probeSequence.current
+        )
+          return modeRef.current;
         dataRef.current = result;
         setData(result);
         setMode("ONLINE");
@@ -295,6 +314,10 @@ function Application({
             await database.settings.put({
               key: "active-user",
               value: result.profile.id,
+            });
+            await database.settings.put({
+              key: `current-trip:${result.profile.id}`,
+              value: result.trip?.id ?? "",
             });
             if (current !== generation.current)
               throw new Error(
@@ -348,6 +371,26 @@ function Application({
         return next;
       }
     })();
+    return request;
+  }
+  async function probe(force = false): Promise<Connectivity> {
+    if (querying.current) {
+      probeAgain.current ||= force;
+      return querying.current;
+    }
+    const current = generation.current;
+    const request = (async () => {
+      let connection: Connectivity;
+      do {
+        probeAgain.current = false;
+        connection = await probeOnce();
+      } while (
+        probeAgain.current &&
+        current === generation.current &&
+        !signedOutRef.current
+      );
+      return connection;
+    })();
     querying.current = request;
     try {
       return await request;
@@ -355,10 +398,297 @@ function Application({
       if (querying.current === request) querying.current = undefined;
     }
   }
+  async function deviceRequest<T>(body: Record<string, unknown>): Promise<T> {
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 15000);
+    try {
+      const response = await fetch("/api/driver/device", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: abort.signal,
+      });
+      const value = await response.json();
+      if (!response.ok)
+        throw new SyncError(value.code, value.message, response.status);
+      return value;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  function prepareOrOpenOfflineTrip(localOnly = false): Promise<void> {
+    if (opening.current) return opening.current;
+    if (vault.current || signedOutRef.current) return Promise.resolve();
+    const current = generation.current;
+    let pendingOnPhone = 0;
+    let preparingTrip: string | undefined;
+    updateOfflinePrepState("PREPARING");
+    preparationError.current = "";
+    setOfflinePrepError("");
+    setMessage("");
+    const activate = async () => {
+      if (current !== generation.current || signedOutRef.current) return;
+      const user = (await database.settings.get("active-user"))?.value;
+      const d = dataRef.current;
+      if (!user || (profileRef.current && profileRef.current.id !== user))
+        return;
+      const copies = await database.vaults
+        .where("user")
+        .equals(user)
+        .sortBy("updated");
+      pendingOnPhone = copies.reduce((count, row) => count + row.pending, 0);
+      const remembered = await database.settings.get(`current-trip:${user}`);
+      const eligible = copies.filter((r) => !r.retired);
+      const candidate =
+        eligible.find((r) => r.trip === (d?.trip?.id ?? remembered?.value)) ??
+        (remembered?.value === "" ? undefined : eligible.at(-1));
+      const id =
+        !localOnly && d
+          ? d.trip &&
+            !d.trip.cancelled &&
+            ["LOADED", "ACTIVE"].includes(d.trip.status)
+            ? `${user}:${d.trip.id}`
+            : undefined
+          : candidate?.id;
+      if (!id || (localOnly && !candidate)) return;
+      const tripId = id.slice(user.length + 1);
+      preparingTrip = tripId;
+      const existing = await database.vaults.get(id);
+      let secrets = await getAutomaticDeviceSecrets(database, user);
+      if (current !== generation.current || signedOutRef.current) return;
+      let opened: OfflineVault | undefined;
+      if (existing && secrets) {
+        try {
+          opened = await OfflineVault.unlock(database, id, secrets.secret);
+        } catch (error) {
+          if (!(error instanceof OfflineLocalDataError)) throw error;
+          if (existing.pending !== 0 || existing.review !== 0) throw error;
+        }
+      }
+      if (
+        existing &&
+        !opened &&
+        (existing.pending !== 0 || existing.review !== 0)
+      )
+        throw new OfflineLocalDataError(
+          "RECORDS",
+          "Local pending records need admin help.",
+        );
+      if (!opened) {
+        // An old setup cannot be opened with a newly generated automatic key.
+        // Only a zero-pending copy can be rebuilt online, after server approval;
+        // create() archives the old bytes atomically instead of discarding them.
+        if (localOnly) return;
+        if (modeRef.current !== "ONLINE")
+          throw new SyncError("NETWORK", "Offline preparation needs internet.");
+        if (
+          !d?.trip ||
+          d.profile.id !== user ||
+          d.profile.approval_status !== "APPROVED" ||
+          !d.profile.is_active ||
+          !["LOADED", "ACTIVE"].includes(d.trip.status)
+        )
+          return;
+        secrets ??= await createAutomaticDeviceSecrets(database, user);
+        // Persist credentials before any request whose response can be lost.
+        let credentials = await OfflineVault.prepare(
+          database,
+          user,
+          tripId,
+          secrets.secret,
+          secrets,
+          true,
+        );
+        const registration = await deviceRequest<{
+          replace_installation?: boolean;
+        }>({
+          action: "automatic-register",
+          trip: tripId,
+          ...credentials,
+        });
+        if (registration.replace_installation) {
+          // No current-trip journal may be overwritten. Rotation preserves the
+          // old encrypted setup and all historical records/keys, durably before
+          // registering a fresh writer. A lost response retries the same writer.
+          secrets = await replaceRevokedAutomaticDevice(
+            database,
+            user,
+            tripId,
+            secrets.device,
+          );
+          credentials = await OfflineVault.prepare(
+            database,
+            user,
+            tripId,
+            secrets.secret,
+            secrets,
+            true,
+          );
+          const replacement = await deviceRequest<{
+            replace_installation?: boolean;
+          }>({
+            action: "automatic-register",
+            trip: tripId,
+            ...credentials,
+          });
+          if (replacement.replace_installation)
+            throw new SyncError(
+              "DEVICE_RESET_REQUIRED",
+              "Could not prepare offline access",
+              403,
+            );
+        }
+        await prepareOfflineShell();
+        shellPrepared.current = true;
+        const snapshot = await offlineRequest<OfflineSnapshot>({
+          action: "register",
+          trip: tripId,
+          ...credentials,
+        });
+        if (current !== generation.current) return;
+        snapshot.locale = localeRef.current;
+        opened = await OfflineVault.create(
+          database,
+          snapshot,
+          credentials.device,
+          credentials.token,
+          secrets.secret,
+          existing,
+        );
+        void navigator.storage?.persist?.().catch(() => false);
+      }
+      if (current !== generation.current) return;
+      const local = selectedLocale.current
+        ? await opened.mutate((s) => {
+            s.locale = localeRef.current;
+          })
+        : await opened.read();
+      if (current !== generation.current) return;
+      if (
+        local.user !== user ||
+        (dataRef.current && dataRef.current.profile.id !== user)
+      )
+        throw new Error("Sign in as the driver who saved these changes.");
+      // A startup unlock can finish after the online probe. It must not install
+      // the previously selected writer over the newly confirmed current trip.
+      const authoritative = dataRef.current;
+      const savedTrip = local.snapshot.workspace.trips.find(
+        (t) => t.id === local.snapshot.round.trip_id,
+      )!;
+      if (
+        local.retired ||
+        savedTrip.cancelled ||
+        savedTrip.status === "CLOSED" ||
+        (authoritative &&
+          authoritative.trip?.id !== local.snapshot.round.trip_id)
+      ) {
+        if (!local.retired) {
+          const oldTrip =
+            authoritative?.overview.trips.find(
+              (t) => t.id === local.snapshot.round.trip_id,
+            ) ??
+            local.snapshot.workspace.trips.find(
+              (t) => t.id === local.snapshot.round.trip_id,
+            )!;
+          await opened.mutate((s) => {
+            s.retired = {
+              status: oldTrip.status,
+              cancelled: !!oldTrip.cancelled,
+              at: new Date().toISOString(),
+            };
+          });
+        }
+        return;
+      }
+      vault.current = opened;
+      setState(local);
+      updateOfflinePrepState("READY");
+      window.dispatchEvent(
+        new CustomEvent("mk-locale-restored", { detail: local.locale }),
+      );
+      if (controller.current) controller.current.stopped = true;
+      controller.current = new SyncController(
+        opened,
+        (v) => {
+          if (current === generation.current && vault.current === opened)
+            setView(v);
+        },
+        (s) => {
+          if (current === generation.current && vault.current === opened)
+            setState(s);
+        },
+      );
+      await loadRows();
+      if (modeRef.current === "ONLINE") void controller.current.run();
+      else if (!navigator.onLine) {
+        modeRef.current = "OFFLINE";
+        setMode("OFFLINE");
+      }
+    };
+    const task = (async () => {
+      try {
+        // One activation across tabs; the second tab re-reads the durable copy.
+        if (navigator.locks)
+          await navigator.locks.request("mk:offline-prepare", activate);
+        else await activate();
+      } catch (error) {
+        if (current === generation.current) {
+          if (
+            preparingTrip &&
+            dataRef.current &&
+            dataRef.current.trip?.id !== preparingTrip
+          ) {
+            updateOfflinePrepState("IDLE");
+            return;
+          }
+          updateOfflinePrepState("FAILED");
+          preparationError.current =
+            error instanceof SyncError && error.code === "DEVICE_REVOKED"
+              ? "This browser's offline access was revoked. Ask the warehouse admin to reset offline access."
+              : error instanceof SyncError &&
+                  error.code === "DEVICE_RESET_REQUIRED"
+                ? "This trip is linked to another phone. Ask the warehouse admin to reset offline access."
+                : "Could not prepare offline access";
+          setOfflinePrepError(preparationError.current);
+          setMessage(
+            error instanceof SyncError
+              ? error.code === "DEVICE_REVOKED"
+                ? "This browser's offline access was revoked. Ask the warehouse admin to reset offline access."
+                : error.code === "DEVICE_RESET_REQUIRED"
+                  ? "This trip is linked to another phone. Ask the warehouse admin to reset offline access."
+                  : error.code === "MIGRATION_REQUIRED"
+                    ? "Offline access needs an update. Ask the warehouse admin."
+                    : error.code === "NETWORK"
+                      ? "Offline data could not be prepared. Please reconnect and try again."
+                      : "Offline data could not be prepared. Please contact the admin if this continues."
+              : error instanceof OfflineLocalDataError
+                ? pendingOnPhone > 0
+                  ? "Saved records on this phone need help from the admin. Keep this app's data."
+                  : "Offline data could not be prepared. Please reconnect and try again."
+                : storageMessage(error),
+          );
+        }
+      }
+    })().finally(() => {
+      if (opening.current === task) opening.current = undefined;
+      // A local-only restore with no saved trip leaves startup free to prepare
+      // the online trip, even if its probe finished during this same promise.
+      if (
+        current === generation.current &&
+        offlinePrepRef.current === "PREPARING"
+      )
+        updateOfflinePrepState("IDLE");
+    });
+    opening.current = task;
+    return task;
+  }
   useEffect(() => {
     mounted.current = true;
     let disposed = false;
     const refresh = async (event?: Event) => {
+      setAuthorizationTime(Date.now());
       if (event?.type === "offline") {
         probeSequence.current++;
         modeRef.current = "OFFLINE";
@@ -411,6 +741,13 @@ function Application({
     window.addEventListener("mk-offline-locked", lock);
     window.addEventListener("mk-customer-confirmed", refresh);
     window.addEventListener("operation-saved", refresh);
+    const tripChanged = () => {
+      void probe(true).then((connection) => {
+        if (!disposed && connection === "ONLINE")
+          void controller.current?.run();
+      });
+    };
+    window.addEventListener("mk-driver-trip-changed", tripChanged);
     const visible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -475,6 +812,7 @@ function Application({
       window.removeEventListener("mk-offline-locked", lock);
       window.removeEventListener("mk-customer-confirmed", refresh);
       window.removeEventListener("operation-saved", refresh);
+      window.removeEventListener("mk-driver-trip-changed", tripChanged);
       window.removeEventListener("mk-locale-selected", localeChanged);
       document.removeEventListener("visibilitychange", visible);
       Dexie.on("storagemutated").unsubscribe(load);
@@ -539,200 +877,6 @@ function Application({
     if (current === generation.current && vault.current === writer)
       setState(next);
   }
-  async function deviceRequest<T>(body: Record<string, unknown>): Promise<T> {
-    const abort = new AbortController();
-    const timeout = setTimeout(() => abort.abort(), 15000);
-    try {
-      const response = await fetch("/api/driver/device", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: abort.signal,
-      });
-      const value = await response.json();
-      if (!response.ok)
-        throw new SyncError(value.code, value.message, response.status);
-      return value;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-  function prepareOrOpenOfflineTrip(localOnly = false): Promise<void> {
-    if (opening.current) return opening.current;
-    if (vault.current || signedOutRef.current) return Promise.resolve();
-    const current = generation.current;
-    let pendingOnPhone = 0;
-    updateOfflinePrepState("PREPARING");
-    setMessage("");
-    const activate = async () => {
-      if (current !== generation.current || signedOutRef.current) return;
-      const user = (await database.settings.get("active-user"))?.value;
-      const d = dataRef.current;
-      if (!user || (profileRef.current && profileRef.current.id !== user))
-        return;
-      const copies = await database.vaults
-        .where("user")
-        .equals(user)
-        .sortBy("updated");
-      pendingOnPhone = copies.reduce((count, row) => count + row.pending, 0);
-      const candidate =
-        copies.find((r) => r.pending > 0) ??
-        copies.find((r) => r.trip === d?.trip?.id) ??
-        copies.at(-1);
-      const id =
-        !localOnly && d?.trip && !candidate?.pending
-          ? `${user}:${d.trip.id}`
-          : candidate?.id;
-      if (!id || (localOnly && !candidate)) return;
-      const tripId = id.slice(user.length + 1);
-      const existing = await database.vaults.get(id);
-      let secrets = await getAutomaticDeviceSecrets(database, user);
-      if (current !== generation.current || signedOutRef.current) return;
-      let opened: OfflineVault | undefined;
-      if (existing && secrets) {
-        try {
-          opened = await OfflineVault.unlock(database, id, secrets.secret);
-        } catch (error) {
-          if (!(error instanceof OfflineLocalDataError)) throw error;
-          if (existing.pending !== 0 || existing.review !== 0) throw error;
-        }
-      }
-      if (
-        existing &&
-        !opened &&
-        (existing.pending !== 0 || existing.review !== 0)
-      )
-        throw new OfflineLocalDataError(
-          "RECORDS",
-          "Local pending records need admin help.",
-        );
-      if (!opened) {
-        // An old setup cannot be opened with a newly generated automatic key.
-        // Only a zero-pending copy can be rebuilt online, after server approval;
-        // create() archives the old bytes atomically instead of discarding them.
-        if (localOnly) return;
-        if (modeRef.current !== "ONLINE")
-          throw new SyncError("NETWORK", "Offline preparation needs internet.");
-        if (
-          !d?.trip ||
-          d.profile.id !== user ||
-          d.profile.approval_status !== "APPROVED" ||
-          !d.profile.is_active ||
-          !["LOADED", "ACTIVE"].includes(d.trip.status)
-        )
-          return;
-        secrets ??= await createAutomaticDeviceSecrets(database, user);
-        // Persist credentials before any request whose response can be lost.
-        const credentials = await OfflineVault.prepare(
-          database,
-          user,
-          tripId,
-          secrets.secret,
-          secrets,
-          true,
-        );
-        await deviceRequest({
-          action: "automatic-register",
-          trip: tripId,
-          ...credentials,
-        });
-        await prepareOfflineShell();
-        shellPrepared.current = true;
-        const snapshot = await offlineRequest<OfflineSnapshot>({
-          action: "register",
-          trip: tripId,
-          ...credentials,
-        });
-        if (current !== generation.current) return;
-        snapshot.locale = localeRef.current;
-        opened = await OfflineVault.create(
-          database,
-          snapshot,
-          credentials.device,
-          credentials.token,
-          secrets.secret,
-          existing,
-        );
-        void navigator.storage?.persist?.().catch(() => false);
-      }
-      if (current !== generation.current) return;
-      const local = selectedLocale.current
-        ? await opened.mutate((s) => {
-            s.locale = localeRef.current;
-          })
-        : await opened.read();
-      if (current !== generation.current) return;
-      if (
-        local.user !== user ||
-        (dataRef.current && dataRef.current.profile.id !== user)
-      )
-        throw new Error("Sign in as the driver who saved these changes.");
-      vault.current = opened;
-      setState(local);
-      updateOfflinePrepState("READY");
-      window.dispatchEvent(
-        new CustomEvent("mk-locale-restored", { detail: local.locale }),
-      );
-      if (controller.current) controller.current.stopped = true;
-      controller.current = new SyncController(
-        opened,
-        (v) => {
-          if (current === generation.current && vault.current === opened)
-            setView(v);
-        },
-        (s) => {
-          if (current === generation.current && vault.current === opened)
-            setState(s);
-        },
-      );
-      await loadRows();
-      if (modeRef.current === "ONLINE") void controller.current.run();
-      else if (!navigator.onLine) {
-        modeRef.current = "OFFLINE";
-        setMode("OFFLINE");
-      }
-    };
-    const task = (async () => {
-      try {
-        // One activation across tabs; the second tab re-reads the durable copy.
-        if (navigator.locks)
-          await navigator.locks.request("mk:offline-prepare", activate);
-        else await activate();
-      } catch (error) {
-        if (current === generation.current) {
-          updateOfflinePrepState("FAILED");
-          setMessage(
-            error instanceof SyncError
-              ? error.code === "DEVICE_RESET_REQUIRED"
-                ? "This trip is linked to another phone. Ask the warehouse admin to reset offline access."
-                : error.code === "MIGRATION_REQUIRED"
-                  ? "Offline access needs an update. Ask the warehouse admin."
-                  : error.code === "NETWORK"
-                    ? "Offline data could not be prepared. Please reconnect and try again."
-                    : "Offline data could not be prepared. Please contact the admin if this continues."
-              : error instanceof OfflineLocalDataError
-                ? pendingOnPhone > 0
-                  ? "Saved records on this phone need help from the admin. Keep this app's data."
-                  : "Offline data could not be prepared. Please reconnect and try again."
-                : storageMessage(error),
-          );
-        }
-      }
-    })().finally(() => {
-      if (opening.current === task) opening.current = undefined;
-      // A local-only restore with no saved trip leaves startup free to prepare
-      // the online trip, even if its probe finished during this same promise.
-      if (
-        current === generation.current &&
-        offlinePrepRef.current === "PREPARING"
-      )
-        updateOfflinePrepState("IDLE");
-    });
-    opening.current = task;
-    return task;
-  }
   async function record(
     kind: Parameters<OfflineVault["record"]>[0],
     draft: unknown,
@@ -750,6 +894,16 @@ function Application({
       if (!writer) {
         throw new Error(offlinePreparingMessage);
       }
+      const currentTrip = dataRef.current?.trip;
+      if (
+        dataRef.current &&
+        (currentTrip?.id !== writer.id.slice(writer.id.indexOf(":") + 1) ||
+          currentTrip.cancelled ||
+          currentTrip.status === "CLOSED")
+      )
+        throw new Error(
+          "This trip is no longer current. Open your current trip.",
+        );
       if (
         ["AUTHENTICATION", "AUTHORIZATION", "DATABASE"].includes(
           modeRef.current,
@@ -776,7 +930,11 @@ function Application({
     }
   }
   const runtime = {
+    online: mode === "ONLINE",
+    tripStatus: (id: string) => data?.overview.trips.find((t) => t.id === id),
+    workspace: data?.workspace,
     offlinePrepState,
+    offlinePrepError,
     revision: JSON.stringify(
       state
         ? [
@@ -844,6 +1002,94 @@ function Application({
           );
         const operation = String(form.get("operation")),
           id = String(form.get("key"));
+        if (["start", "continue"].includes(operation)) {
+          const target = String(form.get("trip"));
+          if (starting.current)
+            return starting.current.trip === target &&
+              starting.current.action === operation
+              ? starting.current.request
+              : { error: "A trip action is already in progress. Please wait." };
+          const request = (async (): Promise<OperationState> => {
+            if (modeRef.current !== "ONLINE" || !navigator.onLine)
+              return {
+                error:
+                  "Connect to the internet to start this trip. After it starts, you can continue offline.",
+              };
+            if ((await probe(true)) !== "ONLINE")
+              return {
+                error:
+                  "Connect to the internet to start this trip. After it starts, you can continue offline.",
+              };
+            const latest = dataRef.current;
+            const requested = latest?.overview.trips.find(
+              (t) => t.id === target,
+            );
+            if (requested?.cancelled)
+              return {
+                error: "This trip was cancelled. Open your current trip.",
+              };
+            if (latest?.trip?.id !== target || requested?.status === "CLOSED")
+              return {
+                error:
+                  "This trip is no longer current. Open your current trip.",
+              };
+            if (!vault.current) await prepareOrOpenOfflineTrip();
+            const writer = vault.current;
+            if (!writer || offlinePrepRef.current !== "READY")
+              return {
+                error: preparationError.current || offlinePreparingMessage,
+              };
+            const local = await writer.read();
+            if (local.retired)
+              return {
+                error:
+                  "This trip is no longer current. Open your current trip.",
+              };
+            if (String(form.get("trip")) !== local.snapshot.round.trip_id)
+              return { error: "Open the trip that is saved on this phone." };
+            // Account authentication alone cannot authorize another phone's trip.
+            // Reuse the server's existing ownership preflight before activation.
+            await deviceRequest({
+              action: "automatic-register",
+              trip: local.snapshot.round.trip_id,
+              device: local.device,
+              token: local.token,
+            });
+            if (operation === "start" && requested?.status === "ACTIVE") {
+              await refreshSnapshot();
+              return { success: "Trip already started.", id: target };
+            }
+            const result = await driverOperationAction(null, form);
+            if (!result?.success) {
+              await probe(true);
+              if (
+                operation === "start" &&
+                dataRef.current?.trip?.id === local.snapshot.round.trip_id &&
+                dataRef.current.trip.status === "ACTIVE"
+              ) {
+                await refreshSnapshot();
+                setNotice("Trip already started.");
+                return {
+                  success: "Trip already started.",
+                  id: local.snapshot.round.trip_id,
+                };
+              }
+              return result;
+            }
+            await refreshSnapshot();
+            await probe(true);
+            void controller.current?.run(true);
+            setNotice("Trip active");
+            return { ...result, success: "Trip active" };
+          })();
+          starting.current = { trip: target, action: operation, request };
+          try {
+            return await request;
+          } finally {
+            if (starting.current?.request === request)
+              starting.current = undefined;
+          }
+        }
         // UI gating is also enforced here for stale/programmatic submissions.
         // Never wait for preparation inside a delivery save or touch its draft.
         if (
@@ -851,45 +1097,7 @@ function Application({
           (offlinePrepRef.current !== "READY" || !vault.current)
         )
           return { error: offlinePreparingMessage };
-        if (!vault.current) {
-          if (!["start", "continue"].includes(operation))
-            return { error: offlinePreparingMessage };
-          if (modeRef.current !== "ONLINE")
-            throw new Error("Connect to internet to start this trip.");
-          let result: OperationState;
-          try {
-            result = await driverOperationAction(null, form);
-          } catch (error) {
-            if ((await probe(true)) === "OFFLINE")
-              throw new Error(
-                "Connect to internet once before starting this trip.",
-              );
-            throw error;
-          }
-          if (
-            result?.error ===
-            "Use the registered offline device for this delivery round."
-          ) {
-            await probe(true);
-            return {
-              error: offlinePreparingMessage,
-            };
-          }
-          if (result?.error && (await probe(true)) === "OFFLINE") {
-            return {
-              error: "Connect to internet once before starting this trip.",
-            };
-          }
-          if (result?.success) {
-            if (operation === "start" || operation === "submit")
-              setNotice("Record saved.");
-            // A request begun before this write can contain stale inventory or
-            // ACTIVE status. Fetch a newer version before presenting success.
-            await probe(true);
-            return { ...result, success: "Record saved." };
-          }
-          return result;
-        }
+        if (!vault.current) return { error: offlinePreparingMessage };
         const local = await vault.current.read();
         if (String(form.get("trip")) !== local.snapshot.round.trip_id)
           throw new Error("Open the trip that is saved on this phone.");
@@ -1016,6 +1224,12 @@ function Application({
             ? { ...result, success: "Record saved." }
             : result;
         }
+        if (["driver-visit", "instant"].includes(operation))
+          completedScreens.current.add(
+            operation === "instant"
+              ? "/driver/instant-delivery"
+              : "/driver/delivery",
+          );
         return { success, id: String(form.get("id") || id) };
       } catch (error) {
         return { error: storageMessage(error) };
@@ -1025,18 +1239,32 @@ function Application({
       if ((await probe()) === "ONLINE") await refreshSnapshot();
     },
     next: () => {
-      setEpoch((e) => e + 1);
+      if (!driverPaths.includes(path)) {
+        // Detail pages are server-rendered. Reload only on the explicit
+        // Continue action; the saved journal survives this refresh.
+        window.location.reload();
+        return;
+      }
+      completedScreens.current.delete(path);
+      setEpochs((e) => ({ ...e, [path]: (e[path] ?? 0) + 1 }));
       setNotice("");
       void probe();
     },
   };
   const projected = state ? projectedWorkspace(state) : undefined;
+  const useLocal =
+    !!state &&
+    !state.retired &&
+    (data
+      ? data.trip?.id === state.snapshot.round.trip_id
+      : currentRound(state.snapshot.workspace)?.id ===
+        state.snapshot.round.trip_id);
   const shown =
     !deviceChecked || signedOut
       ? undefined
-      : data && !state
+      : data && !useLocal
         ? data
-        : state
+        : state && useLocal
           ? ({
               ...data,
               profile: state.snapshot.profile,
@@ -1045,16 +1273,24 @@ function Application({
               overview: data?.overview ?? projected!,
               workspace: projected!,
               finance: state.snapshot.finance,
-              trip: projected!.trips.find(
-                (t) => t.id === state.snapshot.round.trip_id,
-              ),
-              day: projected!.days.find((d) => d.status === "OPEN"),
-              dayOpen: projected!.days.some((d) => d.status === "OPEN"),
+              trip:
+                data?.trip ??
+                projected!.trips.find(
+                  (t) => t.id === state.snapshot.round.trip_id,
+                ),
+              day:
+                data?.day ?? projected!.days.find((d) => d.status === "OPEN"),
+              dayOpen:
+                data?.dayOpen ??
+                projected!.days.some((d) => d.status === "OPEN"),
               delivering:
                 !state.sealed &&
                 !state.paused &&
-                state.snapshot.round.phase === "ACTIVE",
-              history: data?.history ?? projected!.trips,
+                (data
+                  ? data.delivering
+                  : state.snapshot.round.phase === "ACTIVE"),
+              history:
+                data?.history ?? data?.overview.trips ?? projected!.trips,
               pending: data?.pending,
               instant: projectedInstants(state),
               eligibleTrips: projected!.trips.filter(
@@ -1072,6 +1308,27 @@ function Application({
           : "/driver/home"
       : pathname;
   const screen = driverPaths.includes(path);
+  const detailId = /^\/driver\/trips\/([a-f0-9-]{36})$/i.exec(path)?.[1];
+  const invoiceDetail = /^\/driver\/invoices\/[a-f0-9-]{36}$/i.test(path);
+  const detailVersion = data?.overview.trips.find((t) => t.id === detailId);
+  const detailSignature = detailVersion
+    ? JSON.stringify([
+        detailVersion.status,
+        detailVersion.cancelled,
+        detailVersion.scheduled_date,
+        detailVersion.loaded_at,
+      ])
+    : "";
+  const detailRead = useRef({ id: "", signature: "" });
+  useEffect(() => {
+    if (
+      detailId &&
+      detailRead.current.id === detailId &&
+      detailRead.current.signature !== detailSignature
+    )
+      router.refresh();
+    detailRead.current = { id: detailId ?? "", signature: detailSignature };
+  }, [detailId, detailSignature, router]);
   const pending =
     rows
       .filter(
@@ -1081,23 +1338,23 @@ function Application({
       )
       .reduce((n, r) => n + r.pending, 0) +
     (state ? state.operations.filter((o) => o.status !== "SYNCED").length : 0);
-  const trip = shown?.trip;
   return (
     <LocaleProvider
       initialLocale={state?.locale ?? data?.locale ?? initialLocale}
       userId={profile?.id}
     >
-      <DriverRuntimeContext.Provider value={screen ? runtime : null}>
-        <div
-          className="min-h-dvh pb-44 lg:pb-6"
-          onClickCapture={(e) => {
-            const link = (e.target as HTMLElement).closest("a");
+      <DriverRuntimeContext.Provider
+        value={screen || detailId || invoiceDetail ? runtime : null}
+      >
+        <DriverPageContainer
+          onClickCapture={(event) => {
+            const link = (event.target as HTMLElement).closest("a");
             if (
               !link ||
-              e.ctrlKey ||
-              e.metaKey ||
-              e.shiftKey ||
-              e.altKey ||
+              event.ctrlKey ||
+              event.metaKey ||
+              event.shiftKey ||
+              event.altKey ||
               link.target ||
               link.hasAttribute("download")
             )
@@ -1107,38 +1364,36 @@ function Application({
               target.origin === window.location.origin &&
               driverPaths.includes(target.pathname)
             ) {
-              e.preventDefault();
+              event.preventDefault();
+              if (completedScreens.current.delete(target.pathname)) {
+                const destination = target.pathname;
+                setEpochs((e) => ({
+                  ...e,
+                  [destination]: (e[destination] ?? 0) + 1,
+                }));
+              }
+              if (document.activeElement instanceof HTMLElement)
+                document.activeElement.blur();
               window.history.pushState(
                 null,
                 "",
                 target.pathname + target.search,
               );
+              window.scrollTo({ top: 0, behavior: "auto" });
             }
           }}
         >
-          <header className="border-b bg-card p-4">
-            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-bold">
-                  <T k="Mount Kailash" />
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  <T k="Driver Workspace" />
-                </p>
-                <a
-                  href="/account/profile"
-                  aria-label="My Profile"
-                  className="underline"
-                  data-testid="profile-name"
-                >
-                  {profile?.name}
-                </a>
-              </div>
-              <LanguageSwitcher />
-              {profile ? (
+          <DriverMobileHeader
+            name={profile?.name}
+            online={mode !== "OFFLINE"}
+            notifications={
+              profile ? (
                 <NotificationBell
                   key={profile.id}
                   profile={profile}
+                  onTripChange={() =>
+                    window.dispatchEvent(new Event("mk-driver-trip-changed"))
+                  }
                   online={mode === "ONLINE"}
                   unlocked={
                     deviceChecked &&
@@ -1146,7 +1401,8 @@ function Application({
                     mode !== "AUTHORIZATION" &&
                     (mode === "ONLINE" ||
                       !state ||
-                      Date.now() < Date.parse(state.snapshot.authorizedUntil))
+                      authorizationTime <
+                        Date.parse(state.snapshot.authorizedUntil))
                   }
                   cache={state?.notifications}
                   persist={
@@ -1164,82 +1420,26 @@ function Application({
                 />
               ) : (
                 <LockedNotificationBell />
-              )}
-              {profile && <SignOutButton user={profile.id} driver />}
-            </div>
-            <div className="mx-auto max-w-7xl">
-              <Navigation role="DRIVER" />
-            </div>
-          </header>
+              )
+            }
+          />
+          <DriverBottomNav path={path} />
           <main
             id="main-content"
-            className="mx-auto max-w-3xl space-y-5 p-5 sm:p-8"
+            className="driver-main mx-auto w-full max-w-6xl space-y-4 px-4 pt-4 sm:px-6 sm:pt-6"
           >
-            <Card className="space-y-2" data-testid="driver-sync-status">
-              <p>
-                <T k={mode === "OFFLINE" ? "Offline" : "Online"} />
-              </p>
-              {(offlinePrepState === "READY" || pending > 0) && (
-                <p role="status" data-testid="pending-sync-count">
-                  {mode === "OFFLINE" ? (
-                    <T k="{0} changes saved on this phone" values={[pending]} />
-                  ) : view.status === "Sync Failed" ||
-                    view.status === "Needs Review" ? (
-                    <T k="Saved on phone" />
-                  ) : pending ? (
-                    <T k="Syncing {0} changes..." values={[pending]} />
-                  ) : (
-                    <T k="All synced" />
-                  )}
-                </p>
-              )}
-              {mode === "OFFLINE" && (
-                <p>
-                  <T k="They will sync automatically when internet returns." />
-                </p>
-              )}
-              {mode !== "OFFLINE" &&
-                (view.status === "Sync Failed" ||
-                  view.status === "Needs Review") && (
-                  <p>
-                    <T k="We'll try again when internet is available." />
-                  </p>
-                )}
-              {offlinePrepState === "PREPARING" && (
-                <p role="status">
-                  <T k="Preparing trip for offline use..." />
-                </p>
-              )}
-              {offlinePrepState === "FAILED" && (
-                <div role="alert" className="space-y-2">
-                  <p>
-                    <T k="Could not prepare offline data." />
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void prepareOrOpenOfflineTrip()}
-                  >
-                    <T k="Retry" />
-                  </Button>
-                </div>
-              )}
-              {offlinePrepState === "READY" && (
-                <>
-                  <p>
-                    <span>
-                      <T k="Offline ready" />
-                    </span>{" "}
-                    <span aria-hidden="true">✓</span>
-                  </p>
-                  <p>
-                    <T k="You can continue deliveries without internet." />
-                  </p>
-                </>
-              )}
-            </Card>
+            <DriverConnectivityStatus
+              mode={mode}
+              prep={offlinePrepState}
+              pending={pending}
+              status={view.status}
+              retry={() => void prepareOrOpenOfflineTrip()}
+            />
             {message && (
-              <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">
+              <p
+                role="alert"
+                className="rounded-lg bg-red-50 p-3 text-sm text-red-800"
+              >
                 <Message value={message} />
               </p>
             )}
@@ -1247,205 +1447,42 @@ function Application({
               ["AUTHENTICATION", "AUTHORIZATION", "DATABASE"].includes(
                 mode,
               ) && (
-                <p role="alert" className="rounded-lg bg-amber-50 p-4">
+                <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm">
                   <Message value={connectionMessage} />
                 </p>
               )}
-            {state?.sealed && (
-              <p role="status">
-                <T k="This delivery round is sealed. No new sales can be recorded." />
-              </p>
-            )}
             {state?.paused && (
-              <p role="status">
-                <T k="This trip is paused for carryover. Resume online after admin authorization." />
+              <p role="status" className="text-sm">
+                <T k="This trip is paused. Reopen online after the warehouse approves tomorrow's trip." />
               </p>
             )}
             {notice && (
-              <p role="status" className="rounded-lg bg-teal-50 p-4">
+              <p
+                role="status"
+                className="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900"
+              >
                 <Message value={notice} />
               </p>
             )}
             {shown && screen ? (
-              <>
-                {path === "/driver/home" && <DriverHomeView data={shown} />}
-                {path === "/driver/delivery" && (
-                  <>
-                    <h1 className="text-3xl font-bold">
-                      <T k="New Sale" />
-                    </h1>
-                    {trip && shown.delivering ? (
-                      <>
-                        <Card id="add-delivery">
-                          <DeliveryForm
-                            // Preparation and sync never change this key. Only a
-                            // confirmed save followed by Continue resets a draft.
-                            key={`${trip.id}:${epoch}`}
-                            simplifiedPayment
-                            workspace={shown.workspace}
-                            finance={shown.finance}
-                            trip={trip}
-                            requestKey={crypto.randomUUID()}
-                            initialCustomer={
-                              params.get("customer") ?? undefined
-                            }
-                          />
-                        </Card>
-                        <details className="rounded-xl border p-4">
-                          <summary>
-                            <T k="Collect previous credit without a new delivery" />
-                          </summary>
-                          {state ? (
-                            <OfflineCollection
-                              state={state}
-                              busy={busy}
-                              save={(d) =>
-                                record("PAYMENT", d)
-                                  .then(() => true)
-                                  .catch((e) => {
-                                    setMessage(storageMessage(e));
-                                    return false;
-                                  })
-                              }
-                            />
-                          ) : (
-                            <CollectCreditForm
-                              finance={shown.finance}
-                              workspace={shown.workspace}
-                              trip={trip}
-                              requestKey={crypto.randomUUID()}
-                            />
-                          )}
-                        </details>
-                      </>
-                    ) : (
-                      <p>
-                        <T k="No active delivery stock. Waiting for warehouse loading." />
-                      </p>
-                    )}
-                  </>
-                )}
-                {path === "/driver/customers" &&
-                  (state ? (
-                    <>
-                      <OfflineCustomers
-                        state={state}
-                        busy={busy}
-                        save={(d, edit) =>
-                          record(edit ? "CONTACT" : "CUSTOMER", d)
-                            .then(() => true)
-                            .catch((e) => {
-                              setMessage(storageMessage(e));
-                              return false;
-                            })
-                        }
-                      />
-                      <OfflineCollection
-                        state={state}
-                        busy={busy}
-                        save={(d) =>
-                          record("PAYMENT", d)
-                            .then(() => true)
-                            .catch((e) => {
-                              setMessage(storageMessage(e));
-                              return false;
-                            })
-                        }
-                      />
-                    </>
-                  ) : (
-                    <DriverCustomers
-                      workspace={shown.workspace}
-                      trip={shown.delivering ? trip : undefined}
-                    />
-                  ))}
-                {path === "/driver/pending-jars" && (
-                  <DriverPendingJars
-                    key={params.get("customer") ?? "directory"}
-                    workspace={shown.workspace}
-                    pending={shown.pending}
-                    state={state}
-                    trip={shown.delivering ? trip : undefined}
-                    customer={params.get("customer") ?? undefined}
-                  />
-                )}
-                {path === "/driver/instant-delivery" && (
-                  <InstantDriver
-                    key={`${trip?.id ?? "idle"}:${epoch}`}
-                    data={shown}
-                    state={state}
-                    online={mode === "ONLINE"}
-                  />
-                )}
-                {path === "/driver/sales" && (
-                  <>
-                    <DriverSalesView
-                      data={shown}
-                      q={{
-                        from: params.get("from") ?? undefined,
-                        to: params.get("to") ?? undefined,
-                      }}
-                    />
-                    {state &&
-                      state.operations.some((o) => o.status !== "SYNCED") && (
-                        <OfflineHistory state={state} pendingOnly />
-                      )}
-                  </>
-                )}
-                {path === "/driver/return" && (
-                  <>
-                    <h1 className="text-3xl font-bold">
-                      <T k="Return to Warehouse" />
-                    </h1>
-                    {trip &&
-                      ["SUBMITTED", "UNDER_REVIEW", "DISCREPANCY"].includes(
-                        trip.status,
-                      ) && (
-                        <p role="status">
-                          <T k="Awaiting warehouse verification" />
-                        </p>
-                      )}
-                    {trip && (
-                      <DriverStock workspace={shown.workspace} trip={trip} />
-                    )}{" "}
-                    {state?.paused ? (
-                      <p role="status">
-                        <T k="This trip is paused for carryover. Resume online after admin authorization." />
-                      </p>
-                    ) : state ? (
-                      <OfflineReturnForm
-                        state={state}
-                        busy={busy}
-                        save={(counts) =>
-                          record("SUBMIT", {
-                            counts,
-                            manifest: state.operations.map((o) => ({
-                              id: o.id,
-                              fingerprint: o.fingerprint,
-                            })),
-                          })
-                            .then(() => true)
-                            .catch((e) => {
-                              setMessage(storageMessage(e));
-                              return false;
-                            })
-                        }
-                      />
-                    ) : trip && shown.delivering ? (
-                      <ReturnForm
-                        workspace={shown.workspace}
-                        trip={trip}
-                        requestKey={crypto.randomUUID()}
-                        admin={false}
-                      />
-                    ) : (
-                      <p>
-                        <T k="No active delivery stock. Waiting for warehouse loading." />
-                      </p>
-                    )}
-                  </>
-                )}
-              </>
+              <DriverWorkspaceScreens
+                key={shown.trip?.id ?? "waiting"}
+                path={path}
+                params={params}
+                data={shown}
+                state={useLocal ? state : undefined}
+                busy={busy}
+                epochs={epochs}
+                online={mode === "ONLINE"}
+                record={(kind, value) =>
+                  record(kind, value)
+                    .then(() => true)
+                    .catch((error) => {
+                      setMessage(storageMessage(error));
+                      return false;
+                    })
+                }
+              />
             ) : screen ? (
               <p>
                 <Message
@@ -1460,15 +1497,15 @@ function Application({
               children
             )}
             {!shown && mode !== "CHECKING" && (
-              <a className="inline-block underline" href="/sign-in?reauth=1">
+              <a
+                className="inline-flex min-h-11 items-center text-primary underline"
+                href="/sign-in?reauth=1"
+              >
                 <T k="Sign in online" />
               </a>
             )}
           </main>
-          <footer className="p-5 text-xs text-muted-foreground">
-            <T k="Asia/Kathmandu · Business days close manually" />
-          </footer>
-        </div>
+        </DriverPageContainer>
       </DriverRuntimeContext.Provider>
     </LocaleProvider>
   );

@@ -95,8 +95,8 @@ test("pending registration, admin approval, actual names, suspension and reactiv
       adminPage.getByRole("heading", { name: "Ram Thapa", exact: true }),
     ).toBeVisible();
     await expect(
-      adminPage.getByText("pending@fixture.example", { exact: true }),
-    ).toBeVisible();
+      adminPage.getByTestId(`driver-card-${pendingId}`),
+    ).toContainText("9800000000");
     await adminPage.goto(`/admin/drivers/${pendingId}`);
     await expect(
       adminPage.getByText("pending@fixture.example", { exact: true }),
@@ -137,9 +137,8 @@ test("pending registration, admin approval, actual names, suspension and reactiv
       "My Stock",
       "New Sale",
       "Customers",
-      "Unreturned Jars",
       "Sales History",
-      "Return to Warehouse",
+      "More",
     ])
       await expect(
         page.getByRole("navigation").getByRole("link", { name, exact: true }),
@@ -198,7 +197,9 @@ test("pending registration, admin approval, actual names, suspension and reactiv
     await page.getByRole("button", { name: "नेपाली", exact: true }).click();
     expect((await preference).ok()).toBe(true);
     await expect(
-      page.getByText(message("ne", "Driver Workspace"), { exact: true }),
+      page
+        .getByTestId("driver-bottom-nav")
+        .getByRole("link", { name: message("ne", "My Stock"), exact: true }),
     ).toBeVisible();
     await expect(
       page
@@ -217,6 +218,7 @@ test("pending registration, admin approval, actual names, suspension and reactiv
     await page.screenshot({
       path: `test-results/driver-approval-${page.viewportSize()!.width}px.png`,
     });
+    await openAdminMenuForSignOut(page);
     await page
       .getByRole("button", { name: message("ne", "Sign Out"), exact: true })
       .click();
@@ -261,6 +263,7 @@ test("admin creation defaults pending, rejection is visible and sign-out outages
   page.on("dialog", (d) => d.accept());
   await login(page, "admin", /admin\/dashboard/);
   await page.goto("/admin/drivers");
+  await page.getByRole("button", { name: "Add driver", exact: true }).click();
   const add = accountForm(page, "driver");
   await add.getByLabel("Existing Supabase Auth user UUID").fill(pendingId);
   await add.getByLabel("Full name").fill("New Driver");
@@ -307,6 +310,7 @@ test("admin creation defaults pending, rejection is visible and sign-out outages
   expect(
     (await request.post("http://127.0.0.1:17777/logout-failure")).ok(),
   ).toBe(true);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in\?reason=signout/);
   await expect(page.getByRole("status")).toContainText(
@@ -315,6 +319,7 @@ test("admin creation defaults pending, rejection is visible and sign-out outages
   await page.goto("/driver/delivery");
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "pending", /driver\/home/);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await page.goto("/driver/delivery");

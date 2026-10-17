@@ -11,6 +11,7 @@ import { offlineIdentity } from "./offline";
 import { offlineRpc, OfflineServerError } from "@/data-access/offline";
 import { uuid } from "@/domain/inventory/validation";
 import type { DeviceSecrets } from "@/lib/offline/device";
+import { diagnoseOfflineOwnership } from "./offline-diagnostics";
 
 function recoveryKey() {
   const key = process.env.OFFLINE_DEVICE_RECOVERY_KEY;
@@ -74,12 +75,29 @@ export async function trustedDeviceCommand(body: Record<string, unknown>) {
       throw new OfflineServerError("INVALID", "Invalid offline record.", 400);
     // Check the trip BEFORE registering this installation. Otherwise a failed
     // legacy-round transfer leaves an unrelated approved device behind.
-    if (body.trip !== undefined)
-      await offlineRpc("offline_preparation_access", {
-        p_trip: uuid(String(body.trip)),
-        p_device: device,
-        p_token: body.token,
-      });
+    if (body.trip !== undefined) {
+      try {
+        const access = await offlineRpc<{ replace_installation?: boolean }>(
+          "offline_preparation_access",
+          {
+            p_trip: uuid(String(body.trip)),
+            p_device: device,
+            p_token: body.token,
+          },
+        );
+        if (access?.replace_installation) {
+          await diagnoseOfflineOwnership(
+            profile.id,
+            device,
+            "REPLACEMENT_REQUIRED",
+          );
+          return { replace_installation: true };
+        }
+      } catch (error) {
+        await diagnoseOfflineOwnership(profile.id, device, "DENIED");
+        throw error;
+      }
+    }
     const result = await offlineRpc("trusted_device_register", {
       p_device: device,
       p_token: body.token,
@@ -92,6 +110,7 @@ export async function trustedDeviceCommand(body: Record<string, unknown>) {
       }),
     });
     await markDevice();
+    await diagnoseOfflineOwnership(profile.id, device, "REGISTERED");
     return result;
   }
   if (body.action === "register") {

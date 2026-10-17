@@ -1,3 +1,4 @@
+import { saveDriverRecord } from "./fixture-client";
 import { openAdminMenuForSignOut } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
@@ -20,15 +21,35 @@ async function login(page: Page, role = "admin") {
   await page.getByRole("button", { name: "English", exact: true }).click();
 }
 async function save(page: Page, label: string) {
+  if (page.url().includes("/driver/")) {
+    if (label === "Start Trip") {
+      await page
+        .getByRole("button", { name: "Start Trip", exact: true })
+        .click();
+      await expect(
+        page.getByText("Trip active", { exact: true }).first(),
+      ).toBeVisible();
+    } else await saveDriverRecord(page, label);
+    return;
+  }
   const action = page.waitForResponse(
     (r) =>
       r.request().method() === "POST" && !!r.request().headers()["next-action"],
   );
   await page.getByRole("button", { name: label, exact: true }).click();
   expect((await action).ok()).toBe(true);
-  await expect(
-    page.getByText(/^(Saved to the database\.|Saved to Supabase\.)$/).first(),
-  ).toBeVisible();
+  if (label === "Save as Draft")
+    await expect(page.getByTestId("trip-creation-success")).toContainText(
+      "saved as a draft.",
+    );
+  else
+    await expect(
+      page
+        .getByText(
+          /^(Record saved\.|Saved to the database\.|Saved to Supabase\.)$/,
+        )
+        .first(),
+    ).toBeVisible();
 }
 async function pick(page: Page, date: string) {
   await page
@@ -120,10 +141,8 @@ test("night loads remain prepared through closing and drivers use 85/65 without 
       .getByTestId("create-trip-section")
       .getByLabel("Vehicle", { exact: true })
       .selectOption({ label: vehicle });
-    await save(page, "Create draft trip");
-    await page
-      .getByRole("link", { name: "Open saved trip", exact: true })
-      .click();
+    await save(page, "Save as Draft");
+    await page.getByRole("link", { name: "Open Trip", exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/trips\/[0-9a-f-]{36}$/);
     const trip = new URL(page.url()).pathname.split("/").at(-1)!;
     trips.push(trip);
@@ -208,7 +227,11 @@ test("night loads remain prepared through closing and drivers use 85/65 without 
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("85");
-  await save(page, "Start delivering");
+  // The fixture opened tomorrow's session; advance the phone for its scheduled
+  // activation, then restore real time before timestamp-checked journal writes.
+  await page.clock.setSystemTime(new Date(tomorrow + "T07:00:00+05:45"));
+  await save(page, "Start Trip");
+  await page.clock.setSystemTime(new Date());
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "New Sale", exact: true })
@@ -222,6 +245,9 @@ test("night loads remain prepared through closing and drivers use 85/65 without 
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
   await save(page, "Save Delivery");
+  await expect
+    .poll(async () => (await admin.workspace(trips[0])).visits.length)
+    .toBe(1);
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "My Stock", exact: true })

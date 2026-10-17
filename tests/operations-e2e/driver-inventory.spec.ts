@@ -1,6 +1,13 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
+import { driverNavigate, driverReturn } from "../offline-e2e/driver-navigation";
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
-import { activeFixtureTrip, fixtureIds } from "./fixture-client";
+import {
+  activeFixtureTrip,
+  fixtureIds,
+  fixtureClient,
+  replayDriverDelivery,
+} from "./fixture-client";
 import { parseCommand } from "../../src/domain/operations/commands";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 import type { DeliveryCustomerContext } from "../../src/domain/operations/customer-context";
@@ -27,6 +34,24 @@ async function login(page: Page, role = "driver") {
   ).toBeEnabled();
 }
 async function save(page: Page, name: string) {
+  if (page.url().includes("/driver/")) {
+    if (name === "Submit warehouse returns") return driverReturn(page);
+    const label =
+      name === "Start Trip"
+        ? "Start Trip"
+        : name === "Collect outstanding credit"
+          ? "Save collection"
+          : name;
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect(
+      page
+        .getByText(name === "Start Trip" ? "Trip active" : "Saved on phone", {
+          exact: true,
+        })
+        .first(),
+    ).toBeVisible();
+    return;
+  }
   const response = page.waitForResponse(
     (r) =>
       r.request().method() === "POST" && !!r.request().headers()["next-action"],
@@ -35,13 +60,35 @@ async function save(page: Page, name: string) {
   expect((await response).ok()).toBe(true);
 }
 async function card(page: Page, label: string, value: number) {
-  await expect(
-    page
-      .getByRole("region", { name: "Delivery stock", exact: true })
-      .locator("section.rounded-xl")
-      .filter({ has: page.getByRole("heading", { name: label, exact: true }) })
-      .locator("p"),
-  ).toHaveText(String(value));
+  const ids: Record<string, string> = {
+    "Remaining Full Jars": "driver-remaining-full-jars",
+    "Empty Jars Collected": "driver-empty-jars-collected",
+    "Cartons Remaining": "driver-cartons-remaining",
+  };
+  if (ids[label]) {
+    await expect(page.getByTestId(ids[label]!)).toHaveText(String(value));
+    return;
+  }
+  // Home deliberately shows only current physical stock. Assert detailed round
+  // counters from the authoritative load and visit journals instead.
+  const driver = await fixtureClient(page.request, "driver"),
+    w = await driver.workspace();
+  const trip = w.trips.find((t) => t.status !== "CLOSED")!;
+  const scoped = await driver.workspace(trip.id);
+  const actual =
+    label === "Full Jars Sold"
+      ? scoped.items.reduce((n, i) => n + i.full_jars, 0)
+      : scoped.loads
+          .filter(
+            (l) =>
+              l.trip_id === trip.id &&
+              l.stock_kind ===
+                (label === "Total Cartons Loaded"
+                  ? "BOTTLE_CARTON"
+                  : "FULL_JAR"),
+          )
+          .reduce((n, l) => n + l.quantity, 0);
+  expect(actual).toBe(value);
 }
 async function record(
   page: Page,
@@ -134,15 +181,16 @@ test("driver inventory, simplified selling, audited returns and automatic second
       .getByRole("button", { name: "Add New Customer", exact: true })
       .click();
     await page.getByLabel("Customer name", { exact: true }).fill("ABC Hotel");
+    await page.getByText("More customer details", { exact: true }).click();
     await page
       .getByLabel("Contact person (optional)", { exact: true })
       .fill("Hotel manager");
     await page
       .getByLabel("Customer type (optional)", { exact: true })
       .fill("Hotel");
-    await page
-      .getByLabel("Delivery notes (optional)", { exact: true })
-      .fill("Use rear entrance");
+    await expect(
+      page.getByLabel("Delivery notes (optional)", { exact: true }),
+    ).toHaveCount(0);
     await save(page, "Save and select customer");
     await expect(
       page.getByText("Selected: ABC Hotel", { exact: true }),
@@ -150,13 +198,18 @@ test("driver inventory, simplified selling, audited returns and automatic second
     await expect(
       page.getByLabel("Jars Delivered", { exact: true }),
     ).toHaveValue("1");
+    await expect
+      .poll(async () =>
+        (await admin.workspace()).customers.some((c) => c.name === "ABC Hotel"),
+      )
+      .toBe(true);
     const hotel = (await admin.workspace()).customers.find(
       (c) => c.name === "ABC Hotel",
     )!;
     expect(hotel).toMatchObject({
       contact_person: "Hotel manager",
       customer_type: "Hotel",
-      delivery_notes: "Use rear entrance",
+      delivery_notes: "",
       created_by: fixtureIds.driver,
     });
     const command = await record(page, 35, 30, "Credit", 1);
@@ -164,9 +217,9 @@ test("driver inventory, simplified selling, audited returns and automatic second
       .poll(async () => (await admin.workspace(trip)).visits.length)
       .toBe(1);
     const persisted = await admin.workspace(trip);
-    expect(await driver.rpc(command.rpc, command.args)).toBe(
-      persisted.visits[0]!.id,
-    );
+    expect(
+      await replayDriverDelivery(page, trip, String(command.args.p_key)),
+    ).toBe(persisted.visits[0]!.id);
     expect((await admin.workspace(trip)).movements).toEqual(
       persisted.movements,
     );
@@ -236,12 +289,12 @@ test("driver inventory, simplified selling, audited returns and automatic second
       ),
     ).toHaveLength(3);
     await page.goto("/driver/return");
-    await expect(
-      page.getByLabel("Full jars counted", { exact: true }),
-    ).toHaveValue("40");
-    await expect(
-      page.getByLabel("Empty jars counted", { exact: true }),
-    ).toHaveValue("37");
+    await expect(page.getByLabel(/^20L test jar · Full [Jj]ars$/)).toHaveValue(
+      "40",
+    );
+    await expect(page.getByLabel(/^20L test jar · Empty [Jj]ars$/)).toHaveValue(
+      "37",
+    );
     await save(page, "Submit warehouse returns");
     await expect
       .poll(async () => (await admin.workspace(trip)).trips[0]!.status)
@@ -260,10 +313,7 @@ test("driver inventory, simplified selling, audited returns and automatic second
       .poll(async () => (await admin.workspace(trip)).trips[0]!.status)
       .toBe("CLOSED");
     await expect(
-      page.getByText(
-        "No active delivery stock. Waiting for warehouse loading.",
-        { exact: true },
-      ),
+      page.getByText("Waiting for warehouse loading", { exact: true }),
     ).toBeVisible({ timeout: 20000 });
     const next = randomUUID();
     await admin.rpc("create_trip", {
@@ -287,19 +337,15 @@ test("driver inventory, simplified selling, audited returns and automatic second
     await card(page, "Total Jars Loaded", 80);
     await card(page, "Full Jars Sold", 0);
     await card(page, "Empty Jars Collected", 0);
-    await save(page, "Start delivering");
+    await save(page, "Start Trip");
     await page.goto(`/driver/delivery?customer=${hotel.id}`);
     await expect(
       page.getByText("Selected: ABC Hotel", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText("Previous Pending Jars: 3", { exact: true }),
+      page.getByText("Updated Pending Balance: 3", { exact: true }),
     ).toBeVisible();
-    await page
-      .getByText("Collect previous credit without a new delivery", {
-        exact: true,
-      })
-      .click();
+    await driverNavigate(page, "Collections");
     await page
       .getByLabel("Collection customer", { exact: true })
       .selectOption(hotel.id);
@@ -311,6 +357,9 @@ test("driver inventory, simplified selling, audited returns and automatic second
     expect((await finance()).sales).toHaveLength(3);
     await page.goto("/driver/return");
     await save(page, "Submit warehouse returns");
+    await expect
+      .poll(async () => (await admin.workspace(next)).trips[0]?.status)
+      .toBe("SUBMITTED");
     await adminPage.goto(`/admin/trips/${next}`);
     await adminPage
       .getByLabel("Verification / discrepancy reason", { exact: true })
@@ -387,13 +436,12 @@ test("driver inventory, simplified selling, audited returns and automatic second
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
+    await openAdminMenuForSignOut(page);
     await page.getByRole("button", { name: "Sign Out", exact: true }).click();
     await expect(page).toHaveURL(/sign-in/);
     await login(page);
     await page.goto(`/driver/pending-jars?customer=${hotel.id}`);
-    await expect(
-      page.getByText("3 pending jars", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId("driver-pending-total")).toHaveText("3");
   } catch (error) {
     await test.info().attach("driver failure", {
       body: await page.locator("main").innerText(),

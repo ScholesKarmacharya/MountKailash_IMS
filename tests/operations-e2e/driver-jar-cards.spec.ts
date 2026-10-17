@@ -1,3 +1,4 @@
+import { driverNavigate } from "../offline-e2e/driver-navigation";
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip, fixtureIds } from "./fixture-client";
@@ -76,10 +77,7 @@ test("driver cards keep confirmed quantities, group customers, filter BS dates, 
     });
   const before = await f.admin.workspace(f.trip);
   await login(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Unreturned Jars", exact: true })
-    .click();
+  await driverNavigate(page, "Unreturned Jars");
   await expect(
     page.getByRole("heading", { name: "Unreturned Jars", exact: true }),
   ).toBeVisible();

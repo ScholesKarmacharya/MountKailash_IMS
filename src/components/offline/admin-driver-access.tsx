@@ -13,18 +13,11 @@ import { Field } from "@/components/operation-form";
 export function AdminDriverOfflineAccess({
   driver,
   access,
-  requestKey,
 }: {
   driver: { id: string; name: string };
   access: DriverOfflineAccess;
-  requestKey: string;
 }) {
-  const [state, action, pending] = useActionState(
-    resetOfflineAccessAction,
-    null,
-  );
-  const [key] = useState(requestKey);
-  const { t } = useLocale();
+  const [success, setSuccess] = useState("");
   return (
     <Card className="space-y-4" data-testid="driver-offline-access">
       <h2 className="text-lg font-semibold">
@@ -32,6 +25,28 @@ export function AdminDriverOfflineAccess({
       </h2>
       <p className="font-medium">{driver.name}</p>
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">
+            <T k="Previous device" />
+          </dt>
+          <dd>
+            <T
+              k={access.previous_device_revoked ? "Revoked" : "Not recorded"}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">
+            <T k="Last reset" />
+          </dt>
+          <dd>
+            {access.last_reset_at ? (
+              <DateValue value={access.last_reset_at} time />
+            ) : (
+              <T k="Not recorded" />
+            )}
+          </dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">
             <T k="Status" />
@@ -165,68 +180,101 @@ export function AdminDriverOfflineAccess({
         title="Reset offline access?"
         triggerLabel="Reset Offline Access"
         destructive
-        disabled={!access.can_reset || !!state?.success}
+        disabled={!access.can_reset}
         icon={<AlertTriangle className="size-4" aria-hidden="true" />}
       >
-        <form action={action} aria-busy={pending} className="space-y-4">
-          <p>
-            {t("Reset offline access for {driver name}?").replace(
-              "{driver name}",
-              driver.name,
-            )}
-          </p>
-          <p>
-            <T k="This will revoke the previous device and allow the driver to prepare offline access on a new phone or browser." />
-          </p>
-          <p>
-            <T k="Previous sales, deliveries, offline records and audit history will be preserved." />
-          </p>
-          <p
-            role="alert"
-            className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
-          >
-            <T k="Changes that exist only on the old phone may not be recoverable after reset." />
-          </p>
-          <input type="hidden" name="driver" value={driver.id} />
-          <input type="hidden" name="trip" value={access.trip_id ?? ""} />
-          <input type="hidden" name="key" value={key} />
-          <fieldset disabled={pending || !!state?.success}>
-            <Field name="reason" label="Reason (optional)" maxLength={500} />
-          </fieldset>
-          {state?.error && (
-            <p role="alert" className="text-sm text-red-800">
-              <T k={state.error} />
-            </p>
-          )}
-          {state?.success ? (
-            <>
-              <p role="status">
-                <T k={state.success} />
-              </p>
-              <DialogClose label="Close dialog" />
-            </>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              <DialogClose disabled={pending} />
-              <Button
-                type="submit"
-                disabled={pending}
-                className="bg-red-700 text-white hover:bg-red-800"
-              >
-                <T k={pending ? "Saving…" : "Reset Access"} />
-              </Button>
-            </div>
-          )}
-        </form>
+        <OfflineAccessResetForm
+          driver={driver}
+          trip={access.trip_id}
+          onSuccess={setSuccess}
+        />
       </AdminDialog>
-      {state?.success && (
+      {success && (
         <p
           role="status"
           className="rounded-lg bg-teal-50 p-3 text-sm text-teal-900"
         >
-          <T k={state.success} />
+          <T k={success} />
         </p>
       )}
     </Card>
+  );
+}
+
+// The dialog unmounts this form when closed. Each new confirmation gets its own
+// stable request key, while retries of that confirmation remain idempotent.
+function OfflineAccessResetForm({
+  driver,
+  trip,
+  onSuccess,
+}: {
+  driver: { id: string; name: string };
+  trip: string | null;
+  onSuccess: (message: string) => void;
+}) {
+  const [state, action, pending] = useActionState(
+    async (
+      previous: Awaited<ReturnType<typeof resetOfflineAccessAction>>,
+      form: FormData,
+    ) => {
+      const result = await resetOfflineAccessAction(previous, form);
+      if (result?.success) onSuccess(result.success);
+      return result;
+    },
+    null,
+  );
+  const [key] = useState(() => crypto.randomUUID());
+  const { t } = useLocale();
+  return (
+    <form action={action} aria-busy={pending} className="space-y-4">
+      <p>
+        {t("Reset offline access for {driver name}?").replace(
+          "{driver name}",
+          driver.name,
+        )}
+      </p>
+      <p>
+        <T k="This will revoke the previous device and allow the driver to prepare offline access on a new phone or browser." />
+      </p>
+      <p>
+        <T k="Previous sales, deliveries, offline records and audit history will be preserved." />
+      </p>
+      <p
+        role="alert"
+        className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+      >
+        <T k="Changes that exist only on the old phone may not be recoverable after reset." />
+      </p>
+      <input type="hidden" name="driver" value={driver.id} />
+      <input type="hidden" name="trip" value={trip ?? ""} />
+      <input type="hidden" name="key" value={key} />
+      <fieldset disabled={pending || !!state?.success}>
+        <Field name="reason" label="Reason (optional)" maxLength={500} />
+      </fieldset>
+      {state?.error && (
+        <p role="alert" className="text-sm text-red-800">
+          <T k={state.error} />
+        </p>
+      )}
+      {state?.success ? (
+        <>
+          <p role="status">
+            <T k={state.success} />
+          </p>
+          <DialogClose label="Close dialog" />
+        </>
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          <DialogClose disabled={pending} />
+          <Button
+            type="submit"
+            disabled={pending}
+            className="bg-red-700 text-white hover:bg-red-800"
+          >
+            <T k={pending ? "Saving…" : "Reset Access"} />
+          </Button>
+        </div>
+      )}
+    </form>
   );
 }

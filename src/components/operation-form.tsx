@@ -3,7 +3,7 @@ import { LocalizedSelect } from "@/components/localization";
 
 import { T, Message } from "@/components/localization";
 
-import { useActionState, useEffect, useState, useId } from "react";
+import { useActionState, useEffect, useState, useId, useRef } from "react";
 import Link from "next/link";
 import { operationAction } from "@/app/operations-actions";
 import { Button } from "./ui/button";
@@ -108,6 +108,7 @@ export function OperationForm({
   const { t } = useLocale();
   const runtime = useDriverRuntime();
   const [blockedMessage, setBlockedMessage] = useState("");
+  const submitting = useRef(false);
   const [state, action, pending] = useActionState(
     async (previous: Parameters<typeof operationAction>[0], form: FormData) => {
       if (submitDisabled) return { error: submitBlockedMessage };
@@ -119,6 +120,7 @@ export function OperationForm({
         if (result?.success) window.dispatchEvent(new Event("operation-saved"));
         return result;
       } finally {
+        submitting.current = false;
         window.dispatchEvent(new Event("operation-settled"));
       }
     },
@@ -160,12 +162,22 @@ export function OperationForm({
       onChange={() => setDirty(true)}
       onClick={() => setDirty(true)}
       onSubmit={(e) => {
+        if (submitting.current || state?.success) {
+          e.preventDefault();
+          return;
+        }
         if (submitDisabled) {
           e.preventDefault();
           setBlockedMessage(submitBlockedMessage ?? "");
           return;
         }
-        if (!showSubmit || !window.confirm(t(confirm))) e.preventDefault();
+        const submitter = (e.nativeEvent as SubmitEvent).submitter;
+        const confirmation = submitter?.getAttribute("data-confirm") ?? confirm;
+        if (!showSubmit || !window.confirm(t(confirmation))) {
+          e.preventDefault();
+          return;
+        }
+        submitting.current = true;
       }}
     >
       <input type="hidden" name="operation" value={operation} />

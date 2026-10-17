@@ -1,5 +1,11 @@
 # Driver offline-first implementation
 
+Cloud status verified 17 October 2026: migrations 001–030, including 028, are
+applied. Only the separate admin trip-loading migration 031 is pending. Read the
+[current integration verification and release limits](docs/INTEGRATION_VERIFICATION_2026_10_17.md)
+for the latest executed results; earlier pending-migration statements below
+describe the implementation's original review state.
+
 The latest normal-delivery notes removal, UAT diagnosis and device recovery behavior are documented in [OFFLINE_DEVICE_RECOVERY.md](OFFLINE_DEVICE_RECOVERY.md).
 
 The driver uses the existing Supabase sign-in. Approved LOADED and ACTIVE trips prepare automatically. IndexedDB stores a cryptographically random 32-byte installation secret and independent device token per driver; the encrypted AES-GCM OfflineVault and UUID journal remain in use. No PIN, passphrase, biometric, manual lock, or separate offline switch is presented.

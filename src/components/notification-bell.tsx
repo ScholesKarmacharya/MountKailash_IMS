@@ -31,6 +31,7 @@ type Props = {
   unlocked?: boolean;
   cache?: NotificationCache;
   persist?: (cache: NotificationCache) => Promise<void>;
+  onTripChange?: () => void;
 };
 export function LockedNotificationBell() {
   const { t } = useLocale();
@@ -100,6 +101,7 @@ export function NotificationBell({
   unlocked = true,
   cache,
   persist,
+  onTripChange,
 }: Props) {
   const { t, number } = useLocale();
   const [network, setNetwork] = useState(true);
@@ -118,6 +120,7 @@ export function NotificationBell({
     panel = useRef<HTMLDivElement>(null);
   const current = useRef(feed),
     persistence = useRef(persist);
+  const tripChanged = useRef(onTripChange);
   const known = useRef(new Set(cache?.items.map((n) => n.id)));
   const initialized = useRef(!!cache?.items.length),
     cacheLoaded = useRef(!!cache);
@@ -128,7 +131,8 @@ export function NotificationBell({
   const marking = useRef(false);
   useEffect(() => {
     persistence.current = persist;
-  }, [persist]);
+    tripChanged.current = onTripChange;
+  }, [persist, onTripChange]);
   const seenKey = `mk-notification-seen:${profile.id}`;
   useEffect(() => {
     const update = () => setNetwork(navigator.onLine);
@@ -258,7 +262,19 @@ export function NotificationBell({
         const arrivals = initialized.current
           ? fetched.filter((n) => !known.current.has(n.id) && !n.read_at)
           : [];
+        const changesTrip = fetched.some(
+          (n) =>
+            !known.current.has(n.id) &&
+            [
+              "TRIP_ASSIGNED",
+              "STOCK_LOADED",
+              "TRIP_UPDATED",
+              "TRIP_CANCELLED",
+              "RETURN_CONFIRMED",
+            ].includes(n.type),
+        );
         remember(fetched);
+        if (changesTrip) tripChanged.current?.();
         initialized.current = true;
         setHasMore(page.length === 50);
         const stored = await save({

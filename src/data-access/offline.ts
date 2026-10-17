@@ -57,6 +57,12 @@ export async function offlineRpc<T>(
 ): Promise<T> {
   const { data, error } = await (await createClient()).rpc(name, args);
   if (error) {
+    if (error.code === "MK002")
+      throw new OfflineServerError(
+        "DEVICE_REVOKED",
+        "This browser's offline access was revoked. Ask the warehouse admin to reset offline access.",
+        403,
+      );
     // Preserve a specific ownership diagnosis, including races after preflight
     // and older registration RPCs. Never expose arbitrary database messages.
     if (

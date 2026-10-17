@@ -8,7 +8,7 @@ import {
 import { AdminTripCards } from "@/components/admin-trip-cards";
 import { TripHistoryFilters } from "@/components/trip-history-filters";
 import { filterTrips } from "@/domain/operations/trip-presentation";
-import { CreateTripForm } from "@/components/trip-forms";
+import { CreateTripForm } from "@/components/create-trip-form";
 import { Card } from "@/components/ui/card";
 import { getTripHistory, getTripLoads } from "@/services/history";
 export default async function Page({

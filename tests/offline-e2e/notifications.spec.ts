@@ -1,3 +1,4 @@
+import { driverNavigate, driverReturn } from "./driver-navigation";
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import {
@@ -76,21 +77,12 @@ test("encrypted notifications survive offline reopening, defer return alerts, an
   await page.getByRole("button", { name: "English", exact: true }).click();
 
   await expect(page.getByTestId("notification-badge")).toHaveText("1");
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Return to Warehouse", exact: true })
-    .click();
-  await page
-    .getByRole("button", {
-      name: "Prepare return and seal device queue",
-      exact: true,
-    })
-    .click();
+  await driverNavigate(page, "Return to Warehouse");
+  await driverReturn(page);
   await expect(
-    page.getByText(
-      "This delivery round is sealed. No new sales can be recorded.",
-      { exact: true },
-    ),
+    page.getByText("Return submitted. Waiting for warehouse confirmation.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect((await f.admin.workspace(f.trip)).trips[0]!.status).toBe("ACTIVE");
   expect(

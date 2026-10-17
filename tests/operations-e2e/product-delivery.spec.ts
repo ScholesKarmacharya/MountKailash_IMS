@@ -1,3 +1,5 @@
+import { saveDriverRecord } from "./fixture-client";
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -29,17 +31,7 @@ async function login(page: Page, role = "driver") {
   await language(page, "en");
 }
 async function save(page: Page) {
-  const response = page.waitForResponse(
-    (r) =>
-      r.request().method() === "POST" && !!r.request().headers()["next-action"],
-  );
-  await page
-    .getByRole("button", { name: "Save Delivery", exact: true })
-    .click();
-  expect((await response).ok()).toBe(true);
-  await expect(
-    page.getByText(/^(Record saved\.|Saved to Supabase\.)$/).last(),
-  ).toBeVisible();
+  await saveDriverRecord(page);
 }
 async function pdfText(page: Page, url: string) {
   const response = await page.request.get(url);
@@ -113,6 +105,13 @@ test("carton-only sale has no jar fields in EN/NE forms, history, details, PDFs 
   expect(dialog).not.toMatch(
     /Jars Delivered|Empty Jars Returned|Unreturned Jars/,
   );
+  await expect
+    .poll(
+      async () =>
+        (await admin.rpc<FinanceWorkspace>("finance_workspace", {})).invoices
+          .length,
+    )
+    .toBe(1);
   const f = await admin.rpc<FinanceWorkspace>("finance_workspace", {});
   expect(f.invoices[0]).toMatchObject({ total: "751.25", outstanding: "0.00" });
   const invoice = f.invoices[0]!,
@@ -123,8 +122,9 @@ test("carton-only sale has no jar fields in EN/NE forms, history, details, PDFs 
   expect(w.movements.find((m) => m.visit_id)?.stock_kind).toBe("BOTTLE_CARTON");
   await page.goto("/driver/sales");
   const sale = page
-    .locator("li")
+    .getByTestId("driver-history-card")
     .filter({ has: page.locator(`a[href="/driver/invoices/${invoice.id}"]`) });
+  await sale.locator("summary").click();
   await expect(sale).toContainText("Cartons Delivered");
   await expect(sale).not.toContainText("Empty Jars Returned");
   await page.goto(`/driver/invoices/${invoice.id}`);
@@ -155,6 +155,7 @@ test("carton-only sale has no jar fields in EN/NE forms, history, details, PDFs 
     ),
   ).toBe(true);
   await language(page, "en");
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "admin");
@@ -240,6 +241,9 @@ test("jar and mixed sale confirmation separates visit change from previous custo
   await expect(cartons.locator("dt")).toHaveCount(1);
   await language(page, "en");
   await save(page);
+  await expect
+    .poll(async () => (await admin.workspace(trip)).visits.length)
+    .toBe(2);
   const w = await admin.workspace(trip);
   expect(
     w.custody.find(

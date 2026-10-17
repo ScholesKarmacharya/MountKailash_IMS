@@ -5,6 +5,66 @@ import { roundStock, roundFinance } from "@/domain/operations/driver-workspace";
 import { npr } from "@/domain/finance/money";
 import { Card } from "./ui/card";
 
+export function DriverStockSummary({
+  workspace,
+  trip,
+  returning = false,
+}: {
+  workspace: Workspace;
+  trip: Trip;
+  returning?: boolean;
+}) {
+  const s = roundStock(workspace, trip);
+  const metrics: [string, number, string][] = [
+    ["Full Jars", s.remainingFull, "driver-remaining-full-jars"],
+    [
+      "Empty Jars",
+      returning ? s.remainingEmpty : s.collectedEmpty,
+      "driver-empty-jars-collected",
+    ],
+    ["Cartons", s.remainingCartons, "driver-cartons-remaining"],
+  ];
+  return (
+    <section className="space-y-3" aria-label="Delivery stock">
+      <h2 className="text-sm font-semibold text-muted-foreground">
+        <T
+          k={
+            returning
+              ? "Remaining stock"
+              : trip.status === "LOADED"
+                ? "Loaded stock"
+                : "Today's stock"
+          }
+        />
+      </h2>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {metrics.map(([label, count, test]) => (
+          <Card key={label} className="min-w-0 px-3 py-4">
+            <p className="text-xs font-semibold text-muted-foreground">
+              <T k={label} />
+            </p>
+            <p
+              className="mt-2 text-3xl font-bold tabular-nums text-primary"
+              data-testid={returning ? `return-${test}` : test}
+            >
+              <Value value={count} />
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              <T
+                k={
+                  label === "Empty Jars" && !returning
+                    ? "collected"
+                    : "remaining"
+                }
+              />
+            </p>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function DriverStock({
   workspace,
   trip,
@@ -128,9 +188,6 @@ export function DriverMoney({
           </p>
         </Card>
       )}
-      <p className="text-xs text-muted-foreground">
-        <T k="Sales include configured tax and invoice corrections. Cash and verified Fonepay use receipt journals, including reversals and explicit deposits. Previous-credit collections are separate from sales. Fonepay requires independent admin reconciliation; deposit refunds appear in admin reports." />
-      </p>
     </LocalizedSection>
   );
 }

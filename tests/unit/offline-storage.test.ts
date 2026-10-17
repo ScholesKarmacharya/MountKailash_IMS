@@ -210,6 +210,55 @@ afterEach(async () => {
   await db.delete();
 });
 describe("encrypted offline durability", () => {
+  it("retires a superseded writer without changing any envelope and prepares a separate trip vault", async () => {
+    await vault.record("DELIVERY", sale());
+    const staleTab = await OfflineVault.unlock(
+      db,
+      vault.id,
+      "offline-test-passphrase",
+    );
+    const before = await vault.read();
+    await vault.mutate((s) => {
+      s.retired = {
+        status: "CLOSED",
+        cancelled: true,
+        at: new Date().toISOString(),
+      };
+    });
+    expect((await vault.read()).operations).toEqual(before.operations);
+    expect((await db.vaults.get(vault.id))?.retired).toBe(true);
+    expect((await db.vaults.get(vault.id))?.pending).toBe(1);
+    await expect(staleTab.record("DELIVERY", sale(1, 0))).rejects.toThrow(
+      "cancelled",
+    );
+    const replacement = snapshot(),
+      newTrip = crypto.randomUUID();
+    replacement.round.trip_id = newTrip;
+    replacement.workspace.trips = replacement.workspace.trips.map((t) => ({
+      ...t,
+      id: newTrip,
+    }));
+    replacement.workspace.loads = replacement.workspace.loads.map((l) => ({
+      ...l,
+      trip_id: newTrip,
+    }));
+    const fresh = await OfflineVault.create(
+      db,
+      replacement,
+      device,
+      "b".repeat(64),
+      "offline-test-passphrase",
+    );
+    await fresh.record("DELIVERY", sale(1, 0));
+    expect(await db.vaults.count()).toBe(2);
+    expect((await fresh.read()).operations[0]?.trip).toBe(newTrip);
+    expect((await vault.read()).operations).toEqual(before.operations);
+    expect(
+      (await fresh.read()).operations.some(
+        (o) => o.id === before.operations[0]?.id,
+      ),
+    ).toBe(false);
+  });
   it("preserves an unreadable legacy setup before reserving automatic credentials, without claiming it contains deliveries", async () => {
     await OfflineVault.prepare(db, user, trip, "old-setup-passphrase");
     const original = await db.preparations.get(vault.id);

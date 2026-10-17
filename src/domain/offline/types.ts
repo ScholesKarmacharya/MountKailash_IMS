@@ -1,5 +1,10 @@
 import type { Profile } from "@/domain/auth/roles";
-import type { Workspace, Count, Customer } from "@/domain/operations/types";
+import type {
+  Workspace,
+  Count,
+  Customer,
+  Trip,
+} from "@/domain/operations/types";
 import type { FinanceWorkspace } from "@/domain/finance/types";
 import type { PaymentDraft } from "@/domain/finance/types";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
@@ -83,6 +88,9 @@ export type LocalState = {
   // envelopes always keep their original UUID, sequence, payload and hash.
   inheritedReceipts?: Receipt[];
   sealed: boolean;
+  // Online selection retired this writer. Evidence and original envelopes stay
+  // intact; this durable guard also stops stale tabs/offline reopening writing.
+  retired?: { status: Trip["status"]; cancelled: boolean; at: string };
   paused?: boolean;
   lastSynced?: string;
   notifications?: NotificationCache;

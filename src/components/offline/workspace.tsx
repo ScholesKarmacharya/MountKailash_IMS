@@ -172,33 +172,89 @@ export function OfflineReturnForm({
   save: (counts: ReturnType<typeof localStock>) => Promise<boolean>;
 }) {
   const { t } = useLocale();
-  const expected = localStock(state),
-    [values, setValues] = useState<Record<string, number>>({});
+  const expected = localStock(state);
+  const [values, setValues] = useState<Record<string, number>>({});
+  const [reviewed, setReviewed] = useState("");
+  const actual = expected.map((c) => ({
+    ...c,
+    quantity: values[c.product_id + c.stock_kind] ?? c.quantity,
+  }));
+  const signature = JSON.stringify(actual);
+  const reviewing = reviewed === signature;
   return (
     <div className="space-y-4">
-      {expected.map((c) => (
-        <Counter
-          key={c.product_id + c.stock_kind}
-          label={`${state.snapshot.workspace.products.find((p) => p.id === c.product_id)?.name} · ${t(c.stock_kind === "FULL_JAR" ? "Full jars" : c.stock_kind === "EMPTY_JAR" ? "Empty jars" : "Water cartons")}`}
-          value={values[c.product_id + c.stock_kind] ?? c.quantity}
-          onChange={(n) =>
-            setValues((v) => ({ ...v, [c.product_id + c.stock_kind]: n }))
-          }
-        />
-      ))}
-      <Button
-        disabled={busy || state.sealed}
-        onClick={() =>
-          void save(
-            expected.map((c) => ({
-              ...c,
-              quantity: values[c.product_id + c.stock_kind] ?? c.quantity,
-            })),
-          )
-        }
-      >
-        <T k="Prepare return and seal device queue" />
-      </Button>
+      <h2 className="text-lg font-semibold">
+        <T k={reviewing ? "You are returning" : "Returning"} />
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        <T k="Count the stock on your vehicle." />
+      </p>
+      {reviewing ? (
+        <div className="space-y-3 rounded-xl bg-muted p-4">
+          {actual.map((c) => (
+            <p
+              className="flex justify-between gap-3"
+              key={c.product_id + c.stock_kind}
+            >
+              <span>
+                {
+                  state.snapshot.workspace.products.find(
+                    (p) => p.id === c.product_id,
+                  )?.name
+                }{" "}
+                ·{" "}
+                <T
+                  k={
+                    c.stock_kind === "FULL_JAR"
+                      ? "Full jars"
+                      : c.stock_kind === "EMPTY_JAR"
+                        ? "Empty jars"
+                        : "Cartons"
+                  }
+                />
+              </span>
+              <strong>{c.quantity}</strong>
+            </p>
+          ))}
+        </div>
+      ) : (
+        expected.map((c) => (
+          <Counter
+            key={c.product_id + c.stock_kind}
+            label={`${state.snapshot.workspace.products.find((p) => p.id === c.product_id)?.name} · ${t(c.stock_kind === "FULL_JAR" ? "Full jars" : c.stock_kind === "EMPTY_JAR" ? "Empty jars" : "Cartons")}`}
+            value={values[c.product_id + c.stock_kind] ?? c.quantity}
+            onChange={(n) =>
+              setValues((v) => ({ ...v, [c.product_id + c.stock_kind]: n }))
+            }
+          />
+        ))
+      )}
+      {reviewing ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => setReviewed("")}
+          >
+            <T k="Edit counts" />
+          </Button>
+          <Button
+            className="min-h-14"
+            disabled={busy || state.sealed}
+            onClick={() => void save(actual)}
+          >
+            <T k="Confirm Return" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          className="min-h-14 w-full"
+          disabled={busy || state.sealed}
+          onClick={() => setReviewed(signature)}
+        >
+          <T k="Review Return" />
+        </Button>
+      )}
     </div>
   );
 }

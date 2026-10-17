@@ -4,6 +4,13 @@ import { readCurrentProfile } from "@/data-access/profiles";
 import { DriverApplication } from "@/components/driver-application";
 import { can } from "@/domain/auth/roles";
 import { cookies } from "next/headers";
+import type { Viewport } from "next";
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 export default async function DriverLayout({
   children,
 }: {

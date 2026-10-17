@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { driverNavigate } from "./driver-navigation";
 import { randomUUID } from "node:crypto";
 import { activeFixtureTrip } from "../operations-e2e/fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
@@ -146,6 +147,7 @@ test("approved HOUSE supplies free online then offline, survives reload and sync
     )?.quantity,
   ).toBe(12);
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("80");
+  await driverNavigate(page, "More");
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await page.waitForURL("**/sign-in");
   await page.getByRole("button", { name: "English", exact: true }).click();

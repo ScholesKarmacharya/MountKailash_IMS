@@ -1,3 +1,4 @@
+import { saveDriverRecord } from "./fixture-client";
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import {
@@ -26,6 +27,9 @@ async function login(page: Page, role = "driver") {
   ).toBeEnabled();
 }
 async function record(page: Page, full: number, empty: number) {
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
   await page.getByLabel("Jars Delivered", { exact: true }).fill(String(full));
   await page
     .getByLabel("Empty Jars Returned", { exact: true })
@@ -38,14 +42,7 @@ async function record(page: Page, full: number, empty: number) {
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  const response = page.waitForResponse(
-    (r) =>
-      r.request().method() === "POST" && !!r.request().headers()["next-action"],
-  );
-  await page
-    .getByRole("button", { name: "Save Delivery", exact: true })
-    .click();
-  expect((await response).ok()).toBe(true);
+  await saveDriverRecord(page);
 }
 async function logout(page: Page) {
   await openAdminMenuForSignOut(page);
@@ -85,12 +82,13 @@ test("FIFO pending dates, return-only collection and admin report persist throug
     .toBe(3);
   const pending = (await context()).pending_jars!;
   await page.goto("/driver/home");
-  await expect(
-    page.getByText(
-      "2 deliveries · 2 customer visits (including return-only visits)",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  // The compact Home shows physical stock. Visit counters remain authoritative
+  // in the trip journal and the individual history cards.
+  const visits = await admin.workspace(trip);
+  expect(visits.visits).toHaveLength(2);
+  expect(new Set(visits.items.map((i) => i.visit_id)).size).toBe(2);
+  await page.goto("/driver/sales");
+  await expect(page.getByTestId("driver-history-card")).toHaveCount(2);
   await page.goto("/driver/pending-jars");
   await expect(page.getByTestId("driver-pending-total")).toHaveText("3");
   await logout(page);
@@ -108,12 +106,15 @@ test("FIFO pending dates, return-only collection and admin report persist throug
   expect(finance.invoices).toHaveLength(2);
   expect(finance.sales).toHaveLength(2);
   await page.goto("/driver/home");
-  await expect(
-    page.getByText(
-      "2 deliveries · 3 customer visits (including return-only visits)",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  const afterReturn = await admin.workspace(trip);
+  expect(afterReturn.visits).toHaveLength(3);
+  expect(
+    new Set(
+      afterReturn.items
+        .filter((i) => i.full_jars > 0 || i.cartons > 0)
+        .map((i) => i.visit_id),
+    ).size,
+  ).toBe(2);
   await page.goto("/driver/pending-jars");
   await page.goto("/driver/pending-jars");
   await expect(
@@ -144,7 +145,7 @@ test("FIFO pending dates, return-only collection and admin report persist throug
     ),
   ).toBe(true);
 });
-test("two drivers use independent vehicles simultaneously and cannot enter each other's trips", async ({
+test("two drivers retain a simultaneous customer conflict, resolve it with audited admin review and remain isolated", async ({
   page,
   request,
   browser,
@@ -214,13 +215,88 @@ test("two drivers use independent vehicles simultaneously and cannot enter each 
         .getByRole("button", { name: "Refresh customer", exact: true })
         .click(),
     ]);
+    await Promise.all(
+      [page, second].map((p) =>
+        expect(p.getByText("Offline ready", { exact: true })).toBeVisible({
+          timeout: 30000,
+        }),
+      ),
+    );
+    // Freeze both phones' original balance before either upload. Without this
+    // barrier the second phone may correctly refresh after the first commits.
+    await Promise.all([
+      page.context().setOffline(true),
+      secondContext.setOffline(true),
+    ]);
     await Promise.all([record(page, 20, 15), record(second, 10, 7)]);
+    expect((await admin.workspace(trip)).visits).toHaveLength(0);
+    expect((await admin.workspace(trip2)).visits).toHaveLength(0);
+    await Promise.all([
+      page.context().setOffline(false),
+      secondContext.setOffline(false),
+    ]);
+    const sync = () =>
+      admin.rpc<{
+        operations: {
+          id: string;
+          status: string;
+          kind: string;
+          payload: string;
+          message: string;
+        }[];
+        reviews: {
+          operation_id: string;
+          action: string;
+          details: { original_payload: string };
+        }[];
+      }>("offline_admin_workspace", {});
+    // Both phones read the same original custody. Exactly one may commit;
+    // the other must retain its original operation for an explicit FIFO review.
+    await expect
+      .poll(
+        async () =>
+          (await sync()).operations.filter((o) => o.status === "NEEDS_REVIEW")
+            .length,
+      )
+      .toBe(1);
+    const conflict = (await sync()).operations.find(
+      (o) => o.status === "NEEDS_REVIEW",
+    )!;
+    expect(conflict.message).toContain("Customer jar balance changed");
+    expect(
+      (await admin.workspace(trip)).visits.length +
+        (await admin.workspace(trip2)).visits.length,
+    ).toBe(1);
+    await admin.rpc("offline_admin_review", {
+      p_id: conflict.id,
+      p_action: "REBASE_CUSTODY",
+      p_customer: null,
+      p_reason:
+        "Reviewed both disposable delivery slips and physical return counts; allocate FIFO against current custody",
+      p_key: randomUUID(),
+    });
+    await Promise.all(
+      [page, second].map((p) =>
+        p.evaluate(() => window.dispatchEvent(new Event("focus"))),
+      ),
+    );
     await expect
       .poll(async () => (await admin.workspace(trip)).visits.length)
       .toBe(1);
     await expect
       .poll(async () => (await admin.workspace(trip2)).visits.length)
       .toBe(1);
+    expect((await sync()).reviews).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation_id: conflict.id,
+          action: "REBASE_CUSTODY",
+          details: expect.objectContaining({
+            original_payload: conflict.payload,
+          }),
+        }),
+      ]),
+    );
     const firstWorkspace = await admin.workspace(trip),
       secondWorkspace = await admin.workspace(trip2);
     const firstLocation = firstWorkspace.vehicles.find(

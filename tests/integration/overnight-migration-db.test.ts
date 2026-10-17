@@ -201,7 +201,7 @@ it("the overnight migration preserves a confirmed historical trip, all original 
       for (const table of tables) {
         const query =
           table === "trips"
-            ? "to_jsonb(t)-array['scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled']"
+            ? "to_jsonb(t)-array['scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled','proposed_load_items']"
             : "to_jsonb(t)";
         records.push(
           (
@@ -251,6 +251,21 @@ it("the overnight migration preserves a confirmed historical trip, all original 
       loaded_by: null,
       loading_business_day_id: null,
     });
+    await actor(admin);
+    expect((await rpc<DayDetail>("business_day_report", [day])).report).toEqual(
+      archive,
+    );
+    // Proposed draft metadata must not rewrite these historical journal rows,
+    // the closed trip, the prepared load, balances or the archived closing.
+    await db.exec("reset role");
+    const beforeDraftLoading = await snapshot();
+    await db.exec(
+      readFileSync(
+        "supabase/migrations/202610160031_trip_create_and_load.sql",
+        "utf8",
+      ),
+    );
+    expect(await snapshot()).toEqual(beforeDraftLoading);
     await actor(admin);
     expect((await rpc<DayDetail>("business_day_report", [day])).report).toEqual(
       archive,

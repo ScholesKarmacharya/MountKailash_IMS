@@ -1,5 +1,6 @@
+import { saveDriverRecord } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
-import { activeFixtureTrip } from "./fixture-client";
+import { activeFixtureTrip, openAdminMenuForSignOut } from "./fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
 import { message } from "../../src/lib/i18n/messages";
 async function language(page: Page, locale: "en" | "ne") {
@@ -21,26 +22,23 @@ async function login(page: Page, role = "driver") {
   await page.getByLabel("Email address").fill(`${role}@fixture.example`);
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  const title = role === "admin" ? "Operations dashboard" : "My day";
-  await expect(
-    page.getByRole("heading", {
-      name: new RegExp(`^(${title}|${message("ne", title)})$`),
-    }),
-  ).toBeVisible();
+  if (role === "admin")
+    await expect(
+      page.getByRole("heading", {
+        name: new RegExp(
+          `^(Operations dashboard|${message("ne", "Operations dashboard")})$`,
+        ),
+      }),
+    ).toBeVisible();
+  else
+    await expect(page.getByTestId("driver-remaining-full-jars")).toBeVisible();
   await language(page, "en");
 }
 async function save(page: Page) {
   await page
     .getByRole("button", { name: "Review delivery", exact: true })
     .click();
-  const saved = page.waitForResponse(
-    (r) =>
-      r.request().method() === "POST" && !!r.request().headers()["next-action"],
-  );
-  await page
-    .getByRole("button", { name: "Save Delivery", exact: true })
-    .click();
-  expect((await saved).ok()).toBe(true);
+  await saveDriverRecord(page);
 }
 test("Paid and Credit validate amounts, preserve drafts across languages and update actual invoices and admin reports", async ({
   page,
@@ -162,19 +160,22 @@ test("Paid and Credit validate amounts, preserve drafts across languages and upd
       .filter({ hasText: "Credit requires a registered customer" }),
   ).toBeVisible();
   await expect(review).toBeDisabled();
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "admin");
   await page.goto("/admin/credit");
-  await expect(
-    page
-      .getByRole("row")
-      .filter({
-        has: page.getByRole("link", { name: "Refresh customer", exact: true }),
-      })
-      .getByRole("cell", { name: "NPR 300.50", exact: true })
-      .first(),
-  ).toBeVisible();
+  const accountSummary = page
+    .getByRole("heading", {
+      name: "Customer account summary",
+      exact: true,
+    })
+    .locator("..");
+  const account = accountSummary
+    .locator("tbody tr:visible, dl:visible")
+    .filter({ hasText: "Refresh customer" });
+  await expect(account).toHaveCount(1);
+  await expect(account.getByText("NPR 300.50", { exact: true })).toBeVisible();
   await page.goto("/admin/dashboard");
   for (const label of ["Confirmed Collections", "Total Outstanding Credit"])
     await expect(

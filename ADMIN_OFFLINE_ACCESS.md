@@ -1,5 +1,7 @@
 # Admin driver offline access
 
+Current ownership recovery update: [17 October fix and Cloud diagnosis](docs/OFFLINE_DEVICE_OWNERSHIP_FIX.md). Migration 032 handles revoked browser identities with no current round, persists replacement-waiting status, and aligns trip selection. The notes below describe the original migration 030 implementation and its historical validation.
+
 Implemented at **Admin → Drivers → View Driver Details → Offline Access**.
 
 The card shows the driver's name, current LOADED/ACTIVE trip, vehicle, registration and sync times, last reported pending count, and server records awaiting review or retry. It does not expose device identifiers or credentials. Status describes server information, not proof that a particular phone has prepared its local data. Phone-only changes are explicitly unknown.

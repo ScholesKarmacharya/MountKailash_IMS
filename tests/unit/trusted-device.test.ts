@@ -13,6 +13,7 @@ import {
   createAutomaticDeviceSecrets,
   getAutomaticDeviceSecrets,
   clearAutomaticDeviceSecrets,
+  replaceRevokedAutomaticDevice,
 } from "@/lib/offline/device";
 let db: OfflineDatabase;
 const user = crypto.randomUUID(),
@@ -72,6 +73,66 @@ it("never removes the automatic key while a preparation or encrypted journal exi
   );
   expect(await db.vaults.get(evidence.id)).toEqual(evidence);
   expect(await getAutomaticDeviceSecrets(db, user)).toBeDefined();
+});
+it("durably rotates only registration credentials after server authorization, preserving the key, archived setup and historical journals", async () => {
+  const original = await createAutomaticDeviceSecrets(db, user);
+  const row = {
+    id: `${user}:current`,
+    user,
+    trip: "current",
+    salt: [1],
+    iv: [2],
+    cipher: [3],
+    pending: 0,
+    review: 0,
+    updated: "",
+  };
+  const history = {
+    ...row,
+    id: `${user}:history`,
+    trip: "history",
+    pending: 2,
+  };
+  await db.preparations.add(row);
+  await db.vaults.add(history);
+  const next = await replaceRevokedAutomaticDevice(
+    db,
+    user,
+    "current",
+    original.device,
+  );
+  expect(next.device).not.toBe(original.device);
+  expect(next.token).not.toBe(original.token);
+  expect(next.secret).toBe(original.secret);
+  expect(await getAutomaticDeviceSecrets(db, user)).toEqual(next);
+  expect(await db.vaults.get(history.id)).toEqual(history);
+  expect((await db.archives.toArray())[0]?.row).toEqual(row);
+  expect(
+    await db.settings.get(
+      `retired-automatic-device:${user}:${original.device}`,
+    ),
+  ).toBeDefined();
+  expect(
+    await replaceRevokedAutomaticDevice(db, user, "current", original.device),
+  ).toEqual(next);
+});
+it("refuses credential rotation over an existing current-trip journal, including a fully synced journal", async () => {
+  const original = await createAutomaticDeviceSecrets(db, user);
+  await db.vaults.add({
+    id: `${user}:current`,
+    user,
+    trip: "current",
+    salt: [],
+    iv: [],
+    cipher: [1],
+    pending: 0,
+    review: 0,
+    updated: "",
+  });
+  await expect(
+    replaceRevokedAutomaticDevice(db, user, "current", original.device),
+  ).rejects.toThrow("Keep this phone's saved data");
+  expect(await getAutomaticDeviceSecrets(db, user)).toEqual(original);
 });
 it("keeps the automatic encryption key when only archived evidence remains", async () => {
   await createAutomaticDeviceSecrets(db, user);

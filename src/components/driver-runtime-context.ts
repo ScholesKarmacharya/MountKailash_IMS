@@ -2,13 +2,18 @@
 import { createContext, useContext } from "react";
 import type { OperationState } from "@/app/operations-actions";
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
+import type { Trip, Workspace } from "@/domain/operations/types";
 
 export type OfflinePrepState = "IDLE" | "PREPARING" | "READY" | "FAILED";
 export const offlinePreparingMessage =
   "Offline data is still being prepared. Please wait a moment.";
 
 export type DriverRuntime = {
+  online?: boolean;
+  tripStatus?: (id: string) => Trip | undefined;
+  workspace?: Workspace;
   offlinePrepState: OfflinePrepState;
+  offlinePrepError?: string;
   revision: string;
   cachedCustomer: (customer: string) => DeliveryCustomerContext | undefined;
   customer: (
@@ -30,4 +35,6 @@ export const driverPaths = [
   "/driver/pending-jars",
   "/driver/sales",
   "/driver/return",
+  "/driver/more",
+  "/driver/collections",
 ];

@@ -21,6 +21,7 @@ import type {
 import type { DeliveryCustomerContext } from "@/domain/operations/customer-context";
 import { confirmedCustomerContext } from "@/domain/operations/confirmed-customer";
 import { ProfileAccessError } from "@/domain/auth/access-errors";
+import { diagnoseOfflineOwnership } from "./offline-diagnostics";
 import { readInstantWorkspace } from "@/data-access/instant";
 
 export async function offlineIdentity() {
@@ -122,13 +123,28 @@ export async function offlineSnapshot(
   };
 }
 export async function offlineCommand(body: Record<string, unknown>) {
-  await offlineIdentity();
+  const profile = await offlineIdentity();
   const args = credentials(body);
   switch (body.action) {
-    case "register":
-      await offlineRpc("offline_preparation_access", args);
+    case "register": {
+      const access = await offlineRpc<{ replace_installation?: boolean }>(
+        "offline_preparation_access",
+        args,
+      );
+      if (access?.replace_installation)
+        throw new OfflineServerError(
+          "DEVICE_RESET_REQUIRED",
+          "Prepare fresh device credentials after the admin reset.",
+          403,
+        );
       await offlineRpc("offline_register", args);
+      await diagnoseOfflineOwnership(
+        profile.id,
+        args.p_device,
+        "ROUND_REGISTERED",
+      );
       return offlineSnapshot(args);
+    }
     case "snapshot":
       return offlineSnapshot(args);
     case "status":

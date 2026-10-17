@@ -4,17 +4,20 @@ import { offlineRpc, OfflineServerError } from "@/data-access/offline";
 import { uuid } from "@/domain/inventory/validation";
 import type { DeviceRound } from "@/domain/offline/types";
 import type { DriverOfflineAccess } from "@/domain/offline/admin";
+import { diagnoseOfflineOwnership } from "./offline-diagnostics";
 
 export async function getDriverOfflineAccess(
   driver: string,
 ): Promise<DriverOfflineAccess> {
   await requirePermission("admin:read");
   try {
+    const { diagnostics: _diagnostics, ...access } = await offlineRpc<
+      Omit<DriverOfflineAccess, "available"> & { diagnostics?: unknown }
+    >("admin_driver_offline_access", { p_driver: uuid(driver) });
+    void _diagnostics;
+    await diagnoseOfflineOwnership(driver, null, "STATUS");
     return {
-      ...(await offlineRpc<Omit<DriverOfflineAccess, "available">>(
-        "admin_driver_offline_access",
-        { p_driver: uuid(driver) },
-      )),
+      ...access,
       available: true,
     };
   } catch (e) {
@@ -34,6 +37,9 @@ export async function getDriverOfflineAccess(
       retry_count: null,
       reset_pending: false,
       can_reset: false,
+      previous_device_revoked: false,
+      last_reset_at: null,
+      last_reset_by: null,
     };
   }
 }

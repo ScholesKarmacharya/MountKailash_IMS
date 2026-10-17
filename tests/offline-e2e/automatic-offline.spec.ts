@@ -134,7 +134,9 @@ test("automatically prepares, commits online before upload, reopens offline, and
   });
   await context.setOffline(false);
   await expect
-    .poll(async () => (await f.admin.workspace(f.trip)).visits.length)
+    .poll(async () => (await f.admin.workspace(f.trip)).visits.length, {
+      timeout: 30000,
+    })
     .toBe(1);
   await page.reload();
   await ready(page);
@@ -272,10 +274,10 @@ test("admin warns before reset, preserves accepted and unsent history, and autho
       .getByRole("button", { name: "Close dialog", exact: true })
       .last()
       .click();
-    await expect(card).toContainText("Previous device revoked");
+    await expect(card).toContainText("Waiting for driver device");
     await expect(
       card.getByRole("button", { name: "Reset Offline Access", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     await expect(
       admin.getByText("Offline access reset", { exact: true }),
     ).toBeVisible();

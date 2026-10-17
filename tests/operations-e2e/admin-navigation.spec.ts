@@ -1,3 +1,4 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip } from "./fixture-client";
 async function login(page: Page, role = "admin") {
@@ -152,6 +153,7 @@ test("responsive admin navigation, focus, backdrop, route highlight, notificatio
   await navbar.locator('a[href="/account/profile"]').click();
   await expect(page).toHaveURL(/account\/profile/);
   if (await trigger.isVisible()) await trigger.click();
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await page.goto("/admin/payments");

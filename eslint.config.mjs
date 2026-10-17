@@ -7,6 +7,7 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     ".next-offline-e2e/**",
+    ".next-driver-verification/**",
     ".next-sprint2-e2e/**",
     ".next-scaffold-e2e/**",
     ".next-auth-e2e/**",

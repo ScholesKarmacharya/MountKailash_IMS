@@ -36,3 +36,14 @@ it("does not turn arbitrary authorization failures into an ownership diagnosis o
     status: 403,
   });
 });
+it("distinguishes a revoked browser without claiming a trip has another owner", async () => {
+  rpc.mockResolvedValue({
+    error: { code: "MK002", message: "Private raw details" },
+  });
+  await expect(offlineRpc("offline_preparation_access")).rejects.toMatchObject({
+    code: "DEVICE_REVOKED",
+    status: 403,
+    message:
+      "This browser's offline access was revoked. Ask the warehouse admin to reset offline access.",
+  });
+});

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { fixtureClient, fixtureIds } from "./fixture-client";
 import { formatBusinessDate } from "../../src/domain/localization/calendar";
+import { driverReturn } from "../offline-e2e/driver-navigation";
 
 async function login(page: Page, role: string) {
   await page.goto("/sign-in");
@@ -165,11 +166,14 @@ test("independent recipients receive persistent trip notifications, correct link
       { product_id: fixtureIds.jar, stock_kind: "FULL_JAR", quantity: 85 },
       { product_id: fixtureIds.jar, stock_kind: "EMPTY_JAR", quantity: 0 },
     ];
-    await driverApi.rpc("submit_trip", {
-      p_trip: trip,
-      p_counts: returned,
-      p_key: randomUUID(),
-    });
+    await page.goto("/driver/return");
+    await driverReturn(page);
+    await expect
+      .poll(async () => (await driverApi.workspace(trip)).trips[0]?.status)
+      .toBe("SUBMITTED");
+    expect((await driverApi.workspace(trip)).declarations).toEqual(
+      expect.arrayContaining(returned.map((c) => expect.objectContaining(c))),
+    );
     await adminPage.bringToFront();
     await expect(adminPage.getByTestId("notification-badge")).toHaveText("1", {
       timeout: 20000,

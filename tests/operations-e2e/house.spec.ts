@@ -22,6 +22,7 @@ test("admin creates approved HOUSE; driver delivers 15/10 free; reports and bili
   page.on("dialog", (d) => d.accept());
   await login(page, "admin");
   await page.goto("/admin/customers");
+  await page.getByRole("button", { name: "Add customer", exact: true }).click();
   const form = page.locator("form").filter({
     has: page.getByRole("button", { name: "Create customer", exact: true }),
   });
@@ -45,6 +46,10 @@ test("admin creates approved HOUSE; driver delivers 15/10 free; reports and bili
     (c) => c.name === "Owner's House",
   )!;
   expect(house.house_status).toBe("APPROVED");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await page.waitForURL("**/sign-in");
@@ -71,8 +76,15 @@ test("admin creates approved HOUSE; driver delivers 15/10 free; reports and bili
     .getByRole("button", { name: "Save Delivery", exact: true })
     .click();
   await expect(
-    sale.getByText("Saved to Supabase.", { exact: true }),
+    page.getByText("Saved on phone", { exact: true }).first(),
   ).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (await f.admin.rpc<FinanceWorkspace>("finance_workspace", {})).invoices
+          .length,
+    )
+    .toBe(1);
   const finances = await f.admin.rpc<FinanceWorkspace>("finance_workspace", {});
   expect(finances.invoices[0]?.total).toBe("0.00");
   expect(finances.payments).toHaveLength(0);
@@ -87,9 +99,10 @@ test("admin creates approved HOUSE; driver delivers 15/10 free; reports and bili
   expect(r.rows[0]?.reference_value).toBe("2253.75");
   expect((await f.admin.workspace(f.trip)).custody[0]?.quantity).toBe(5);
   await page.goto("/driver/sales");
-  await expect(
-    page.getByText("Payment Status: Free Supply", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByTestId("driver-history-card").first()).toContainText(
+    "Free Supply",
+  );
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await page.waitForURL("**/sign-in");
   await login(page, "admin");

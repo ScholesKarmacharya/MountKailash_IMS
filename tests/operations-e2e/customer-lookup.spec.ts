@@ -19,6 +19,16 @@ const saleForm = (page: Page) =>
   page.locator("form").filter({
     has: page.locator('input[name="operation"][value="driver-visit"]'),
   });
+
+async function deferPreparation(page: Page) {
+  // Exercise online lookup before a cache exists. Prepared/offline customer
+  // selection is covered by the offline suites and intentionally avoids HTTP.
+  await page.route("**/api/driver/offline", (route) => {
+    if (route.request().postDataJSON()?.action === "register")
+      return route.fulfill({ status: 503, json: { code: "TEMPORARY" } });
+    return route.continue();
+  });
+}
 test("regular/HOUSE lookup, rapid reselection and retries preserve the delivery draft", async ({
   page,
   request,
@@ -40,6 +50,7 @@ test("regular/HOUSE lookup, rapid reselection and retries preserve the delivery 
     p_supply_type: "HOUSE",
     p_house_status: "APPROVED",
   });
+  await deferPreparation(page);
   await login(page);
   const loaded = page.waitForResponse((r) =>
     r.url().includes(`/customers/${f.customer}/context`),
@@ -52,7 +63,8 @@ test("regular/HOUSE lookup, rapid reselection and retries preserve the delivery 
   await form
     .getByLabel("Total Amount Received (NPR)", { exact: true })
     .fill("300.50");
-  await form.getByLabel("Visit notes", { exact: true }).fill("Keep this draft");
+  // Driver notes were intentionally removed; retain the actual quantity draft.
+  await expect(form.getByLabel("Visit notes", { exact: true })).toHaveCount(0);
   await expect(
     form.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeEnabled();
@@ -91,8 +103,8 @@ test("regular/HOUSE lookup, rapid reselection and retries preserve the delivery 
   await expect(
     form.getByLabel("Empty Jars Returned", { exact: true }),
   ).toHaveValue("1");
-  await expect(form.getByLabel("Visit notes", { exact: true })).toHaveValue(
-    "Keep this draft",
+  await expect(form.getByLabel("Jars Delivered", { exact: true })).toHaveValue(
+    "2",
   );
   await form
     .getByRole("button", { name: "Refresh customer", exact: false })
@@ -126,9 +138,9 @@ test("regular/HOUSE lookup, rapid reselection and retries preserve the delivery 
     await expect(
       form.getByText("No Payment Required", { exact: true }),
     ).toHaveCount(0);
-    await expect(form.getByLabel("Visit notes", { exact: true })).toHaveValue(
-      "Keep this draft",
-    );
+    await expect(
+      form.getByLabel("Jars Delivered", { exact: true }),
+    ).toHaveValue("2");
     await page.getByRole("button", { name: "नेपाली", exact: true }).click();
     await expect(
       form.getByRole("alert").filter({
@@ -169,6 +181,7 @@ test("expired access token refreshes for customer API; an expired refresh token 
   request,
 }) => {
   const f = await activeFixtureTrip(request);
+  await deferPreparation(page);
   await login(page);
   const loaded = page.waitForResponse((r) =>
     r.url().includes(`/customers/${f.customer}/context`),
@@ -177,9 +190,7 @@ test("expired access token refreshes for customer API; an expired refresh token 
   expect((await loaded).status()).toBe(200);
   const form = saleForm(page);
   await form.getByLabel("Jars Delivered", { exact: true }).fill("3");
-  await form
-    .getByLabel("Visit notes", { exact: true })
-    .fill("Expired session draft");
+  await form.getByLabel("Empty Jars Returned", { exact: true }).fill("1");
   const cookies = await context.cookies(),
     auth = cookies.find((c) => c.name.includes("auth-token"))!;
   expect(auth).toBeDefined();
@@ -227,9 +238,9 @@ test("expired access token refreshes for customer API; an expired refresh token 
   await expect(form.getByLabel("Jars Delivered", { exact: true })).toHaveValue(
     "3",
   );
-  await expect(form.getByLabel("Visit notes", { exact: true })).toHaveValue(
-    "Expired session draft",
-  );
+  await expect(
+    form.getByLabel("Empty Jars Returned", { exact: true }),
+  ).toHaveValue("1");
   await expect(
     form.getByRole("button", { name: "Review delivery", exact: true }),
   ).toBeDisabled();

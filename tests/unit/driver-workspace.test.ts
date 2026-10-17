@@ -117,6 +117,59 @@ it("chooses the operational round, preserves internal statuses and maps return r
     currentRound({ ...emptyWorkspace, trips: [{ ...trip, status: "CLOSED" }] }),
   ).toBeUndefined();
 });
+it("excludes cancelled and completed trips and prioritizes actionable trips before returned status", () => {
+  const cancelled = {
+    ...trip,
+    id: "cancelled",
+    status: "LOADED",
+    cancelled: true,
+  } as Trip;
+  const returned = { ...trip, id: "returned", status: "SUBMITTED" } as Trip;
+  const draft = {
+    ...trip,
+    id: "draft",
+    status: "DRAFT",
+    scheduled_date: "2026-10-17",
+  } as Trip;
+  const loaded = { ...draft, id: "loaded", status: "LOADED" } as Trip;
+  const w = { ...emptyWorkspace, trips: [cancelled, returned, draft, loaded] };
+  expect(currentRound(w)?.id).toBe("loaded");
+  expect(currentRound({ ...w, trips: [returned, draft] })?.id).toBe("draft");
+  expect(currentRound({ ...w, trips: [cancelled] })).toBeUndefined();
+  expect(
+    tripDayOpen(
+      { ...w, days: [{ id: "day", status: "OPEN", date_label: "2026-10-17" }] },
+      cancelled,
+    ),
+  ).toBe(false);
+  expect(
+    tripCanStart(
+      { ...w, days: [{ id: "day", status: "OPEN", date_label: "2026-10-17" }] },
+      cancelled,
+    ),
+  ).toBe(false);
+});
+it("breaks multiple-trip anomalies deterministically by status, earliest schedule, newest creation and sequence", () => {
+  const loaded = {
+    ...trip,
+    status: "LOADED",
+    scheduled_date: "2026-10-18",
+    created_at: "2026-10-16",
+  } as Trip;
+  const due = {
+    ...loaded,
+    id: "due",
+    scheduled_date: "2026-10-17",
+    trip_number: 9,
+  };
+  const newest = { ...due, id: "newest", created_at: "2026-10-17" };
+  const w = { ...emptyWorkspace, trips: [loaded, due, newest] };
+  expect(currentRound(w)?.id).toBe("newest");
+  expect(currentRound({ ...w, trips: [...w.trips].reverse() })?.id).toBe(
+    "newest",
+  );
+  expect(currentRound({ ...w, trips: [...w.trips, trip] })?.id).toBe(trip.id);
+});
 it("old-credit collections, pending Fonepay and corrections stay separate from new sales", () => {
   const f = {
     ...emptyFinance,

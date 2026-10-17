@@ -75,3 +75,23 @@ it("does not disguise authorization failures as a deployment update", async () =
     code: "AUTHORIZATION",
   });
 });
+it("preserves reset and waiting metadata but removes internal diagnostics from the client response", async () => {
+  fake.rpc.mockResolvedValue({
+    trip_id: trip,
+    status: "Waiting for driver device",
+    can_reset: true,
+    reset_pending: true,
+    last_reset_at: "2026-10-17T00:00:00Z",
+    diagnostics: { round_device_id: key },
+  });
+  const access = await getDriverOfflineAccess(driver);
+  expect(access).toMatchObject({
+    available: true,
+    trip_id: trip,
+    can_reset: true,
+    reset_pending: true,
+    status: "Waiting for driver device",
+    last_reset_at: "2026-10-17T00:00:00Z",
+  });
+  expect(access).not.toHaveProperty("diagnostics");
+});

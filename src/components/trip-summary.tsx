@@ -26,6 +26,7 @@ import {
   tripCanStart,
 } from "@/domain/operations/driver-workspace";
 import { DriverStock } from "./driver-stock";
+import { StartTripAction } from "./start-trip-action";
 import { Button } from "./ui/button";
 import {
   MigrationRequired,
@@ -146,7 +147,7 @@ export async function TripDetail({
   if (!w.available) return <MigrationRequired />;
   const trip = w.trips.find((t) => t.id === id);
   if (!trip) notFound();
-  const operational = trip.status !== "CLOSED";
+  const operational = trip.status !== "CLOSED" && !trip.cancelled;
   const dayOpen = tripDayOpen(w, trip);
   const groups = new Map<
     string,
@@ -224,7 +225,7 @@ export async function TripDetail({
           <TripPreparationForms workspace={w} trip={trip} />
         </Card>
       )}
-      {trip.carryover_pending && (
+      {trip.carryover_pending && operational && (
         <Card>
           <p className="mb-4">
             <T k="Trip is paused for authorized carryover. Vehicle stock and pending settlement are preserved." />
@@ -341,15 +342,21 @@ export async function TripDetail({
           <LoadTripForm workspace={w} trip={trip} requestKey={randomUUID()} />
         </Card>
       )}
-      {tripCanStart(w, trip) && (
+      {(admin
+        ? tripCanStart(w, trip)
+        : ["DRAFT", "LOADED"].includes(trip.status)) && (
         <Card>
-          <OperationForm
-            operation="start"
-            trip={id}
-            requestKey={randomUUID()}
-            label="Start trip"
-            confirm="Start this loaded trip?"
-          />
+          {admin ? (
+            <OperationForm
+              operation="start"
+              trip={id}
+              requestKey={randomUUID()}
+              label="Start trip"
+              confirm="Start this loaded trip?"
+            />
+          ) : (
+            <StartTripAction trip={trip} workspace={w} />
+          )}
         </Card>
       )}
       {dayOpen && !admin && trip.status === "ACTIVE" && (
@@ -730,7 +737,7 @@ export async function TripDetail({
         </Card>
       )}
       {!admin && trip.status === "ACTIVE" && (
-        <div className="sticky bottom-3 grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 shadow-lg">
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2">
           <Button asChild className="min-h-14">
             <Link href="/driver/delivery">
               <T k="New Delivery" />

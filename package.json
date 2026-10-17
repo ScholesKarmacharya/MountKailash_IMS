@@ -15,8 +15,10 @@
     "test:e2e": "playwright test",
     "test:e2e:auth": "playwright test --config=playwright.auth.config.ts",
     "test:e2e:operations": "playwright test --config=playwright.operations.config.ts",
+    "test:e2e:operations:production": "node scripts/test-operations-production.mjs",
     "seed:demo": "node --env-file=.env.local scripts/seed-demo.mjs",
-    "test:e2e:offline": "node scripts/test-offline-e2e.mjs"
+    "test:e2e:offline": "node scripts/test-offline-e2e.mjs",
+    "test:e2e:driver-verification": "node scripts/test-driver-verification.mjs"
   },
   "dependencies": {
     "@inicrea/bikram-sambat-core": "0.1.3",

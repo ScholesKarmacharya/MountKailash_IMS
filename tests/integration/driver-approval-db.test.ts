@@ -59,8 +59,8 @@ async function history() {
       (
         await db.query<Record<string, unknown>>(
           // Compare all original fields across forward migrations. New optional
-          // offline metadata is checked separately; old records stay unchanged.
-          `select coalesce(jsonb_agg(to_jsonb(t)-array['offline_occurred_at','supply_classification','reference_price_snapshot','free_value_snapshot','scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled'] order by (to_jsonb(t)-array['offline_occurred_at','supply_classification','reference_price_snapshot','free_value_snapshot','scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled'])::text),'[]'::jsonb) as v from ${table} t`,
+          // metadata is checked separately; old records stay unchanged.
+          `select coalesce(jsonb_agg(to_jsonb(t)-array['offline_occurred_at','supply_classification','reference_price_snapshot','free_value_snapshot','scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled','proposed_load_items'] order by (to_jsonb(t)-array['offline_occurred_at','supply_classification','reference_price_snapshot','free_value_snapshot','scheduled_date','created_business_day_id','loaded_at','loaded_by','loading_business_day_id','cancelled','proposed_load_items'])::text),'[]'::jsonb) as v from ${table} t`,
         )
       ).rows[0]!.v,
     );
@@ -168,7 +168,7 @@ beforeAll(async () => {
     await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
   const metadata = (
     await db.query<Record<string, unknown>>(
-      "select scheduled_date::text,created_business_day_id,loaded_at,cancelled from public.trips where id=$1",
+      "select scheduled_date::text,created_business_day_id,loaded_at,cancelled,proposed_load_items from public.trips where id=$1",
       [trip],
     )
   ).rows[0]!;
@@ -183,6 +183,7 @@ beforeAll(async () => {
   );
   expect(metadata.loaded_at).toBeNull(); // No invented historical loading stamp.
   expect(metadata.cancelled).toBe(false);
+  expect(metadata.proposed_load_items).toEqual([]);
 }, 30000);
 afterAll(async () => db.close());
 beforeEach(async () => {

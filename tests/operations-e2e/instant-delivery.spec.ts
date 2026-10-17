@@ -1,5 +1,13 @@
+import { driverNavigate } from "../offline-e2e/driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
-import { activeFixtureTrip, fixtureIds } from "./fixture-client";
+import {
+  activeFixtureTrip,
+  fixtureIds,
+  openAdminMenuForSignOut,
+} from "./fixture-client";
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
 async function login(page: Page, role = "driver") {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "English", exact: true }).click();
@@ -18,6 +26,9 @@ async function fill(
   credit = false,
   screenshot?: string,
 ) {
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
   await page.getByLabel("Customer or Event Name", { exact: true }).fill(name);
   await page.getByLabel("Phone Number", { exact: true }).fill("9801234567");
   await page
@@ -51,10 +62,7 @@ test("quick event deliveries reuse sale/return/payment ledgers, separate admin c
   page.on("dialog", (d) => d.accept());
   const f = await activeFixtureTrip(request);
   await login(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   await expect(
     page.getByRole("heading", { name: "Instant Delivery", exact: true }),
   ).toBeVisible();
@@ -78,6 +86,9 @@ test("quick event deliveries reuse sale/return/payment ledgers, separate admin c
     `test-results/instant-form-${testInfo.project.name}.png`,
   );
   await expect(cards).toHaveCount(2);
+  await expect
+    .poll(async () => (await f.admin.workspace(f.trip)).visits.length)
+    .toBe(2);
   const w = await f.admin.workspace(f.trip);
   expect(w.items.reduce((n, i) => n + i.full_jars, 0)).toBe(40);
   expect(w.custody.reduce((n, c) => n + c.quantity, 0)).toBe(5);
@@ -89,6 +100,7 @@ test("quick event deliveries reuse sale/return/payment ledgers, separate admin c
   adminPage.on("dialog", (d) => d.accept());
   try {
     await login(adminPage, "admin");
+    await openAdminMenuForSignOut(adminPage);
     await adminPage
       .getByRole("navigation")
       .getByRole("link", { name: "Instant Deliveries", exact: true })
@@ -130,6 +142,7 @@ test("quick event deliveries reuse sale/return/payment ledgers, separate admin c
     const event = page
       .getByTestId("instant-card")
       .filter({ hasText: "Wedding Credit" });
+    await page.getByText("Instant Delivery History", { exact: true }).click();
     await event.click({ position: { x: 24, y: 24 } });
     await expect(
       page.getByRole("button", {
@@ -255,11 +268,11 @@ test("carton-only instant orders use available stock, a one-time reference and o
   page.on("dialog", (d) => d.accept());
   const f = await activeFixtureTrip(request, 0, 10);
   await login(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   await expect(page.getByTestId("instant-form")).toBeVisible();
+  await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
+    timeout: 30000,
+  });
   await expect(page.getByLabel("Jars Delivered", { exact: true })).toHaveCount(
     0,
   );
@@ -286,6 +299,9 @@ test("carton-only instant orders use available stock, a one-time reference and o
   await expect(card).toContainText("Test water carton");
   await expect(card).toContainText("All Returned");
   await expect(card).toContainText("Paid");
+  await expect
+    .poll(async () => (await f.admin.workspace(f.trip)).visits.length)
+    .toBe(1);
   const w = await f.admin.workspace(f.trip),
     location = w.vehicles.find(
       (v) => v.id === w.trips[0]!.vehicle_id,
@@ -308,18 +324,15 @@ test("carton-only instant orders use available stock, a one-time reference and o
   });
 });
 
-test("no active trip blocks the form with the warehouse message", async ({
+test("no active trip blocks the form with guidance back to stock", async ({
   page,
   request,
 }) => {
   expect((await request.post("http://127.0.0.1:17777/reset")).ok()).toBe(true);
   await login(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   await expect(
-    page.getByText("No active delivery trip. Please contact the warehouse.", {
+    page.getByText("No active trip", {
       exact: true,
     }),
   ).toBeVisible();
@@ -347,15 +360,11 @@ test("a schema capability failure is not mislabeled as a missing active trip", a
     });
   });
   await login(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   await expect(
-    page.getByText(
-      "Instant Delivery requires a database update. Contact the admin.",
-      { exact: true },
-    ),
+    page.getByText("Offline access needs an update. Ask the warehouse admin.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText("No active delivery trip. Please contact the warehouse.", {
@@ -393,10 +402,7 @@ test("multiple eligible trip responses require a choice before entry", async ({
     });
   });
   await login(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   const chooser = page.getByTestId("instant-trip-chooser");
   await expect(chooser).toBeVisible();
   await expect(chooser.getByRole("link")).toHaveCount(2);
@@ -410,4 +416,5 @@ test("multiple eligible trip responses require a choice before entry", async ({
     .locator(`a[href='/driver/instant-delivery?trip=${f.trip}']`)
     .click();
   await expect(page.getByTestId("instant-form")).toBeVisible();
+  await page.unrouteAll({ behavior: "wait" });
 });

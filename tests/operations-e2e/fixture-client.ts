@@ -1,7 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 export async function openAdminMenuForSignOut(page: Page) {
+  // Driver sign-out now lives in More; admins retain the responsive drawer.
+  const signOut = page.getByRole("button", { name: /^(Sign Out|लग आउट)$/ });
+  const driverMenu = page.locator('header a[href="/driver/more"]');
+  if (new URL(page.url()).pathname.startsWith("/driver/")) {
+    await expect(driverMenu).toBeVisible();
+    if (await signOut.isVisible()) return;
+    await driverMenu.click();
+    await expect(signOut).toBeVisible();
+    return;
+  }
   const trigger = page.getByTestId("admin-menu-button");
+  if (
+    new URL(page.url()).pathname.startsWith("/admin/") &&
+    (page.viewportSize()?.width ?? 1280) < 1024
+  )
+    await expect(trigger).toBeVisible();
   if (
     (await trigger.isVisible()) &&
     !(await page.getByTestId("admin-mobile-drawer").isVisible())
@@ -9,12 +24,158 @@ export async function openAdminMenuForSignOut(page: Page) {
     await trigger.click();
 }
 import type { Workspace } from "../../src/domain/operations/types";
+import type { Receipt, LocalState } from "../../src/domain/offline/types";
+
+export async function saveDriverRecord(page: Page, label = "Save Delivery") {
+  const button = page.getByRole("button", {
+    name: label === "Collect outstanding credit" ? "Save collection" : label,
+    exact: true,
+  });
+  const initialForm = button.locator("xpath=ancestor::form").first();
+  const operation = await initialForm
+    .locator('input[name="operation"]')
+    .inputValue()
+    .catch(() => "");
+  const key = await initialForm.locator('input[name="key"]').inputValue();
+  // The submit button is replaced after success, so anchor to the stable key.
+  const form = page.locator("form").filter({
+    has: page.locator(`input[name="key"][value="${key}"]`),
+  });
+  await button.click();
+  // Acceptance is a durable local save. No server action is expected here;
+  // each caller separately polls actual SQL rows and financial/stock effects.
+  if (["driver-visit", "instant", "finance:PAYMENT"].includes(operation))
+    await expect(
+      form.getByRole("status").filter({ hasText: "Saved on phone" }),
+    ).toBeVisible();
+  else
+    await expect(
+      page.getByText("Saved on phone", { exact: true }).first(),
+    ).toBeVisible();
+}
+
+/** Replay the actual retained driver envelope through the authorized gateway.
+ * The automatic key and token stay inside the disposable browser profile. */
+export async function replayDriverDelivery(
+  page: Page,
+  trip: string,
+  id: string,
+) {
+  const receipt = await page.evaluate(
+    async ({ trip, id }) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const r = indexedDB.open("mount-kailash-offline");
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+      let row: {
+          id: string;
+          user: string;
+          trip: string;
+          retired?: boolean;
+          salt: number[];
+          iv: number[];
+          cipher: number[];
+        },
+        secret: string;
+      try {
+        const rows = await new Promise<(typeof row)[]>((resolve, reject) => {
+          const r = db.transaction("vaults").objectStore("vaults").getAll();
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => reject(r.error);
+        });
+        const selected = rows.find((r) => r.trip === trip && !r.retired);
+        if (!selected) throw new Error("Fixture journal unavailable");
+        row = selected;
+        const settings = await new Promise<{ value: string }>(
+          (resolve, reject) => {
+            const r = db
+              .transaction("settings")
+              .objectStore("settings")
+              .get(`automatic-device:${row.user}`);
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+          },
+        );
+        secret = (JSON.parse(settings.value) as { secret: string }).secret;
+      } finally {
+        db.close();
+      }
+      const material = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        "PBKDF2",
+        false,
+        ["deriveKey"],
+      );
+      const key = await crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: new Uint8Array(row.salt),
+          iterations: 210000,
+          hash: "SHA-256",
+        },
+        material,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"],
+      );
+      const bytes = await crypto.subtle.decrypt(
+        {
+          name: "AES-GCM",
+          iv: new Uint8Array(row.iv),
+          additionalData: new TextEncoder().encode(row.id),
+        },
+        key,
+        new Uint8Array(row.cipher),
+      );
+      const local = JSON.parse(new TextDecoder().decode(bytes)) as LocalState;
+      const original = local.operations.find(
+        (o) => o.kind === "DELIVERY" && o.id === id,
+      );
+      if (!original) throw new Error("Original fixture delivery unavailable");
+      const { version, sequence, kind, occurredAt, payload, fingerprint } =
+        original;
+      const response = await fetch("/api/driver/offline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "post",
+          trip,
+          device: local.device,
+          token: local.token,
+          operation: {
+            id,
+            trip,
+            version,
+            sequence,
+            kind,
+            occurredAt,
+            payload,
+            fingerprint,
+          },
+        }),
+      });
+      if (!response.ok)
+        throw new Error(`Fixture replay rejected: ${response.status}`);
+      return (await response.json()) as Receipt;
+    },
+    { trip, id },
+  );
+  expect(receipt.status).toBe("CONFIRMED");
+  expect(receipt.id).toBe(id);
+  expect(receipt.trip).toBe(trip);
+  return receipt.result;
+}
 
 // Fixed loopback fixture only. Never reads .env.local or contacts Supabase Cloud.
 const provider =
-  process.env.OFFLINE_E2E === "1"
-    ? "http://127.0.0.1:17778"
-    : "http://127.0.0.1:17777";
+  process.env.VERIFY_DRIVER_E2E === "1"
+    ? "http://127.0.0.1:17779"
+    : process.env.OFFLINE_E2E === "1"
+      ? "http://127.0.0.1:17778"
+      : "http://127.0.0.1:17777";
+export const fixtureProvider = provider;
 export const fixtureIds = {
   driver: "00000000-0000-0000-0000-000000000002",
   jar: "00000000-0000-0000-0000-000000000011",
@@ -52,8 +213,13 @@ export async function activeFixtureTrip(
   request: APIRequestContext,
   load = 100,
   cartons = 0,
+  start = true,
 ) {
-  expect((await request.post(`${provider}/reset`)).ok()).toBe(true);
+  // Schema initialization is fixture setup, not a UI/network responsiveness
+  // assertion. Allow simultaneous isolated builds on slower Windows machines.
+  expect(
+    (await request.post(`${provider}/reset`, { timeout: 60000 })).ok(),
+  ).toBe(true);
   const admin = await fixtureClient(request);
   const customer = randomUUID(),
     vehicle = randomUUID(),
@@ -116,11 +282,12 @@ export async function activeFixtureTrip(
     p_key: randomUUID(),
   });
   const driver = await fixtureClient(request, "driver");
-  await driver.rpc("transition_trip", {
-    p_trip: trip,
-    p_action: "START",
-    p_reason: "",
-    p_key: randomUUID(),
-  });
+  if (start)
+    await driver.rpc("transition_trip", {
+      p_trip: trip,
+      p_action: "START",
+      p_reason: "",
+      p_key: randomUUID(),
+    });
   return { admin, driver, customer, trip };
 }

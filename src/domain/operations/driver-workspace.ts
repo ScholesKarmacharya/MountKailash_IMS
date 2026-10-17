@@ -18,21 +18,27 @@ export function currentRound(workspace: Workspace) {
   const priority = [
     "ACTIVE",
     "LOADED",
+    "DRAFT",
     "SUBMITTED",
     "UNDER_REVIEW",
     "DISCREPANCY",
-    "DRAFT",
   ];
   return [...workspace.trips]
-    .filter((t) => t.status !== "CLOSED")
+    .filter((t) => !t.cancelled && priority.includes(t.status))
     .sort(
       (a, b) =>
         priority.indexOf(a.status) - priority.indexOf(b.status) ||
-        b.created_at.localeCompare(a.created_at),
+        (a.scheduled_date ?? a.date_label ?? "").localeCompare(
+          b.scheduled_date ?? b.date_label ?? "",
+        ) ||
+        b.created_at.localeCompare(a.created_at) ||
+        (b.trip_number ?? 0) - (a.trip_number ?? 0) ||
+        a.id.localeCompare(b.id),
     )[0];
 }
 export function tripDayOpen(workspace: Workspace, trip: Trip) {
-  if (trip.carryover_pending) return false;
+  if (trip.cancelled || trip.status === "CLOSED" || trip.carryover_pending)
+    return false;
   return workspace.days.some(
     (d) =>
       d.status === "OPEN" &&

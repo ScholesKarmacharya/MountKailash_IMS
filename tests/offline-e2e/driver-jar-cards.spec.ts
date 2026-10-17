@@ -1,3 +1,4 @@
+import { driverNavigate } from "./driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import {
@@ -6,10 +7,7 @@ import {
 } from "../operations-e2e/fixture-client";
 import type { DeliveryCustomerContext } from "../../src/domain/operations/customer-context";
 async function nav(page: Page, label: string) {
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: label, exact: true })
-    .click();
+  await driverNavigate(page, label);
 }
 test("same customer cards survive offline reopening, keep device estimates and reconcile with admin once", async ({
   page,

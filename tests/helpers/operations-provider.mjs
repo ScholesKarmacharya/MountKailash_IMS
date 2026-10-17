@@ -14,7 +14,12 @@ const ids = {
 let db;
 let logoutFailures = 0;
 const preferences = new Map();
-const providerPort = process.env.OFFLINE_E2E === "1" ? 17778 : 17777;
+const providerPort =
+  process.env.VERIFY_DRIVER_E2E === "1"
+    ? 17779
+    : process.env.OFFLINE_E2E === "1"
+      ? 17778
+      : 17777;
 async function reset() {
   logoutFailures = 0;
   preferences.clear();
@@ -120,6 +125,7 @@ const allowedTables = new Set([
   "driver_offline_rounds",
 ]);
 const allowedRpc = new Set([
+  "offline_ownership_diagnostics",
   "offline_preparation_access",
   "offline_admin_reset_device",
   "admin_driver_offline_access",
@@ -174,6 +180,8 @@ const allowedRpc = new Set([
   "save_driver",
   "create_trip",
   "schedule_trip",
+  "create_trip_with_load",
+  "save_trip_draft_load",
   "trip_preparation_command",
   "assign_trip_customer",
   "load_trip",

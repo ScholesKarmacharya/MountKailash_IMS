@@ -1,3 +1,4 @@
+import { driverNavigate } from "./driver-navigation";
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import {
@@ -30,10 +31,7 @@ test("one-time contact, sale and later returns survive encrypted offline reopeni
   await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   const onlineForm = await page.getByTestId("instant-form").innerText();
   await page.getByRole("button", { name: "नेपाली", exact: true }).click();
   await expect(
@@ -62,6 +60,7 @@ test("one-time contact, sale and later returns survive encrypted offline reopeni
   await page
     .getByRole("button", { name: "Save Instant Delivery", exact: true })
     .click();
+  await openHistory(page);
   await expect(page.getByTestId("instant-card")).toContainText(
     "Saved on Device",
   );
@@ -89,6 +88,7 @@ test("one-time contact, sale and later returns survive encrypted offline reopeni
   await expect(page.getByTestId("instant-card")).toContainText(
     "Offline Wedding",
   );
+  await openHistory(page);
   await page
     .getByTestId("instant-card")
     .getByRole("button", { name: "Open Instant Delivery", exact: true })
@@ -204,16 +204,14 @@ test("offline old-credit collection on an existing event is durable and never cr
   await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Instant Delivery", exact: true })
-    .click();
+  await driverNavigate(page, "Instant Delivery");
   await context.setOffline(true);
   await expect(
     page
       .getByTestId("driver-sync-status")
       .getByText("Offline", { exact: true }),
   ).toBeVisible();
+  await openHistory(page);
   await page
     .getByTestId("instant-card")
     .getByRole("button", { name: "Open Instant Delivery", exact: true })
@@ -237,6 +235,7 @@ test("offline old-credit collection on an existing event is durable and never cr
   await page.reload();
   await page.getByRole("button", { name: "English", exact: true }).click();
 
+  await openHistory(page);
   await page
     .getByTestId("instant-card")
     .getByRole("button", { name: "Open Instant Delivery", exact: true })
@@ -270,3 +269,9 @@ test("offline old-credit collection on an existing event is durable and never cr
   ).records;
   expect(records[0]).toMatchObject({ pending: 5, outstanding: "0.00" });
 });
+
+async function openHistory(page: import("@playwright/test").Page) {
+  const cards = page.getByTestId("instant-card");
+  if (!(await cards.first().isVisible()))
+    await page.getByText("Instant Delivery History", { exact: true }).click();
+}

@@ -247,10 +247,10 @@ it("driver management reset preserves all history and the ACTIVE trip, fences th
   expect(await reset()).toBe(driver);
   expect(await reset()).toBe(driver);
   expect(await call("admin_driver_offline_access", [driver])).toMatchObject({
-    status: "Previous device revoked",
+    status: "Waiting for driver device",
     device_registered: false,
     reset_pending: true,
-    can_reset: false,
+    can_reset: true,
     review_count: 1,
   });
   const after = await evidence();
@@ -475,8 +475,8 @@ it("resetting a trip not yet prepared revokes its phone without creating a round
   ]);
   expect(await call("admin_driver_offline_access", [other])).toMatchObject({
     trip_id: unprepared,
-    status: "No device registered",
-    can_reset: false,
+    status: "Waiting for driver device",
+    can_reset: true,
   });
   await actor(other);
   const replacement = randomUUID(),

@@ -8,6 +8,8 @@ export type DriverOfflineAccess = {
     | "No device registered"
     | "Offline access active"
     | "Previous device revoked"
+    | "Waiting for driver device"
+    | "Device reset required"
     | "No active trip";
   device_registered: boolean;
   registered_at: string | null;
@@ -17,4 +19,7 @@ export type DriverOfflineAccess = {
   retry_count: number | null;
   reset_pending: boolean;
   can_reset: boolean;
+  previous_device_revoked?: boolean;
+  last_reset_at?: string | null;
+  last_reset_by?: string | null;
 };

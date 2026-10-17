@@ -1,5 +1,13 @@
 # Mount Kailash Water Distribution Management System
 
+For the resumed offline-driver verification, recovery procedure, current Cloud
+migration status and release limits, read the
+[17 October integration report](docs/INTEGRATION_VERIFICATION_2026_10_17.md).
+`npm.cmd run test:e2e:operations:production` freezes the application build for
+operations regressions. `npm.cmd run test:e2e:driver-verification` uses separate
+build output and loopback ports for driver startup/mobile checks alongside
+another editor. Both use disposable fixture data and never Supabase Cloud data.
+
 Application through Sprint 4 with Sprint 6 integration, driver inventory/sales workspace and dated FIFO pending-jar tracking (2026-10-13). Cloud migrations 001-016 are verified applied, including the explicitly approved driver/FIFO/workspace, Paid/Credit validation and driver approval migrations. See [driver inventory acceptance and Cloud verification](docs/DRIVER_INVENTORY_WORKSPACE.md), [Sprint 6 validation](docs/SPRINT_6_IMPLEMENTATION.md) and [driver workflow changes](docs/DRIVER_WORKFLOW_IMPLEMENTATION.md). Existing accounts and business data are preserved; hosted operational write acceptance remains outstanding.
 
 English/Nepali localization and the Bikram Sambat business calendar are implemented. EN/ने switches immediately without losing drafts; preferences belong to each Supabase Auth user (admin default English, driver default Nepali). Both languages use BS dates. See [implementation, tests, supported dates and manual acceptance](docs/BILINGUAL_BS_CALENDAR.md). No SQL migration or environment change is needed.

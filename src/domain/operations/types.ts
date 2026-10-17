@@ -62,6 +62,7 @@ export type Trip = {
   loaded_by?: string | null;
   cancelled?: boolean;
   carryover_pending?: boolean;
+  proposed_load_items?: Count[];
 };
 export type Count = {
   product_id: string;

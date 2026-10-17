@@ -1,6 +1,5 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
-import { randomUUID } from "node:crypto";
 import { getDriverAccounts, getDriverAudit } from "@/services/accounts";
 import { T, DateValue, Message, LocalizedNav } from "@/components/localization";
 import { AdminDialog } from "@/components/admin-dialog";
@@ -43,6 +42,7 @@ export default async function Page({
     DRIVER_STATUS_CHANGED: "Driver access changed",
     DRIVER_SAVED: "Driver details saved",
     DRIVER_OFFLINE_ACCESS_RESET: "Offline access reset",
+    DRIVER_OFFLINE_ACCESS_RESET_REUSED: "Offline access reset",
   };
   return (
     <div className="space-y-5" data-testid="driver-details-workspace">
@@ -87,7 +87,6 @@ export default async function Page({
         key={driver.id}
         driver={driver}
         access={offlineAccess}
-        requestKey={randomUUID()}
       />
       <Card className="space-y-4">
         <h2 className="text-lg font-semibold">

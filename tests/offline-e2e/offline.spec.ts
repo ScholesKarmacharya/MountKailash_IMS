@@ -1,3 +1,4 @@
+import { driverNavigate, driverReturn } from "./driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import {
   activeFixtureTrip,
@@ -94,11 +95,12 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
     .getByRole("navigation")
     .getByRole("link", { name: "Customers", exact: true })
     .click();
+  await page.getByRole("button", { name: "Add Customer", exact: true }).click();
   await page
     .getByLabel("Customer name", { exact: true })
     .fill("Offline customer");
   await page
-    .getByRole("button", { name: "Save customer", exact: true })
+    .getByRole("button", { name: "Save and select customer", exact: true })
     .click();
   await expect(
     page.getByText("Saved on phone", { exact: true }).first(),
@@ -143,21 +145,12 @@ test("offline paid and new-customer credit survive refresh, sync once, preserve 
   ).toBe("1502.50");
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   expect((await f.admin.workspace(f.trip)).visits).toHaveLength(2);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Return to Warehouse", exact: true })
-    .click();
-  await page
-    .getByRole("button", {
-      name: "Prepare return and seal device queue",
-      exact: true,
-    })
-    .click();
+  await driverNavigate(page, "Return to Warehouse");
+  await driverReturn(page);
   await expect(
-    page.getByText(
-      "This delivery round is sealed. No new sales can be recorded.",
-      { exact: true },
-    ),
+    page.getByText("Return submitted. Waiting for warehouse confirmation.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect
     .poll(async () => (await f.admin.workspace(f.trip)).trips[0]?.status)

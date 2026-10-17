@@ -232,7 +232,7 @@ test("authorization failure preserves the draft, waits for Retry, and reuses the
     const key = await draft(page, f.customer);
     release();
     await expect(
-      page.getByText("Could not prepare offline data.", { exact: true }),
+      page.getByText("Could not prepare offline access", { exact: true }),
     ).toBeVisible();
     await expect(save(page)).toBeDisabled();
     await expect(
@@ -249,7 +249,7 @@ test("authorization failure preserves the draft, waits for Retry, and reuses the
     ).toBeVisible();
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(
-      page.getByText("Could not prepare offline data.", { exact: true }),
+      page.getByText("Could not prepare offline access", { exact: true }),
     ).toBeVisible();
     await preserved(page, f.customer, key);
     expect(attempts).toBe(1);
@@ -262,7 +262,7 @@ test("authorization failure preserves the draft, waits for Retry, and reuses the
     await context.setOffline(false);
     await refreshed;
     await expect(
-      page.getByText("Could not prepare offline data.", { exact: true }),
+      page.getByText("Could not prepare offline access", { exact: true }),
     ).toBeVisible();
     expect(attempts).toBe(1);
     await page.getByRole("button", { name: "Retry", exact: true }).click();

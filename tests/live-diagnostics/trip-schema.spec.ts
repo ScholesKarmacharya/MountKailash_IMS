@@ -18,10 +18,12 @@ test("hosted schema renders the scheduled-trip form after migration", async ({
   const response = await page.goto("/admin/trips");
   expect(response?.status()).toBe(200);
   await expect(
-    page.getByRole("heading", { name: "Create trip", exact: true }),
+    page
+      .getByTestId("create-trip-section")
+      .getByText("Create new trip", { exact: true }),
   ).toBeVisible();
   const form = page.locator("form").filter({
-    has: page.getByRole("button", { name: "Create draft trip", exact: true }),
+    has: page.getByRole("button", { name: "Save as Draft", exact: true }),
   });
   await expect(form.locator('input[name="scheduled"]')).toHaveValue(
     /\d{4}-\d{2}-\d{2}/,
@@ -29,7 +31,7 @@ test("hosted schema renders the scheduled-trip form after migration", async ({
   await expect(form.getByLabel("Driver", { exact: true })).toBeVisible();
   await expect(form.getByLabel("Vehicle", { exact: true })).toBeVisible();
   await expect(
-    form.getByRole("button", { name: "Create draft trip", exact: true }),
+    form.getByRole("button", { name: "Save as Draft", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Unable to save this operation.", { exact: false }),

@@ -100,6 +100,8 @@ test("trip creation is first, future drafts preserve stock and filters retain cu
   await page.goto("/admin/trips");
   const section = page.getByTestId("create-trip-section"),
     current = page.getByTestId(`trip-card-${f.trip}`);
+  await expect(section).toBeVisible();
+  await expect(current).toBeVisible();
   expect((await section.boundingBox())!.y).toBeLessThan(
     (await current.boundingBox())!.y,
   );
@@ -122,8 +124,8 @@ test("trip creation is first, future drafts preserve stock and filters retain cu
     "Tomorrow morning deliveries",
   );
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await save(page, "Create draft trip", section);
-  await expect(section.getByRole("status")).toContainText("Record saved.");
+  await save(page, "Save as Draft", section);
+  await expect(section.getByRole("status")).toContainText("saved as a draft.");
   const after = await f.admin.workspace();
   const draft = after.trips.find((t) => t.vehicle_id === vehicle)!;
   expect(draft.status).toBe("DRAFT");

@@ -44,7 +44,9 @@
     ".next-auth-e2e/types/**/*.ts",
     ".next-auth-e2e/dev/types/**/*.ts",
     ".next-offline-e2e/types/**/*.ts",
-    ".next-offline-e2e/dev/types/**/*.ts"
+    ".next-offline-e2e/dev/types/**/*.ts",
+    ".next-driver-verification/types/**/*.ts",
+    ".next-driver-verification/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

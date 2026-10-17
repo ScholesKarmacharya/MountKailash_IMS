@@ -1,5 +1,11 @@
 "use client";
-import { T, Message, DateValue, Value } from "@/components/localization";
+import {
+  T,
+  Message,
+  DateValue,
+  Value,
+  LocalizedTextarea,
+} from "@/components/localization";
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { operationAction } from "@/app/operations-actions";
@@ -134,6 +140,41 @@ export function DeliveryCustomerForm({
     },
     null,
   );
+  const contactField = (
+    field: keyof typeof contacts,
+    label: string,
+    maxLength: number,
+    required = false,
+  ) => (
+    <label key={field} className="grid gap-2 text-sm font-semibold">
+      <Message value={label} />
+      {runtime && field === "address" ? (
+        <LocalizedTextarea
+          name={field}
+          value={contacts[field]}
+          rows={2}
+          maxLength={maxLength}
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 focus-visible:outline-2 focus-visible:outline-ring"
+          onChange={(e) =>
+            setContacts({ ...contacts, [field]: e.target.value })
+          }
+        />
+      ) : (
+        <Input
+          name={field}
+          value={contacts[field]}
+          required={required}
+          autoFocus={field === "name"}
+          type={field === "phone" ? "tel" : "text"}
+          maxLength={maxLength}
+          onChange={(e) => {
+            setContacts({ ...contacts, [field]: e.target.value });
+            setDuplicate(false);
+          }}
+        />
+      )}
+    </label>
+  );
   return (
     <Card id="customer-editor" className="space-y-4 border-primary">
       <h3 className="text-lg font-bold">
@@ -141,9 +182,11 @@ export function DeliveryCustomerForm({
           value={customer ? "Edit customer contact" : "Add New Customer"}
         />
       </h3>
-      <p className="text-sm text-muted-foreground">
-        <T k="Save contact details and continue this delivery. Prices, credit, deposits and jar balances are managed separately." />
-      </p>
+      {!runtime && (
+        <p className="text-sm text-muted-foreground">
+          <T k="Save contact details and continue this delivery. Prices, credit, deposits and jar balances are managed separately." />
+        </p>
+      )}
       <form action={action} className="space-y-4">
         <input
           type="hidden"
@@ -154,54 +197,59 @@ export function DeliveryCustomerForm({
         <input type="hidden" name="id" value={id} />
         <input type="hidden" name="key" value={key} />
         <input type="hidden" name="version" value={customer?.version ?? 0} />
+        {runtime && (
+          <input
+            type="hidden"
+            name="delivery_notes"
+            value={contacts.delivery_notes}
+          />
+        )}
         <fieldset disabled={pending} className="space-y-4">
           {detailsEnabled && <HouseCustomerFields customer={customer} />}
-          {(
-            [
-              ["name", "Customer name"],
-              ["shop_name", "Shop name (optional)"],
-              ["phone", "Customer phone (optional)"],
-              ["address", "Customer address (optional)"],
-            ] as const
-          ).map(([field, label]) => (
-            <label key={field} className="grid gap-2 text-sm font-semibold">
-              <Message value={label} />
-              <Input
-                name={field}
-                value={contacts[field]}
-                required={field === "name"}
-                autoFocus={field === "name"}
-                type={field === "phone" ? "tel" : "text"}
-                maxLength={
-                  { name: 120, shop_name: 160, phone: 40, address: 500 }[field]
-                }
-                onChange={(e) => {
-                  setContacts({ ...contacts, [field]: e.target.value });
-                  setDuplicate(false);
-                }}
-              />
-            </label>
-          ))}
-          {detailsEnabled &&
-            (
-              [
-                ["contact_person", "Contact person (optional)", 120],
-                ["customer_type", "Customer type (optional)", 80],
-                ["delivery_notes", "Delivery notes (optional)", 2000],
-              ] as const
-            ).map(([field, label, max]) => (
-              <label key={field} className="grid gap-2 text-sm font-semibold">
-                <Message value={label} />
-                <Input
-                  name={field}
-                  value={contacts[field]}
-                  maxLength={max}
-                  onChange={(e) =>
-                    setContacts({ ...contacts, [field]: e.target.value })
-                  }
-                />
-              </label>
-            ))}
+          {contactField("name", "Customer name", 120, true)}
+          {!runtime && contactField("shop_name", "Shop name (optional)", 160)}
+          {contactField("phone", "Customer phone (optional)", 40)}
+          {contactField("address", "Customer address (optional)", 500)}
+          {runtime ? (
+            <details className="rounded-lg border border-border p-3">
+              <summary className="min-h-11 cursor-pointer text-sm font-semibold">
+                <T k="More customer details" />
+              </summary>
+              <div className="space-y-4">
+                {contactField("shop_name", "Shop name (optional)", 160)}
+                {detailsEnabled && (
+                  <>
+                    {contactField(
+                      "contact_person",
+                      "Contact person (optional)",
+                      120,
+                    )}
+                    {contactField(
+                      "customer_type",
+                      "Customer type (optional)",
+                      80,
+                    )}
+                  </>
+                )}
+              </div>
+            </details>
+          ) : (
+            detailsEnabled && (
+              <>
+                {contactField(
+                  "contact_person",
+                  "Contact person (optional)",
+                  120,
+                )}
+                {contactField("customer_type", "Customer type (optional)", 80)}
+                {contactField(
+                  "delivery_notes",
+                  "Delivery notes (optional)",
+                  2000,
+                )}
+              </>
+            )
+          )}
           {(duplicate || state?.error?.includes("matching customer")) && (
             <label className="flex min-h-14 items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm">
               <input
@@ -215,7 +263,11 @@ export function DeliveryCustomerForm({
             </label>
           )}
           <div className="flex flex-wrap gap-3">
-            <Button className="min-h-14" type="submit">
+            <Button
+              className="min-h-14"
+              type="submit"
+              disabled={!!runtime && runtime.offlinePrepState !== "READY"}
+            >
               <Message
                 value={
                   pending
@@ -256,6 +308,7 @@ export function DeliveryCustomerHistory({
   context: DeliveryCustomerContext;
   products: Workspace["products"];
 }) {
+  const runtime = useDriverRuntime();
   return (
     <details className="rounded-lg border border-border p-4 text-sm">
       <summary className="min-h-11 cursor-pointer font-semibold">
@@ -287,7 +340,13 @@ export function DeliveryCustomerHistory({
         {context.jar_allocations && context.jar_allocations.length > 0 && (
           <details>
             <summary className="min-h-11 cursor-pointer font-semibold">
-              <T k="FIFO empty-return allocations" />
+              <T
+                k={
+                  runtime
+                    ? "Jar return history"
+                    : "FIFO empty-return allocations"
+                }
+              />
             </summary>
             {context.jar_allocations.map((a) => (
               <p
@@ -349,7 +408,13 @@ export function DeliveryCustomerHistory({
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          <T k="Latest 50 entries per ledger. Posted transactions remain immutable." />
+          <T
+            k={
+              runtime
+                ? "Recent customer activity."
+                : "Latest 50 entries per ledger. Posted transactions remain immutable."
+            }
+          />
         </p>
       </div>
     </details>

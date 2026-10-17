@@ -17,3 +17,5 @@ supabase/.branches/
 
 .next-offline-e2e/
 .vercel
+
+.next-driver-verification/

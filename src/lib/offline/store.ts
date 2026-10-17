@@ -33,6 +33,7 @@ export type VaultRow = {
   cipher: number[];
   pending: number;
   review: number;
+  retired?: boolean;
   updated: string;
 };
 type Setting = { key: string; value: string };
@@ -150,6 +151,7 @@ async function encrypt(
     cipher: [...new Uint8Array(cipher)],
     pending: state.operations.filter((o) => o.status !== "SYNCED").length,
     review: state.operations.filter((o) => o.status === "NEEDS_REVIEW").length,
+    retired: !!state.retired,
     updated: new Date().toISOString(),
   };
 }
@@ -430,6 +432,12 @@ export class OfflineVault {
     occurredAt = new Date().toISOString(),
   ) {
     return this.mutate(async (state) => {
+      if (state.retired)
+        throw new Error(
+          state.retired.cancelled
+            ? "This trip was cancelled. Open your current trip."
+            : "This trip is no longer current. Open your current trip.",
+        );
       if (state.operations.some((o) => o.id === id))
         throw new Error(
           "This transaction is already saved on this device. Retry synchronization with its original ID.",

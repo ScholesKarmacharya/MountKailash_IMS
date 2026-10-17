@@ -1,4 +1,5 @@
 import { openAdminMenuForSignOut } from "./fixture-client";
+import { driverNavigate } from "../offline-e2e/driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip, fixtureClient } from "./fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
@@ -23,6 +24,19 @@ async function signout(page: Page) {
   await expect(page).toHaveURL(/sign-in/);
 }
 async function save(page: Page, label: string) {
+  if (page.url().includes("/driver/")) {
+    await page
+      .getByRole("button", {
+        name:
+          label === "Collect outstanding credit" ? "Save collection" : label,
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByText("Saved on phone", { exact: true }).first(),
+    ).toBeVisible();
+    return;
+  }
   const response = page.waitForResponse(
     (r) =>
       r.request().method() === "POST" &&
@@ -104,11 +118,7 @@ test("cash, partial Fonepay, old credit, deposit, reconciliation, invoices and i
     .getByRole("main")
     .getByRole("link", { name: "New Sale", exact: true })
     .click();
-  await page
-    .getByText("Collect previous credit without a new delivery", {
-      exact: true,
-    })
-    .click();
+  await driverNavigate(page, "Collections");
   await page
     .getByLabel("Collection customer", { exact: true })
     .selectOption(customer);

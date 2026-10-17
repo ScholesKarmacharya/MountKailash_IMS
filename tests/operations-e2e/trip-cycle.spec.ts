@@ -1,7 +1,12 @@
+import { driverNavigate, driverReturn } from "../offline-e2e/driver-navigation";
 import { parseCommand } from "../../src/domain/operations/commands";
 import { expect, test, type Page } from "@playwright/test";
 import { vehicleCounts } from "../../src/domain/operations/types";
-import { fixtureClient, openAdminMenuForSignOut } from "./fixture-client";
+import {
+  fixtureClient,
+  openAdminMenuForSignOut,
+  replayDriverDelivery,
+} from "./fixture-client";
 async function login(page: Page, role = "admin") {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "English", exact: true }).click();
@@ -18,6 +23,22 @@ async function login(page: Page, role = "admin") {
   ).toBeEnabled();
 }
 async function save(page: Page, label: string) {
+  if (
+    page.url().includes("/driver/") &&
+    !["Start Trip", "Continue this trip"].includes(label)
+  ) {
+    await page
+      .getByRole("button", {
+        name:
+          label === "Collect outstanding credit" ? "Save collection" : label,
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByText("Saved on phone", { exact: true }).first(),
+    ).toBeVisible();
+    return;
+  }
   // A previous operation's toast may still be visible. Wait for this action's
   // action response before checking success. Flight may keep streaming the
   // re-rendered page; persistence assertions below read the actual database.
@@ -29,9 +50,22 @@ async function save(page: Page, label: string) {
   await page.getByRole("button", { name: label, exact: true }).click();
   const response = await action;
   expect(response.ok()).toBe(true);
-  await expect(
-    page.getByText(/^(Saved to the database\.|Saved to Supabase\.)$/).first(),
-  ).toBeVisible();
+  if (label === "Save as Draft")
+    await expect(page.getByTestId("trip-creation-success")).toContainText(
+      "saved as a draft.",
+    );
+  else if (label === "Start Trip")
+    await expect(
+      page.getByText("Trip active", { exact: true }).first(),
+    ).toBeVisible();
+  else
+    await expect(
+      page
+        .getByText(
+          /^(Record saved\.|Saved to the database\.|Saved to Supabase\.)$/,
+        )
+        .first(),
+    ).toBeVisible();
 }
 async function updated(page: Page, reload = false) {
   if (reload)
@@ -46,7 +80,6 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
 }) => {
   await request.post("http://127.0.0.1:17777/reset");
   const admin = await fixtureClient(request);
-  const driver = await fixtureClient(request, "driver");
   page.on("dialog", (d) => d.accept());
   await login(page);
   for (const heading of ["Customers", "Vehicles", "Drivers", "Trips"]) {
@@ -80,10 +113,8 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
     .getByTestId("create-trip-section")
     .getByLabel("Vehicle", { exact: true })
     .selectOption({ label: "TEST-BROWSER" });
-  await save(page, "Create draft trip");
-  await page
-    .getByRole("link", { name: "Open saved trip", exact: true })
-    .click();
+  await save(page, "Save as Draft");
+  await page.getByRole("link", { name: "Open Trip", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/trips\/[0-9a-f-]+$/);
   const tripPath = new URL(page.url()).pathname;
   const tripId = tripPath.split("/").at(-1)!;
@@ -101,10 +132,8 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "driver");
-  await save(page, "Start delivering");
-  await page
-    .getByRole("link", { name: "View round and return history" })
-    .click();
+  await save(page, "Start Trip");
+  await page.getByRole("link", { name: "Trip details", exact: true }).click();
   await page
     .getByRole("main")
     .getByRole("link", { name: "New Sale", exact: true })
@@ -184,7 +213,11 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       .poll(async () => (await admin.workspace(tripId)).visits.length)
       .toBe(++visitCount);
     const saved = await admin.workspace(tripId);
-    const visitId = await driver.rpc<string>(retry.rpc, retry.args);
+    const visitId = await replayDriverDelivery(
+      page,
+      tripId,
+      String(retry.args.p_key),
+    );
     expect(saved.visits.map((v) => v.id)).toContain(visitId);
     const replayed = await admin.workspace(tripId);
     expect(replayed.visits).toHaveLength(saved.visits.length);
@@ -207,22 +240,24 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       .getByRole("alert")
       .filter({ hasText: "exceeds the remaining vehicle stock" }),
   ).toBeVisible();
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Return to Warehouse", exact: true })
-    .click();
-  await expect(
-    page.getByLabel("Full jars counted", { exact: true }),
-  ).toHaveValue("20");
-  await expect(
-    page.getByLabel("Empty jars counted", { exact: true }),
-  ).toHaveValue("65");
+  await driverNavigate(page, "Return to Warehouse");
+  await expect(page.getByLabel(/^20L test jar · Full [Jj]ars$/)).toHaveValue(
+    "20",
+  );
+  await expect(page.getByLabel(/^20L test jar · Empty [Jj]ars$/)).toHaveValue(
+    "65",
+  );
   const beforeSubmission = await admin.workspace(tripId);
-  await save(page, "Submit warehouse returns");
+  await driverReturn(page);
   await updated(page);
   await expect(
-    page.getByText("Awaiting warehouse verification", { exact: true }),
+    page.getByText("Return submitted. Waiting for warehouse confirmation.", {
+      exact: true,
+    }),
   ).toBeVisible();
+  await expect
+    .poll(async () => (await admin.workspace(tripId)).trips[0]?.status)
+    .toBe("SUBMITTED");
   const submitted = await admin.workspace(tripId);
   expect(submitted.trips[0]!.status).toBe("SUBMITTED");
   expect(submitted.movements).toHaveLength(beforeSubmission.movements.length);
@@ -238,6 +273,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page, "other");
@@ -247,6 +283,7 @@ test("real SQL physical trip cycle through admin and mobile driver screens", asy
   await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
   await page.goto("/admin/trips");
   await expect(page).toHaveURL(/driver\/home/);
+  await openAdminMenuForSignOut(page);
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect(page).toHaveURL(/sign-in/);
   await login(page);

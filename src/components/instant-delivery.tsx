@@ -1001,21 +1001,34 @@ export function InstantDriver({
             <InstantTripChooser trips={eligible} />
           ) : active && records.available ? (
             <InstantForm data={data} state={state} />
-          ) : records.available ? (
-            <p>
-              <T k="No active delivery trip. Please contact the warehouse." />
+          ) : !active ? (
+            <Card className="space-y-4">
+              <p className="font-semibold">
+                <T k="No active trip" />
+              </p>
+              <Button asChild className="min-h-14 w-full">
+                <Link href="/driver/home">
+                  <T k="Back to Home" />
+                </Link>
+              </Button>
+            </Card>
+          ) : (
+            <p role="alert">
+              <T k="Offline access needs an update. Ask the warehouse admin." />
             </p>
-          ) : null}
-          <h2 className="text-xl font-semibold">
-            <T k="Instant Delivery History" />
-          </h2>
-          <InstantCards
-            workspace={records}
-            select={(r) => {
-              setSelected(r.id);
-              setHistory(undefined);
-            }}
-          />
+          )}
+          <details className="rounded-xl border border-border bg-card p-4">
+            <summary className="min-h-11 cursor-pointer font-semibold">
+              <T k="Instant Delivery History" />
+            </summary>
+            <InstantCards
+              workspace={records}
+              select={(r) => {
+                setSelected(r.id);
+                setHistory(undefined);
+              }}
+            />
+          </details>
         </>
       )}
     </div>

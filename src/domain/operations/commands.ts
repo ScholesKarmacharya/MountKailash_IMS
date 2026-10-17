@@ -10,6 +10,7 @@ export type Operation =
   | "vehicle"
   | "driver"
   | "create"
+  | "prepare-trip"
   | "route"
   | "load"
   | "start"
@@ -135,6 +136,28 @@ export function parseCommand(form: FormData): Command {
         rpc: "save_driver",
         args: { ...master(), p_name: str("name", 120) },
       };
+    case "prepare-trip": {
+      const intent = str("intent", 7);
+      if (!["DRAFT", "CONFIRM"].includes(intent))
+        throw new Error(
+          "Choose whether to save a draft or confirm physical loading.",
+        );
+      return {
+        admin: true,
+        rpc: "create_trip_with_load",
+        args: {
+          p_id: id("id"),
+          p_driver: id("driver"),
+          p_vehicle: id("vehicle"),
+          p_day: id("day"),
+          p_scheduled: dateFilter(str("scheduled", 10)) ?? invalidSchedule(),
+          p_notes: str("notes"),
+          p_items: json("items"),
+          p_confirm: intent === "CONFIRM",
+          ...common,
+        },
+      };
+    }
     case "create":
       return {
         admin: true,
@@ -193,7 +216,8 @@ export function parseCommand(form: FormData): Command {
     case "load":
       return {
         admin: true,
-        rpc: "load_trip",
+        rpc:
+          form.get("draft") === "true" ? "save_trip_draft_load" : "load_trip",
         args: { p_trip: id("trip"), p_items: json("items"), ...common },
       };
     case "start":

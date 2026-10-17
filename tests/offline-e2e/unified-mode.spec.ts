@@ -1,3 +1,4 @@
+import { driverNavigate } from "./driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip } from "../operations-e2e/fixture-client";
 import type { FinanceWorkspace } from "../../src/domain/finance/types";
@@ -124,10 +125,7 @@ async function sale(page: Page, full: number, paid = true, submit = true) {
     .click();
 }
 async function nav(page: Page, label: string) {
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: label, exact: true })
-    .click();
+  await driverNavigate(page, label);
 }
 test("one interface: 100 loaded, 20 online, 15 offline, reopen, automatic confirmation exactly once on another admin device", async ({
   page,
@@ -179,7 +177,7 @@ test("one interface: 100 loaded, 20 online, 15 offline, reopen, automatic confir
 
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
   await nav(page, "Sales History");
-  await expect(page.getByText(/Saved on Device/).first()).toBeVisible();
+  await expect(page.getByText(/Saved on phone/).first()).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 45000,

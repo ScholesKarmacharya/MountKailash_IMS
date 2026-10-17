@@ -76,6 +76,22 @@ it("does not create an unrelated registered device or cookie when a legacy round
   expect(fake.rpc.mock.calls[0]![0]).toBe("offline_preparation_access");
   expect(fake.set).not.toHaveBeenCalled();
 });
+it("returns an admin-authorized fresh-credentials instruction without reapproving a revoked identity", async () => {
+  fake.rpc.mockResolvedValueOnce({
+    allowed: false,
+    replace_installation: true,
+  });
+  expect(
+    await trustedDeviceCommand({
+      action: "automatic-register",
+      trip: crypto.randomUUID(),
+      device,
+      token: secrets.token,
+    }),
+  ).toEqual({ replace_installation: true });
+  expect(fake.rpc).toHaveBeenCalledOnce();
+  expect(fake.set).not.toHaveBeenCalled();
+});
 it("registers automatic access without uploading its encryption secret or requiring a recovery key", async () => {
   vi.stubEnv("OFFLINE_DEVICE_RECOVERY_KEY", "");
   await trustedDeviceCommand({

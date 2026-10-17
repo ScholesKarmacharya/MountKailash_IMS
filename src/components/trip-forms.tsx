@@ -1,7 +1,6 @@
 "use client";
 import { LocalizedSelect } from "@/components/localization";
 import { BsDatePicker } from "./bs-date-picker";
-import { nepalDateLabel } from "@/domain/business-days/time";
 
 import {
   T,
@@ -32,10 +31,11 @@ import { useRouter } from "next/navigation";
 import type { Count, Trip, Workspace } from "@/domain/operations/types";
 import { moneyTotal, vehicleCounts } from "@/domain/operations/types";
 import { stockLabels } from "@/domain/inventory/validation";
-import { OperationForm, Counter, Field, Select } from "./operation-form";
+import { OperationForm, Counter, Field } from "./operation-form";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
+import { TripLoadProducts } from "./trip-load-products";
 import {
   offlinePreparingMessage,
   useDriverRuntime,
@@ -45,86 +45,7 @@ import {
   DeliveryCustomerHistory,
   useDeliveryCustomer,
 } from "./delivery-customers";
-export function CreateTripForm({
-  workspace: w,
-  requestKey,
-  id,
-}: {
-  workspace: Workspace;
-  requestKey: string;
-  id: string;
-}) {
-  const { t } = useLocale();
-  const open = w.days.find((d) => d.status === "OPEN");
-  const usedDrivers = new Set(
-    w.trips.filter((t) => t.status !== "CLOSED").map((t) => t.driver_id),
-  );
-  const usedVehicles = new Set(
-    w.trips.filter((t) => t.status !== "CLOSED").map((t) => t.vehicle_id),
-  );
-  if (!open)
-    return (
-      <p>
-        <T k="Open a business day in warehouse inventory before assigning a trip." />
-      </p>
-    );
-  return (
-    <OperationForm
-      operation="create"
-      requestKey={requestKey}
-      id={id}
-      label="Create draft trip"
-      resultHref="/admin/trips"
-      preserveFields
-    >
-      <input type="hidden" name="day" value={open.id} />
-      <p className="text-sm">
-        {" "}
-        <T k="Business day:" />{" "}
-        <strong>
-          <DateValue value={open.date_label} />
-        </strong>
-      </p>
-      <div className="grid items-start gap-4 md:grid-cols-2">
-        <BsDatePicker
-          name="scheduled"
-          label="Scheduled delivery date"
-          defaultValue={
-            open.date_label > nepalDateLabel(new Date())
-              ? open.date_label
-              : nepalDateLabel(new Date())
-          }
-          min={open.date_label}
-          required
-        />
-        <Select name="driver" label="Driver">
-          <option value="">{t("Choose available driver")}</option>
-          {w.drivers
-            .filter((d) => d.is_active && !usedDrivers.has(d.id))
-            .map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-        </Select>
-        <Select name="vehicle" label="Vehicle">
-          <option value="">{t("Choose available vehicle")}</option>
-          {w.vehicles
-            .filter((v) => v.is_active && !usedVehicles.has(v.id))
-            .map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.plate_number}
-              </option>
-            ))}
-        </Select>
-        <Field name="notes" label="Trip notes (optional)" />
-      </div>
-      <p className="text-sm text-muted-foreground">
-        <T k="A draft reserves the driver and vehicle. Warehouse stock changes only after Confirm physical loading. The driver starts the prepared trip separately." />
-      </p>
-    </OperationForm>
-  );
-}
+
 export function TripPreparationForms({
   workspace: w,
   trip,
@@ -253,22 +174,27 @@ export function LoadTripForm({
 }) {
   const products = w.products.filter((p) => p.is_active);
   const { locale, number } = useLocale();
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [assigned, setAssigned] = useState<Record<string, boolean>>({});
-  const warehouse = w.locations.find((l) => l.code === "MAIN")?.id;
-  const selected = products
-    .filter((p) => assigned[p.id])
-    .map((p) => ({
-      product_id: p.id,
-      stock_kind: p.kind,
-      quantity: quantities[p.id] ?? 0,
-    }));
+  const [selected, setSelected] = useState<Count[]>(
+    trip.proposed_load_items ?? [],
+  );
   return (
     <OperationForm
       operation="load"
       trip={trip.id}
       requestKey={requestKey}
       label="Confirm warehouse loading"
+      preserveFields
+      actions={
+        <Button
+          type="submit"
+          name="draft"
+          value="true"
+          variant="outline"
+          data-confirm="Save proposed quantities without confirming physical loading?"
+        >
+          <T k="Save proposed quantities" />
+        </Button>
+      }
       confirm={tr(locale, "Load {0} onto {1}?", [
         selected
           .map(
@@ -283,46 +209,12 @@ export function LoadTripForm({
         <T k="Choose products and quantities. A jar product can be assigned with zero full jars to permit empty collection; at least one load quantity must be positive." />
       </p>
       <input type="hidden" name="items" value={JSON.stringify(selected)} />
-      {products.map((p) => {
-        const available =
-          w.balances.find(
-            (b) =>
-              b.location_id === warehouse &&
-              b.product_id === p.id &&
-              b.stock_kind === p.kind,
-          )?.quantity ?? 0;
-        return (
-          <div
-            key={p.id}
-            className="space-y-3 rounded-xl border border-border p-4"
-          >
-            <label className="flex min-h-12 items-center gap-3 font-semibold">
-              <input
-                type="checkbox"
-                checked={assigned[p.id] ?? false}
-                onChange={(e) =>
-                  setAssigned({ ...assigned, [p.id]: e.target.checked })
-                }
-                className="size-5"
-              />
-              {p.name}
-            </label>
-            <p className="text-sm">
-              <T k="Warehouse available: {0}" values={[available]} />
-            </p>
-            {assigned[p.id] && (
-              <Counter
-                label={tr(locale, "{0} load", [p.name])}
-                value={quantities[p.id] ?? 0}
-                max={available}
-                onChange={(value) =>
-                  setQuantities({ ...quantities, [p.id]: value })
-                }
-              />
-            )}
-          </div>
-        );
-      })}
+      <TripLoadProducts
+        workspace={w}
+        items={selected}
+        onChange={setSelected}
+        selectProducts
+      />
     </OperationForm>
   );
 }
@@ -538,7 +430,10 @@ export function DeliveryForm({
             is_active: context.customer.is_active,
             supply_type: context.customer.supply_type ?? "REGULAR",
             house_status: context.customer.house_status ?? "NONE",
-            house_version: context.customer.house_version ?? 0,
+            house_version:
+              context.customer.supply_type === "HOUSE"
+                ? (context.customer.house_version ?? 0)
+                : 0,
           },
           billing: context.billing ?? null,
           prices: context.prices,
@@ -549,7 +444,12 @@ export function DeliveryForm({
             .filter((c) => c.quantity !== 0)
             .map(({ product_id, quantity }) => ({ product_id, quantity }))
             .sort((a, b) => a.product_id.localeCompare(b.product_id)),
-          house_products: context.house_products ?? [],
+          // HOUSE metadata arrives when a new contact is confirmed. It does
+          // not change a regular customer's reviewed sale or price.
+          house_products:
+            context.customer.supply_type === "HOUSE"
+              ? (context.house_products ?? [])
+              : [],
         }
       : null,
     counts: counts
@@ -568,22 +468,24 @@ export function DeliveryForm({
   const router = useRouter();
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          <T k="Remaining stock is checked again when saving." />
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setReview(false);
-            if (runtime) void runtime.refresh();
-            else router.refresh();
-          }}
-        >
-          <T k="Refresh stock" />
-        </Button>
-      </div>
+      {!simplifiedPayment && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            <T k="Remaining stock is checked again when saving." />
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setReview(false);
+              if (runtime) void runtime.refresh();
+              else router.refresh();
+            }}
+          >
+            <T k="Refresh stock" />
+          </Button>
+        </div>
+      )}
       {editor && w.driver_workflow && (
         <DeliveryCustomerForm
           key={editor === "edit" ? selected?.id : "new"}
@@ -882,7 +784,12 @@ export function DeliveryForm({
                   (c) => c.product_id === p.id && c.stock_kind === kind,
                 )?.quantity ?? 0;
               return (
-                <Card key={p.id} className="space-y-5 p-4">
+                <Card
+                  key={p.id}
+                  className={
+                    simplifiedPayment ? "space-y-3 p-4" : "space-y-5 p-4"
+                  }
+                >
                   <h3 className="font-semibold">
                     <T k={deliveryHeading(p.kind)} />
                   </h3>
@@ -943,12 +850,14 @@ export function DeliveryForm({
                         value={q.empty_jars}
                         onChange={(n) => update(p.id, "empty_jars", n)}
                       />
-                      <p className="text-sm">
-                        <T k="Unreturned Jars" /> (
-                        <T k="net change from this visit" />
-                        ): <Value value={q.full_jars - q.empty_jars} />
-                      </p>
-                      {selected && !walk && (
+                      {!simplifiedPayment && (
+                        <p className="text-sm">
+                          <T k="Unreturned Jars" /> (
+                          <T k="net change from this visit" />
+                          ): <Value value={q.full_jars - q.empty_jars} />
+                        </p>
+                      )}
+                      {!simplifiedPayment && selected && !walk && (
                         <p className="text-xs text-muted-foreground">
                           <T
                             k="Customer holds {0} jars before this visit."
@@ -967,7 +876,23 @@ export function DeliveryForm({
                           />
                         </p>
                       )}
-                      {selected && !walk && (
+                      {simplifiedPayment && selected && !walk && (
+                        <p className="rounded-lg bg-muted p-3 text-sm font-semibold">
+                          <T
+                            k="Updated Pending Balance: {0}"
+                            values={[
+                              (custody.find(
+                                (c) =>
+                                  c.customer_id === customer &&
+                                  c.product_id === p.id,
+                              )?.quantity ?? 0) +
+                                q.full_jars -
+                                q.empty_jars,
+                            ]}
+                          />
+                        </p>
+                      )}
+                      {!simplifiedPayment && selected && !walk && (
                         <div className="rounded-lg bg-muted p-3 text-sm">
                           <p>
                             <T

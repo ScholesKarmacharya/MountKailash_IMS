@@ -1,3 +1,4 @@
+import { openAdminMenuForSignOut } from "./fixture-client";
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { activeFixtureTrip, fixtureIds } from "./fixture-client";
@@ -72,6 +73,7 @@ test("admin customer cards, confirmed refresh, filters, complete history and Nep
     p_key: randomUUID(),
   });
   await login(page);
+  await openAdminMenuForSignOut(page);
   const nav = page.getByRole("navigation", { name: "Admin navigation" });
   await expect(
     nav.getByRole("link", { name: "Customers", exact: true }),

@@ -21,3 +21,5 @@ next-env.d.ts
 .next-auth-e2e
 .next-scaffold-e2e
 .next-build-check
+
+.next-driver-verification

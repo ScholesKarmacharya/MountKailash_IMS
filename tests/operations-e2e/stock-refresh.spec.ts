@@ -6,7 +6,7 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
   page,
   request,
 }) => {
-  const { driver, customer, trip } = await activeFixtureTrip(request);
+  const { admin, customer, trip } = await activeFixtureTrip(request);
   page.on("dialog", (d) => d.accept());
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("driver@fixture.example");
@@ -22,8 +22,8 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
     .getByRole("button", { name: "Refresh customer", exact: true })
     .click();
   await page.getByLabel("Jars Delivered", { exact: true }).fill("90");
-  // Another signed-in device posts 40 while this browser retains an unsaved 90.
-  await driver.rpc("post_trip_visit", {
+  // An authorized admin records a concurrent delivery while this browser retains 90.
+  await admin.rpc("post_trip_visit", {
     p_trip: trip,
     p_customer: customer,
     p_walk_name: "",
@@ -35,11 +35,10 @@ test("refresh blocks a delivery draft that now exceeds vehicle stock", async ({
     p_notes: "Other device",
     p_key: randomUUID(),
   });
-  await page
-    .getByRole("button", { name: "Refresh stock", exact: true })
-    .click();
+  // Returning to the app refreshes confirmed stock without erasing the draft.
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   const full = page.getByLabel("Jars Delivered", { exact: true });
-  await expect(full).toHaveAttribute("max", "60");
+  await expect(full).toHaveAttribute("max", "60", { timeout: 30000 });
   await expect(full).toHaveValue("90");
   await expect(
     page.getByRole("button", { name: "Review delivery", exact: true }),

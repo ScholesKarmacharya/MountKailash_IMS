@@ -63,3 +63,53 @@ input {
 ::selection {
   background: #b3e5e7;
 }
+
+/* Driver-only viewport and keyboard behavior. No fixed form actions. */
+.driver-shell {
+  --driver-nav-height: 4.75rem;
+  --driver-keyboard-inset: 0px;
+  overflow-wrap: anywhere;
+}
+.driver-main {
+  padding-bottom: calc(
+    var(--driver-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem
+  );
+}
+.driver-bottom-nav {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 30;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  padding: 0.25rem 0.5rem calc(0.25rem + env(safe-area-inset-bottom, 0px));
+}
+.driver-shell :is(input, textarea, select, button, summary) {
+  scroll-margin-block: 1rem;
+}
+.driver-shell
+  :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  min-height: 3rem;
+  font-size: 1rem;
+  max-width: 100%;
+}
+.driver-shell :is(form, fieldset) {
+  min-width: 0;
+}
+.driver-shell[data-keyboard-open="true"] .driver-bottom-nav {
+  display: none;
+}
+.driver-shell[data-keyboard-open="true"] .driver-main {
+  padding-bottom: calc(
+    var(--driver-keyboard-inset) + env(safe-area-inset-bottom, 0px) + 1.5rem
+  );
+}
+@media (min-width: 1024px) {
+  .driver-bottom-nav {
+    position: static;
+    border-top: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .driver-main {
+    padding-bottom: 2rem;
+  }
+}

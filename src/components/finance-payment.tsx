@@ -11,6 +11,11 @@ import { allocations, cents, npr, sum } from "@/domain/finance/money";
 import type { FinanceWorkspace } from "@/domain/finance/types";
 import type { Workspace, Trip } from "@/domain/operations/types";
 import { useDeliveryCustomer } from "./delivery-customers";
+import {
+  DriverRuntimeContext,
+  useDriverRuntime,
+  offlinePreparingMessage,
+} from "./driver-runtime-context";
 export function AmountInput({
   label,
   value,
@@ -255,6 +260,7 @@ export function InvoicePaymentForm({
   requestKey: string;
   available: string;
 }) {
+  const runtime = useDriverRuntime();
   const [amount, setAmount] = useState(""),
     [method, setMethod] = useState("CASH"),
     [reference, setReference] = useState("");
@@ -266,61 +272,78 @@ export function InvoicePaymentForm({
     error = (e as Error).message;
   }
   return (
-    <OperationForm
-      operation="finance:PAYMENT"
-      trip={trip}
-      requestKey={requestKey}
-      label="Record invoice receipt"
-      showSubmit={!!amount && !error}
-      confirm={`Record ${amount} NPR ${method} against this invoice? Fonepay remains pending.`}
-    >
-      <input type="hidden" name="invoice" value={invoice} />
-      <input type="hidden" name="customer" value={customer ?? ""} />
-      <input
-        type="hidden"
-        name="payment_data"
-        value={JSON.stringify({
-          method,
-          amount,
-          reference,
-          deposit_amount: "0",
-          current_amount: customer ? "0" : amount,
-          allocations: customer ? [{ invoice_id: invoice, amount }] : [],
-        })}
-      />
-      <p>
-        <T
-          k="Available to collect: {0}"
-          values={[<Value key="v0" value={npr(available)} />]}
+    // Legacy walk-in receipts retain their invoice-linked online contract.
+    // The durable collection journal requires a registered customer.
+    <DriverRuntimeContext.Provider value={customer ? runtime : null}>
+      <OperationForm
+        operation="finance:PAYMENT"
+        trip={trip}
+        requestKey={requestKey}
+        label="Record invoice receipt"
+        submitDisabled={!!runtime && runtime.offlinePrepState !== "READY"}
+        submitBlockedMessage={
+          runtime?.offlinePrepError ?? offlinePreparingMessage
+        }
+        submitHint={
+          runtime && runtime.offlinePrepState !== "READY" ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              <Message
+                value={runtime.offlinePrepError ?? offlinePreparingMessage}
+              />
+            </p>
+          ) : undefined
+        }
+        showSubmit={!!amount && !error}
+        confirm={`Record ${amount} NPR ${method} against this invoice? Fonepay remains pending.`}
+      >
+        <input type="hidden" name="invoice" value={invoice} />
+        <input type="hidden" name="customer" value={customer ?? ""} />
+        <input
+          type="hidden"
+          name="payment_data"
+          value={JSON.stringify({
+            method,
+            amount,
+            reference,
+            deposit_amount: "0",
+            current_amount: customer ? "0" : amount,
+            allocations: customer ? [{ invoice_id: invoice, amount }] : [],
+          })}
         />
-      </p>
-      <AmountInput
-        label="Invoice amount received (NPR)"
-        value={amount}
-        onChange={setAmount}
-        required
-      />
-      <div className="grid grid-cols-2 gap-3">
-        {["CASH", "FONEPAY"].map((m) => (
-          <Button
-            key={m}
-            type="button"
-            aria-pressed={method === m}
-            variant={method === m ? "default" : "outline"}
-            onClick={() => setMethod(m)}
-          >
-            <Message
-              value={m === "CASH" ? "Cash receipt" : "Fonepay pending"}
-            />
-          </Button>
-        ))}
-      </div>
-      <AmountReference value={reference} onChange={setReference} />
-      {error && (
-        <p role="alert" className="text-red-700">
-          <Message value={error} />
+        <p>
+          <T
+            k="Available to collect: {0}"
+            values={[<Value key="v0" value={npr(available)} />]}
+          />
         </p>
-      )}
-    </OperationForm>
+        <AmountInput
+          label="Invoice amount received (NPR)"
+          value={amount}
+          onChange={setAmount}
+          required
+        />
+        <div className="grid grid-cols-2 gap-3">
+          {["CASH", "FONEPAY"].map((m) => (
+            <Button
+              key={m}
+              type="button"
+              aria-pressed={method === m}
+              variant={method === m ? "default" : "outline"}
+              onClick={() => setMethod(m)}
+            >
+              <Message
+                value={m === "CASH" ? "Cash receipt" : "Fonepay pending"}
+              />
+            </Button>
+          ))}
+        </div>
+        <AmountReference value={reference} onChange={setReference} />
+        {error && (
+          <p role="alert" className="text-red-700">
+            <Message value={error} />
+          </p>
+        )}
+      </OperationForm>
+    </DriverRuntimeContext.Provider>
   );
 }

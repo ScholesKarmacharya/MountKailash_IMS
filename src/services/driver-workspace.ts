@@ -23,19 +23,28 @@ export async function getDriverWorkspace(selectedTrip?: string) {
     active.map((t) => getOperations(false, t.id)),
   );
   const eligibleTrips = snapshots.flatMap((w) => eligibleInstantTrips(w));
-  const trip = requested
+  const candidate = requested
     ? eligibleTrips.find((t) => t.id === requested)
-    : eligibleTrips.length === 1
-      ? eligibleTrips[0]
-      : currentRound(overview);
-  if (selectedTrip && !trip)
+    : currentRound(overview);
+  if (selectedTrip && !candidate)
     throw new Error(
       "Choose an authorized active delivery trip with confirmed stock.",
     );
-  const workspace = trip
-    ? (snapshots.find((w) => w.trips.some((t) => t.id === trip.id)) ??
-      (await getOperations(false, trip.id)))
+  const workspace = candidate
+    ? (snapshots.find((w) => w.trips.some((t) => t.id === candidate.id)) ??
+      (await getOperations(false, candidate.id)))
     : overview;
+  // Cancellation can commit between the overview and scoped reads. Prefer the
+  // latter's metadata; never return an old LOADED label with a CLOSED snapshot.
+  const scoped = workspace.trips.find((t) => t.id === candidate?.id);
+  if (scoped)
+    overview.trips = overview.trips.map((t) =>
+      t.id === scoped.id ? scoped : t,
+    );
+  const trip =
+    scoped && !scoped.cancelled && scoped.status !== "CLOSED"
+      ? scoped
+      : undefined;
   const day =
     overview.days.find((d) => d.status === "OPEN") ??
     overview.days.find((d) => d.status === "CLOSING_REVIEW");

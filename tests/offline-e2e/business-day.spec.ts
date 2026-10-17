@@ -1,3 +1,8 @@
+import {
+  driverNavigate,
+  driverReturn,
+  activeScreen,
+} from "./driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import {
@@ -22,7 +27,7 @@ test("a workspace response started before a confirmed return cannot leave the dr
   await nav(page, "Return to Warehouse");
   await expect(
     page.getByRole("button", {
-      name: "Prepare return and seal device queue",
+      name: "Review Return",
       exact: true,
     }),
   ).toBeEnabled();
@@ -46,17 +51,14 @@ test("a workspace response started before a confirmed return cannot leave the dr
   try {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect.poll(() => captured).toBe(true);
-    await page
-      .getByRole("button", {
-        name: "Prepare return and seal device queue",
-        exact: true,
-      })
-      .click();
+    await driverReturn(page);
     await expect(
       page.getByText("Saved on phone", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText("Awaiting warehouse verification", { exact: true }),
+      page.getByText("Return submitted. Waiting for warehouse confirmation.", {
+        exact: true,
+      }),
     ).toBeVisible();
     const returned = page.waitForResponse((r) =>
       r.url().includes("/api/driver/workspace?"),
@@ -64,11 +66,13 @@ test("a workspace response started before a confirmed return cannot leave the dr
     release();
     await returned;
     await expect(
-      page.getByText("Awaiting warehouse verification", { exact: true }),
+      page.getByText("Return submitted. Waiting for warehouse confirmation.", {
+        exact: true,
+      }),
     ).toBeVisible();
-    expect((await f.admin.workspace(f.trip)).trips[0]?.status).toBe(
-      "SUBMITTED",
-    );
+    await expect
+      .poll(async () => (await f.admin.workspace(f.trip)).trips[0]?.status)
+      .toBe("SUBMITTED");
   } finally {
     release();
   }
@@ -92,11 +96,7 @@ async function login(page: Page, role = "driver") {
   );
 }
 async function nav(page: Page, label: string) {
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: label, exact: true })
-    .click();
-  await expect(page).not.toHaveURL(/\/offline/);
+  await driverNavigate(page, label);
 }
 async function unlock(page: Page) {
   await language(page, "en");
@@ -213,10 +213,10 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     page.getByRole("button", { name: "नेपाली", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await language(page, "en");
-  await expect(page.getByTestId("driver-total-jars-loaded")).toHaveText("100");
-  await expect(page.getByRole("main")).toContainText(
-    formatBusinessDate(trip.date_label, "en"),
+  await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText(
+    "100",
   );
+  await expect(page.getByRole("main")).toContainText(trip.plate_number);
   await nav(page, "New Sale");
   await expect(page.getByLabel("Offline passphrase")).toHaveCount(0);
   await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
@@ -270,10 +270,13 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     ).toBeVisible();
     await nav(page, "Customers");
     await page
+      .getByRole("button", { name: "Add Customer", exact: true })
+      .click();
+    await page
       .getByLabel("Customer name", { exact: true })
       .fill("Created while offline");
     await page
-      .getByRole("button", { name: "Save customer", exact: true })
+      .getByRole("button", { name: "Save and select customer", exact: true })
       .click();
     await expect(page.getByTestId("pending-sync-count")).toHaveText(
       /Saved on phone|2 changes/,
@@ -297,7 +300,10 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
           .filter({ has: page.getByRole("heading", { name, exact: true }) }),
       ).toContainText("5");
     await nav(page, "Sales History");
-    await page.getByLabel("Date range", { exact: true }).selectOption("today");
+    await page.getByText("Filter", { exact: true }).click();
+    await activeScreen(page)
+      .getByLabel("Date range", { exact: true })
+      .selectOption("today");
     await page
       .getByRole("button", { name: "Filter history", exact: true })
       .click();
@@ -309,7 +315,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await nav(page, "Return to Warehouse");
     await expect(
       page.getByRole("button", {
-        name: "Prepare return and seal device queue",
+        name: "Review Return",
         exact: true,
       }),
     ).toBeVisible();
@@ -410,7 +416,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     await expect(saleForm(page).getByRole("alert")).toHaveCount(0);
 
     // Collect already confirmed credit separately, without another sale.
-    await nav(page, "Customers");
+    await nav(page, "Collections");
     await page
       .getByLabel("Collection customer", { exact: true })
       .selectOption(second);
@@ -436,12 +442,7 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
     expect((await finance()).invoices).toHaveLength(2);
     expect((await finance()).deposits).toHaveLength(0);
     await nav(page, "Return to Warehouse");
-    await page
-      .getByRole("button", {
-        name: "Prepare return and seal device queue",
-        exact: true,
-      })
-      .click();
+    await driverReturn(page);
     await expect
       .poll(async () => (await f.admin.workspace(f.trip)).trips[0]?.status)
       .toBe("SUBMITTED");
@@ -489,22 +490,15 @@ test("complete isolated business day: 100 loaded, two customers, 35 sold/25 empt
       "20",
       { timeout: 30000 },
     );
-    await page
-      .getByRole("button", { name: "Start delivering", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Start Trip", exact: true }).click();
     await expect
       .poll(async () => (await f.admin.workspace(reload)).trips[0]?.status)
       .toBe("ACTIVE");
     await expect(
-      page.getByRole("button", { name: "Start delivering", exact: true }),
+      page.getByRole("button", { name: "Start Trip", exact: true }),
     ).toHaveCount(0);
     await nav(page, "Return to Warehouse");
-    await page
-      .getByRole("button", {
-        name: "Prepare return and seal device queue",
-        exact: true,
-      })
-      .click();
+    await driverReturn(page);
     await expect
       .poll(async () => (await f.admin.workspace(reload)).trips[0]?.status)
       .toBe("SUBMITTED");

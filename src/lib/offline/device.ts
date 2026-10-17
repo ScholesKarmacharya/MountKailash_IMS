@@ -46,6 +46,58 @@ export async function createAutomaticDeviceSecrets(
     token: hex(),
   });
 }
+// Called only after the online server confirms an admin-authorized replacement
+// for an unprepared trip. Keep the encryption key and all previous evidence.
+export async function replaceRevokedAutomaticDevice(
+  db: OfflineDatabase,
+  user: string,
+  trip: string,
+  expectedDevice: string,
+) {
+  return db.transaction(
+    "rw",
+    db.settings,
+    db.preparations,
+    db.archives,
+    db.vaults,
+    async () => {
+      const current = await getAutomaticDeviceSecrets(db, user);
+      if (!current) throw new Error("Offline preparation needs internet.");
+      if (current.device !== expectedDevice) return current;
+      if (await db.vaults.get(`${user}:${trip}`))
+        throw new Error(
+          "Keep this phone's saved data until the admin has reviewed it.",
+        );
+      const setup = await db.preparations.get(`${user}:${trip}`);
+      if (setup) {
+        await db.archives.add({
+          id: crypto.randomUUID(),
+          kind: "SETUP",
+          row: setup,
+          preservedAt: new Date().toISOString(),
+        });
+        await db.preparations.delete(setup.id);
+      }
+      const old = await db.settings.get(automaticKey(user));
+      await db.settings.put({
+        key: `retired-automatic-device:${user}:${current.device}`,
+        value: old!.value,
+      });
+      const next = {
+        secret: current.secret,
+        device: crypto.randomUUID(),
+        token: Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+          b.toString(16).padStart(2, "0"),
+        ).join(""),
+      };
+      await db.settings.put({
+        key: automaticKey(user),
+        value: JSON.stringify({ ...next, requiresSignIn: false }),
+      });
+      return next;
+    },
+  );
+}
 export async function clearAutomaticDeviceSecrets(
   db: OfflineDatabase,
   user: string,

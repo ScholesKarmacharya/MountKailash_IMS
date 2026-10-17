@@ -1,3 +1,4 @@
+import { driverNavigate, driverReturn } from "./driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import {
@@ -38,10 +39,7 @@ async function unlock(page: Page) {
   await expect(page.getByText("Offline ready", { exact: true })).toBeVisible();
 }
 async function nav(page: Page, label: string) {
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: label, exact: true })
-    .click();
+  await driverNavigate(page, label);
 }
 async function deliver(
   page: Page,
@@ -121,10 +119,12 @@ test("automatic activation reopens offline without a PIN, records 35/100 jars an
     "100",
   );
   await unlock(reopened);
-  await expect(reopened.getByTestId("driver-total-jars-loaded")).toHaveText(
+  await expect(reopened.getByTestId("driver-remaining-full-jars")).toHaveText(
     "100",
   );
-  await expect(reopened.getByTestId("driver-full-jars-sold")).toHaveText("0");
+  await expect(reopened.getByTestId("driver-empty-jars-collected")).toHaveText(
+    "0",
+  );
   await deliver(reopened, f.customer);
   await expect(
     reopened.getByText("Saved on phone", { exact: true }).first(),
@@ -133,7 +133,9 @@ test("automatic activation reopens offline without a PIN, records 35/100 jars an
   await expect(reopened.getByTestId("driver-remaining-full-jars")).toHaveText(
     "65",
   );
-  await expect(reopened.getByTestId("driver-full-jars-sold")).toHaveText("35");
+  await expect(reopened.getByTestId("driver-remaining-full-jars")).toHaveText(
+    "65",
+  );
   const stored = await localRows(reopened);
   expect(stored.vaults[0]?.pending).toBe(1);
   await reopened.reload();
@@ -335,6 +337,7 @@ test("offline Sign Out clears online credentials while protecting pending record
   await context.setOffline(true);
   await deliver(page, f.customer, 5);
   await nav(page, "My Stock");
+  await nav(page, "More");
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await page.waitForURL("**/sign-in?reauth=1");
   await en(page);
@@ -359,12 +362,7 @@ test("the same trusted phone automatically prepares a later confirmed active rou
   const f = await activeFixtureTrip(request);
   await activate(page);
   await nav(page, "Return to Warehouse");
-  await page
-    .getByRole("button", {
-      name: "Prepare return and seal device queue",
-      exact: true,
-    })
-    .click();
+  await driverReturn(page);
   await expect
     .poll(async () => (await f.admin.workspace(f.trip)).trips[0]?.status)
     .toBe("SUBMITTED");
@@ -401,15 +399,13 @@ test("the same trusted phone automatically prepares a later confirmed active rou
   });
   await nav(page, "My Stock");
   await expect(
-    page.getByRole("button", { name: "Start delivering", exact: true }),
+    page.getByRole("button", { name: "Start Trip", exact: true }),
   ).toBeVisible({ timeout: 20000 });
-  await page
-    .getByRole("button", { name: "Start delivering", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Start Trip", exact: true }).click();
   await expect(page.getByText("Offline ready", { exact: true })).toBeVisible({
     timeout: 30000,
   });
-  await expect(page.getByTestId("driver-total-jars-loaded")).toHaveText("40");
+  await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("40");
   await expect.poll(async () => (await localRows(page)).vaults.length).toBe(2);
   expect(
     await f.admin.rpc<unknown[]>("trusted_device_directory", {}),

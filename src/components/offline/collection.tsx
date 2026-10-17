@@ -6,23 +6,25 @@ import {
   localCustomers,
   resolvedCustomer,
 } from "@/domain/offline/operations";
-import { allocations, cents, decimal } from "@/domain/finance/money";
+import { allocations, cents, decimal, sum, npr } from "@/domain/finance/money";
 import { AmountInput } from "../finance-payment";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
-import { T, Message, useLocale } from "../localization";
+import { T, Message, Value, useLocale } from "../localization";
 export function OfflineCollection({
   state,
   busy,
   save,
+  initialCustomer,
 }: {
   state: LocalState;
   busy: boolean;
   save: (d: CollectionDraft) => Promise<boolean>;
+  initialCustomer?: string;
 }) {
   const { t } = useLocale();
-  const [customer, setCustomer] = useState(""),
+  const [customer, setCustomer] = useState(initialCustomer ?? ""),
     [amount, setAmount] = useState(""),
     [deposit, setDeposit] = useState(""),
     [method, setMethod] = useState<"CASH" | "FONEPAY">("CASH"),
@@ -54,7 +56,7 @@ export function OfflineCollection({
         <T k="Collect outstanding credit" />
       </h2>
       <p className="text-sm">
-        <T k="Collections do not create a sale. Fonepay remains pending until admin reconciliation." />
+        <T k="Fonepay collections wait for warehouse confirmation." />
       </p>
       <label className="grid gap-2">
         <T k="Collection customer" />
@@ -78,6 +80,18 @@ export function OfflineCollection({
           ))}
         </select>
       </label>
+      {customer && (
+        <p className="rounded-lg bg-muted p-3 text-sm">
+          <T k="Outstanding Credit" />:{" "}
+          <strong>
+            <Value
+              value={npr(
+                sum(cachedCredit(state, customer).map((i) => i.outstanding)),
+              )}
+            />
+          </strong>
+        </p>
+      )}
       <AmountInput
         label="Credit amount received (NPR)"
         value={amount}
@@ -122,6 +136,7 @@ export function OfflineCollection({
         </p>
       )}
       <Button
+        className="min-h-14 w-full"
         disabled={
           busy ||
           state.sealed ||

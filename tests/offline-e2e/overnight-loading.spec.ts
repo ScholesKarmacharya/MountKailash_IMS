@@ -1,3 +1,4 @@
+import { driverNavigate } from "./driver-navigation";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { fixtureClient, fixtureIds } from "../operations-e2e/fixture-client";
@@ -17,10 +18,7 @@ async function login(page: Page) {
   await en(page);
 }
 async function nav(page: Page, label: string) {
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: label, exact: true })
-    .click();
+  await driverNavigate(page, label);
 }
 test("a next-day night load survives offline reopening and reconnects exactly once with the original allocation", async ({
   page,
@@ -105,8 +103,8 @@ test("a next-day night load survives offline reopening and reconnects exactly on
 
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
   await expect(
-    page.getByRole("button", { name: "Start delivering", exact: true }),
-  ).toHaveCount(0);
+    page.getByRole("button", { name: "Start Trip", exact: true }),
+  ).toBeDisabled();
   await context.setOffline(false);
   await admin.rpc("business_day_command", {
     p_operation: "REVIEW",
@@ -142,6 +140,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
       })
     ).ok(),
   ).toBe(true);
+  await page.clock.setSystemTime(new Date(tomorrow + "T07:00:00+05:45"));
   await driverA.rpc("transition_trip", {
     p_trip: trips[0],
     p_action: "START",
@@ -161,17 +160,18 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     p_notes: "",
     p_key: randomUUID(),
   });
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByTestId("driver-remaining-full-jars")).toHaveText("65");
-  await page
-    .getByRole("button", { name: "Start delivering", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Start Trip", exact: true }).click();
   await expect(
-    page.getByText("Record saved.", { exact: true }).first(),
+    page.getByText("Trip active", { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
+  // Only the scheduled-start UI uses the fixture's artificial tomorrow. The
+  // real DB wall clock still enforces future timestamp protection for uploads.
+  await page.clock.setSystemTime(new Date());
   await context.setOffline(true);
   await nav(page, "New Sale");
   expect(new URL(page.url()).pathname).toBe("/driver/delivery");
@@ -202,6 +202,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     if (body?.action === "post" && !committed) {
       const response = await route.fetch();
       expect(response.ok()).toBe(true);
+      expect((await response.json()).status).toBe("CONFIRMED");
       committed = true;
       await route.abort("failed");
     } else await route.continue();
@@ -230,14 +231,15 @@ test("a next-day night load survives offline reopening and reconnects exactly on
   expect(own.business_day_id).toBe(next);
   // Continue this registered device through a second closing period using a
   // confirmed PAUSE, keeping the same trip, journal, and original 65-jar load.
-  await nav(page, "My Stock");
+  await nav(page, "More");
+  await page.getByText("Overnight stop", { exact: true }).click();
   await page
     .getByRole("button", { name: "Pause for overnight carryover", exact: true })
     .click();
   await expect(
     page
       .getByText(
-        "This trip is paused for carryover. Resume online after admin authorization.",
+        "This trip is paused. Reopen online after the warehouse approves tomorrow's trip.",
         { exact: true },
       )
       .first(),
@@ -245,6 +247,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
   await expect(page.getByText("All synced", { exact: true })).toBeVisible({
     timeout: 30000,
   });
+  await nav(page, "My Stock");
   for (const trip of trips)
     await admin.rpc("trip_preparation_command", {
       p_trip: trip,
@@ -293,7 +296,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     p_reason: "",
     p_key: randomUUID(),
   });
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(
     page.getByRole("button", { name: "Resume carried trip", exact: true }),
   ).toBeVisible();
@@ -302,7 +305,7 @@ test("a next-day night load survives offline reopening and reconnects exactly on
     .click();
   await expect(
     page.getByText(
-      "This trip is paused for carryover. Resume online after admin authorization.",
+      "This trip is paused. Reopen online after the warehouse approves tomorrow's trip.",
       { exact: true },
     ),
   ).toHaveCount(0);

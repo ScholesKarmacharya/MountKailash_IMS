@@ -52,6 +52,13 @@ export async function writeOperation(command: Command): Promise<string> {
       databaseCode: error.code,
     });
     if (
+      ["create_trip_with_load", "save_trip_draft_load"].includes(command.rpc) &&
+      ["PGRST202", "42883", "42703", "42P01", "PGRST205"].includes(error.code)
+    )
+      throw new Error(
+        "Trip creation with loading requires migration 31. Apply the reviewed migration, then retry.",
+      );
+    if (
       ["schedule_trip", "trip_preparation_command"].includes(command.rpc) &&
       ["PGRST202", "42883", "42703", "42P01", "PGRST205"].includes(error.code)
     )
